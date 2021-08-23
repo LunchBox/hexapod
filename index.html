@@ -1,0 +1,575 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>JS Hexapod</title>
+
+    <link href="./stylesheets/application.css" media="all" rel="stylesheet" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+
+</head>
+<body>
+    
+<h2>JS Hexapod Ver. 0.7.10 - developing</h2>
+
+
+    <div id="scene"></div>
+
+    <div style="overflow: hidden;">
+        <div style="float: left; width: 480px;">
+
+            <div style="margin-top: 400px;">
+                <h3>
+                    Command Time Required (on sync mode)
+                </h3>
+                <canvas id="chart" style="border: 1px solid #ccc;" WIDTH="480" HEIGHT="100"></canvas>
+            </div>
+
+            <h3>
+                Send Command to the bot
+            </h3>
+            <div class="btns">
+                <a href="#" data-action="act_send_cmd" class="control_btn">Send</a> |
+                <a href="#" data-type="switch" data-value="sync" data-action="act_sync_cmd" class="control_btn">Sync</a>
+                <a href="#" data-type="switch" data-value="" data-action="act_sync_cmd" class="control_btn active">Manually</a>
+            </div>
+
+            <br/>
+
+            <h3>
+                Command
+            </h3>
+            <div id="servo_values" style="margin: 4px 0; border: 1px solid #ccc; padding: 4px; font-family: monospace;word-break: break-all;">
+            </div>
+
+            <h3>Last Servo Values</h3>
+            <div id="on_servo_values" style="margin: 4px 0; border: 1px solid #ccc; padding: 4px; font-family: monospace;word-break: break-all;">
+            </div>
+        </div>
+        <div style="margin-left: 490px;" >
+            <div class="tab" style="margin-bottom: 10px;">
+                <a href="" data-content="move_control" class="tab-item active">Control</a>
+                <a href="" data-content="servo_control" class="tab-item">Servos</a>
+                <a href="" data-content="attrs_control" class="tab-item">Attributes</a>
+                <a href="" data-content="status_control" class="tab-item">Status</a>
+            </div>
+
+            <div id="move_control" class="tab_content active">
+                <fieldset class="btns">
+                    <legend>Draw Type</legend>
+                
+                    <a href="#" data-type="switch" data-value="mesh" data-action="act_draw_type_switch" class="control_btn active">Mesh</a>
+                    <a href="#" data-type="switch" data-value="bone" data-action="act_draw_type_switch" class="control_btn">Bone</a>
+                    <a href="#" data-type="switch" data-value="points" data-action="act_draw_type_switch" class="control_btn">Points</a>
+                </fieldset>
+
+                <fieldset class="btns">
+                    <legend>Move Mode</legend>
+                
+                    <a href="#" data-type="switch" data-value="move" data-action="mode_switch" class="control_btn active">Move Mode</a>
+                    <a href="#" data-type="switch" data-value="move_body" data-action="mode_switch" class="control_btn">Move Body</a>
+                    <a href="#" data-type="switch" data-value="rotate_body" data-action="mode_switch" class="control_btn">Rotate Body</a>
+                </fieldset>
+
+
+                <fieldset class="btns">
+                    <legend>...</legend>
+                    <a href="#" data-value="" data-action="act_stop_motion" class="control_btn">Stop</a> |
+                    <a href="#" data-value="act_standby" data-action="act_action" class="control_btn">Standby</a> | 
+                    <a href="#" data-value="act_putdown_tips" data-action="act_action" class="control_btn">Putdown Tips</a>
+
+                    <a href="#" data-value="" data-action="act_reset_configs" class="control_btn">Reset Configs</a> |
+                    <a href="#" data-value="" data-action="act_disable_console" class="control_btn">Disable Console</a>
+                </fieldset>
+                 
+                <fieldset class="btns">
+                    <legend>...</legend>
+                    <a href="#" data-value="87" data-action="act_step" class="control_btn">Forward(w)</a>
+                    <a href="#" data-value="83" data-action="act_step" class="control_btn">Backward(s)</a> |
+                    <a href="#" data-value="90" data-action="act_step" class="control_btn">Move Left(z)</a>
+                    <a href="#" data-value="67" data-action="act_step" class="control_btn">Move Right(c)</a>
+
+                    <hr/>
+
+                    <a href="#" data-value="65" data-action="act_step" class="control_btn">Rotate Left(a)</a>
+                    <a href="#" data-value="68" data-action="act_step" class="control_btn">Rotate Right(d)</a>
+
+                    <hr/>
+
+                    <a href="#" data-value="82" data-action="act_motion2" class="control_btn">Raise(r)</a>
+                    <a href="#" data-value="70" data-action="act_motion2" class="control_btn">Fall(f)</a> |
+
+                    <a href="#" data-value="82" data-action="act_expend" class="control_btn">Expand</a>
+                    <a href="#" data-value="70" data-action="act_compact" class="control_btn">Compact</a>
+                    <input type="range" max="1.5" min="0.5" step="0.1" value="1" onchange="current_bot.tip_circle_scale = parseFloat(this.value); return false;" />
+                </fieldset>
+
+                <fieldset class="btns">
+                    <legend>Gaits</legend>
+                    <a href="#" data-type="switch" data-value="tripod" data-action="gait_switch" class="control_btn active">Tripod</a>
+                    <a href="#" data-type="switch" data-value="squirm" data-action="gait_switch" class="control_btn">Squirm</a>
+                    <a href="#" data-type="switch" data-value="ripple" data-action="gait_switch" class="control_btn">Ripple</a>
+                    <a href="#" data-type="switch" data-value="wave1" data-action="gait_switch" class="control_btn">Wave1</a>
+                    <a href="#" data-type="switch" data-value="wave2" data-action="gait_switch" class="control_btn">Wave2</a>
+                </fieldset>
+
+                <fieldset class="btns">
+                    <legend>...</legend>
+                    <a href="#" data-type="switch" data-value="power" data-action="action_switch" class="control_btn">power</a>
+                    <a href="#" data-type="switch" data-value="efficient" data-action="action_switch" class="control_btn active">efficient</a>
+                    <a href="#" data-type="switch" data-value="body_first" data-action="action_switch" class="control_btn">body first</a>
+                    <a href="#" data-type="switch" data-value="fast" data-action="action_switch" class="control_btn">fast<sub>beta</sub></a> |
+
+                    <a href="#" data-type="switch" data-value="translate" data-action="target_mode_switch" class="control_btn">translate</a>
+                    <a href="#" data-type="switch" data-value="target" data-action="target_mode_switch" class="control_btn active">target</a>
+                </fieldset>
+
+                <div class="joystick-container"></div>
+            </div>
+
+
+            <div id="servo_control" class="tab_content">
+                
+                <h3>Servo Values</h3>
+
+                <div id="servo_controls" style="margin-top: 10px;">
+                </div>
+            </div>
+
+            <div id="attrs_control" class="tab_content">
+            </div>
+
+            <div id="status_control" class="tab_content">
+                <div class="btns">
+                    <a href="#" data-type="switch" data-action="act_play_status" class="control_btn">Play</a>
+                </div>
+
+                <div id="status_history">
+                </div>
+            </div>
+        </div>
+    </div>
+    <div>
+        Old version video: <a href="https://www.youtube.com/watch?v=2jqCGz36oH4">Youtube</a>
+    </div>
+
+    <div>
+        <p>For connecting to your physical bot:</p>
+        <ul>
+            <li>Install <a href="http://nodejs.org/">Node.js</a></li>
+            <li>Download the <a href="node_server/server.js">server.js</a> (it is a nodejs module)</li>
+            <li>Connect your bot to some COM port</li>
+            <li>run the server.js by typing "node PATH/TO/YOUR/server.js" and follow the instruction</li>
+            <li>no guarantee it works...</li>
+        </ul>
+    </div>
+
+    <p>
+        Thanks to the author:
+        <a href="http://freespace.virgin.net/hugo.elias/models/m_ik2.htm">
+            http://freespace.virgin.net/hugo.elias/models/m_ik2.htm
+        </a>
+    </p>
+
+    <div>By Daniel Cheang @ 2015</div>
+
+    <script type="text/javascript" src="js/socket.io.js"></script>
+
+    <script type="text/javascript" src="js/three.min.js"></script>
+    <script type="text/javascript" src="js/Detector.js"></script>
+    <script type="text/javascript" src="js/Stats.js"></script>
+    <script type="text/javascript" src="js/OrbitControls.js"></script>
+    <script type="text/javascript" src="js/THREEx.KeyboardState.js"></script>
+    <script type="text/javascript" src="js/THREEx.FullScreen.js"></script>
+    <script type="text/javascript" src="js/THREEx.WindowResize.js"></script>
+
+    <script type="text/javascript" src="js/hexapod/utils.js"></script>
+    <script type="text/javascript" src="js/hexapod/defaults.js"></script>
+    <script type="text/javascript" src="js/hexapod/scene.js"></script>
+    <script type="text/javascript" src="js/hexapod/joystick2.js"></script>
+    <script type="text/javascript" src="js/hexapod/controls.js"></script>
+    <script type="text/javascript" src="js/hexapod/pos_calculator.js"></script>
+    <script type="text/javascript" src="js/hexapod/rotation_calculator.js"></script>
+
+
+    <script type="text/javascript" src="js/hexapod/gaits.js"></script>
+
+    <script type="text/javascript" src="js/hexapod/hexapod.js"></script>
+
+
+    <script type="text/javascript">
+        var bot_options = get_bot_options();
+
+
+        var current_bot = build_bot(bot_options);
+
+        init_controls(current_bot);
+        bind_key_events();
+
+        current_bot.display_values();
+
+    </script>
+
+    <script>
+        function active_tab(tab_item){
+            var tab_content_id = tab_item.getAttribute("data-content");
+            // console.log(tab_content_id);
+
+            var tab_content = document.querySelector("#" + tab_content_id);
+            // console.log(tab_content);
+            add_class(tab_content, "active");
+        }
+
+        var tabs = document.querySelectorAll(".tab-item");
+        console.log(tabs);
+        Array.prototype.forEach.call(tabs, function(tab){
+            tab.addEventListener("click", function(e){
+                e.preventDefault();
+
+                var tab_items = document.querySelectorAll(".tab-item");
+                Array.prototype.forEach.call(tab_items, function(tab_item){
+                    remove_class(tab_item, "active");
+                });
+                add_class(this, "active");
+
+                var tab_contents = document.querySelectorAll(".tab_content");
+                Array.prototype.forEach.call(tab_contents, function(tab_content){
+                    remove_class(tab_content, "active");
+                });
+
+                console.log(this);
+
+                active_tab(this);
+
+                return false;
+            });
+
+            // if (has_class(tab, "active")) {
+            //     active_tab(tab);
+            // }
+        });
+    </script>
+
+    <script>
+        function HexapodAttributesController(container){
+            this.container = container;
+
+            this.attributes = get_bot_options();
+
+            this.special_attrs = [
+                "coxa_length", 
+                "femur_length", 
+                "tibia_length",
+                "rotate_step",
+                "fb_step",
+                "lr_step"
+            ];
+        }
+
+        HexapodAttributesController.prototype.make_container = function(container, identify, class_name){
+            var elem = document.createElement('div');
+            if (identify){
+                elem.setAttribute("id", identify);
+            }
+            if (class_name){
+                elem.setAttribute("class", class_name);
+            }
+            container.appendChild(elem);
+            
+            return elem;
+        }
+
+        HexapodAttributesController.prototype.make_fieldset = function(container, legend_name, identify, class_name){
+            var fieldset = document.createElement('fieldset');
+            if (identify){
+                fieldset.setAttribute("id", identify);
+            }
+            if (class_name){
+                fieldset.setAttribute("class", class_name);
+            }
+            container.appendChild(fieldset);
+
+            var legend = document.createElement('legend');
+            legend.innerHTML = legend_name;
+            fieldset.appendChild(legend);
+            
+            return fieldset;
+        }
+        HexapodAttributesController.prototype.get_attr = function(attr_name){
+            var attrs = attr_name.split(".");
+            var value = this.attributes;
+            for (var idx in attrs) {
+                value = value[attrs[idx]];
+            }
+            return value;
+        }
+        HexapodAttributesController.prototype.set_attr = function(attr_name, value){
+            console.log(arguments);
+            var attrs = attr_name.split(".");
+            var cmd = "this.attributes";
+            for (var idx in attrs) {
+                cmd += "['" + attrs[idx] + "']";
+            }
+            cmd += " = " + value;
+            console.log(cmd);
+            eval(cmd);
+
+            // save to local storage
+            set_bot_options(this.attributes);
+        }
+
+        HexapodAttributesController.prototype.redraw_bot = function(){
+            current_bot.apply_attributes(this.attributes);
+        }
+
+        
+        HexapodAttributesController.prototype.make_input = function(container, attr_name, input_type, label_name){
+            
+            var label = document.createElement('label');
+            label.setAttribute("for", attr_name);
+            label.innerHTML = label_name;
+
+            container.appendChild(label);
+
+            var input = document.createElement('input');
+            input.setAttribute("type", input_type);
+            input.controller = this;
+
+            if (this.special_attrs.indexOf(attr_name) > -1){
+                this["handle_" + attr_name](attr_name, input);
+            } else {
+                switch(input_type) {
+                case "checkbox":
+                    if (this.get_attr(attr_name)) {
+                        input.checked = true;
+                    }
+                    // input.setAttribute("value", this.get_attr(attr_name));
+                    break;
+                default:
+                    input.setAttribute("value", this.get_attr(attr_name));
+                    input.addEventListener("change", function(){
+                        this.controller.set_attr(attr_name, parseFloat(this.value));
+                        
+                        this.controller.redraw_bot();
+                    });
+                }
+            }
+
+            container.appendChild(input);
+        }
+
+        HexapodAttributesController.prototype.handle_coxa_length = function(attr_name, input){
+            input.setAttribute("value", this.get_attr(attr_name));
+            input.addEventListener("change", function(){
+                this.controller.set_attr(attr_name, parseFloat(this.value));
+
+                for(var idx in this.controller.attributes.leg_options){
+                    this.controller.attributes.leg_options[idx].coxa.length = parseFloat(this.value);
+                }
+                set_bot_options(this.controller.attributes);
+                
+                this.controller.redraw_bot();
+            });
+        }
+        HexapodAttributesController.prototype.handle_femur_length = function(attr_name, input){
+            input.setAttribute("value", this.get_attr(attr_name));
+            input.addEventListener("change", function(){
+                this.controller.set_attr(attr_name, parseFloat(this.value));
+
+                for(var idx in this.controller.attributes.leg_options){
+                    this.controller.attributes.leg_options[idx].femur.length = parseFloat(this.value);
+                }
+                set_bot_options(this.controller.attributes);
+                
+                this.controller.redraw_bot();
+            });
+        }
+        HexapodAttributesController.prototype.handle_tibia_length = function(attr_name, input){
+            input.setAttribute("value", this.get_attr(attr_name));
+            input.addEventListener("change", function(){
+                this.controller.set_attr(attr_name, parseFloat(this.value));
+
+                for(var idx in this.controller.attributes.leg_options){
+                    this.controller.attributes.leg_options[idx].tibia.length = parseFloat(this.value);
+                }
+                set_bot_options(this.controller.attributes);
+                
+                this.controller.redraw_bot();
+            });
+        }
+
+        HexapodAttributesController.prototype.handle_rotate_step = function(attr_name, input){
+            var radius = parseFloat(this.get_attr(attr_name));
+            var angle = Math.round(radius * 180 / Math.PI);
+            input.setAttribute("value", angle);
+
+            input.addEventListener("change", function(){
+                var angle = parseFloat(this.value);
+                var radius = angle * Math.PI / 180;
+                this.controller.set_attr(attr_name, radius);
+
+                current_bot.rotate_step = radius;
+                current_bot.gait_controller.reset_steps();
+                current_bot.adjust_gait_guidelines();
+            });
+        }
+
+        HexapodAttributesController.prototype.handle_fb_step = function(attr_name, input){
+            input.setAttribute("value", parseFloat(this.get_attr(attr_name)));
+
+            input.addEventListener("change", function(){
+                var val = parseFloat(this.value);
+                this.controller.set_attr(attr_name, val);
+
+                current_bot.fb_step = val;
+                current_bot.gait_controller.reset_steps();
+            });
+        }
+
+        HexapodAttributesController.prototype.handle_lr_step = function(attr_name, input){
+            input.setAttribute("value", parseFloat(this.get_attr(attr_name)));
+
+            input.addEventListener("change", function(){
+                var val = parseFloat(this.value);
+                this.controller.set_attr(attr_name, val);
+
+                current_bot.lr_step = val;
+                current_bot.gait_controller.reset_steps();
+            });
+        }
+
+        var container = document.querySelector("#attrs_control");
+        var attrs_control = new HexapodAttributesController(container);
+
+        // motions --------------
+
+        var motion_attrs = attrs_control.make_fieldset(container, "Motions");
+        attrs_control.make_input(motion_attrs, "rotate_step", "number", "Rotate Step");
+        attrs_control.make_input(motion_attrs, "fb_step", "number", "F&B Step");
+        attrs_control.make_input(motion_attrs, "lr_step", "number", "L&R Step");
+
+        /// Body ----------
+
+        var body_attrs = attrs_control.make_fieldset(container, "Body Attrs");
+        attrs_control.make_input(body_attrs, "body_height", "number", "Body Height");
+        attrs_control.make_input(body_attrs, "body_width", "number", "Body Width");
+        attrs_control.make_input(body_attrs, "body_length", "number", "Body Length");
+        // attrs_control.make_input(body_attrs, "body_height_offset", "number", "Body Height Offset");
+
+        var leg_attrs = attrs_control.make_fieldset(container, "Legs Attrs");
+        attrs_control.make_input(leg_attrs, "coxa_length", "number", "Coxa Length");
+        attrs_control.make_input(leg_attrs, "femur_length", "number", "Femur Length");
+        attrs_control.make_input(leg_attrs, "tibia_length", "number", "Tibia Length");
+
+        /// Legs ---------
+
+        for (var idx in attrs_control.attributes.leg_options){
+            var leg_attrs = attrs_control.make_fieldset(container, "Leg " + idx + " Attrs", "leg_" + idx + "_attrs", "tab leg_attrs");
+
+            var leg_attrs_content = attrs_control.make_container(leg_attrs, null, "tab_content");
+
+            var pos_attrs = attrs_control.make_fieldset(leg_attrs_content, "Position");
+            attrs_control.make_input(pos_attrs, "leg_options." + idx + ".x", "number", "pos x");
+            attrs_control.make_input(pos_attrs, "leg_options." + idx + ".y", "number", "pos y");
+            attrs_control.make_input(pos_attrs, "leg_options." + idx + ".z", "number", "pos z");
+            // attrs_control.make_input(pos_attrs, "leg_options." + idx + ".mirror", "number", "Mirror");
+
+            var coxa_attrs = attrs_control.make_fieldset(leg_attrs_content, "Coxa");
+            attrs_control.make_input(coxa_attrs, "leg_options." + idx + ".coxa.length", "number", "Length");
+            attrs_control.make_input(coxa_attrs, "leg_options." + idx + ".coxa.radius", "number", "Radius");
+            attrs_control.make_input(coxa_attrs, "leg_options." + idx + ".coxa.init_angle", "number", "Init Angle");
+            // attrs_control.make_input(coxa_attrs, "leg_options." + idx + ".coxa.servo_value", "number", "Servo Value");
+            // attrs_control.make_input(coxa_attrs, "leg_options." + idx + ".coxa.revert", "checkbox", "Revert");
+
+            var femur_attrs = attrs_control.make_fieldset(leg_attrs_content, "Femur");
+            attrs_control.make_input(femur_attrs, "leg_options." + idx + ".femur.length", "number", "Length");
+            attrs_control.make_input(femur_attrs, "leg_options." + idx + ".femur.radius", "number", "Radius");
+            attrs_control.make_input(femur_attrs, "leg_options." + idx + ".femur.init_angle", "number", "Init Angle");
+            // attrs_control.make_input(femur_attrs, "leg_options." + idx + ".femur.servo_value", "number", "Servo Value");
+            // attrs_control.make_input(femur_attrs, "leg_options." + idx + ".femur.revert", "checkbox", "Revert");
+
+            var tibia_attrs = attrs_control.make_fieldset(leg_attrs_content, "Tibia");
+            attrs_control.make_input(tibia_attrs, "leg_options." + idx + ".tibia.length", "number", "Length");
+            attrs_control.make_input(tibia_attrs, "leg_options." + idx + ".tibia.radius", "number", "Radius");
+            attrs_control.make_input(tibia_attrs, "leg_options." + idx + ".tibia.init_angle", "number", "Init Angle");
+            // attrs_control.make_input(tibia_attrs, "leg_options." + idx + ".tibia.servo_value", "number", "Servo Value");
+            // attrs_control.make_input(tibia_attrs, "leg_options." + idx + ".tibia.revert", "checkbox", "Revert");
+        }
+
+        var tab_legends = document.querySelectorAll(".tab legend");
+        Array.prototype.forEach.call(tab_legends, function(legend){
+            legend.addEventListener("click", function(e){
+                var tab_content = this.parentElement.querySelector(".tab_content");
+                if (tab_content.style.display == "block"){
+                    tab_content.style.display = "none";
+                } else {
+                    tab_content.style.display = "block";
+                }
+            });
+        });
+    </script>
+
+
+    <script>
+        function save(){
+            var code = JSON.stringify(get_bot_options());
+            var blob = new Blob([code], { type: 'text/plain' });
+            saveBlob(blob);
+        }
+
+        function saveBlob(blob){
+            var name = "bot_config.json";
+            if(window.saveAs){
+                window.saveAs(blob, name);
+            }else if(navigator.saveBlob){
+                navigator.saveBlob(blob, name);
+            }else{
+                url = URL.createObjectURL(blob);
+                var link = document.createElement("a");
+                link.setAttribute("href",url);
+                link.setAttribute("download",name);
+                var event = document.createEvent('MouseEvents');
+                event.initMouseEvent('click', true, true, window, 1, 0, 0, 0, 0, false, false, false, false, 0, null);
+                link.dispatchEvent(event);
+            }
+        }
+
+        document.addEventListener('keydown', function(e){
+            if(e.keyCode == 83 && (e.ctrlKey || e.metaKey)){
+                e.preventDefault();
+
+                console.log("keyCode 13 dwn");
+                e.preventDefault();
+                save();
+                // return false;
+            }
+        });
+
+    </script>
+
+
+    <div id="testing">
+    </div>
+
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-71792197-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+
+</body>
+</html>
