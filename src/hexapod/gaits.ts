@@ -199,13 +199,16 @@ export class GaitController {
     for (let i = 0; i < n; i++) {
       const angle = (2 * Math.PI * i) / n - Math.PI / 2;
       const c = Math.cos(angle);
-      if (Math.abs(c) < 0.001) {
-        // Leg on centerline (front or back) — not strictly left or right
-        if (isOdd) centerLeg = i;
-      } else if (c > 0) {
+      if (isOdd && Math.abs(c) < 0.001) {
+        centerLeg = i; // odd N: single front (or back) leg exempt from sides
+      } else if (c > 0.001) {
         rightLegs.push(i);
-      } else {
+      } else if (c < -0.001) {
         leftLegs.push(i);
+      } else {
+        // Boundary leg (cos≈0): front→right, back→left
+        if (Math.sin(angle) < 0) rightLegs.push(i);  // front (sin<0 = -Z)
+        else leftLegs.push(i);                          // back (sin>0 = +Z)
       }
     }
 
@@ -273,32 +276,18 @@ export class GaitController {
       add(label, grps);
     }
 
-    // Mirror / opposite pairs (even N only)
+    // Mirror pairs — each opposite pair is its own gait group (even N only)
     if (n % 2 === 0) {
       const half = n / 2;
-      const grps: number[][] = [];
-      // Pair i with i+half, with groups of 2
-      for (let r = 0; r < 2; r++) {
-        const g: number[] = [];
-        for (let i = r; i < half; i += 2) {
-          g.push(i, i + half);
-        }
-        if (g.length > 0) grps.push(g);
+      const pairs: number[][] = [];
+      for (let i = 0; i < half; i++) {
+        pairs.push([i, i + half]);
       }
-      add('mirror', grps);
+      add('pairs', pairs);
+    }
 
-      // squirm-like: 4 rounds
-      const sq: number[][] = [];
-      for (let r = 0; r < 4; r++) {
-        const g: number[] = [];
-        for (let i = 0; i < n; i++) {
-          if ((i + r * 2) % 3 === 0) g.push(i);
-        }
-        if (g.length > 0) sq.push(g);
-      }
-      add('squirm', sq);
-    } else {
-      // squirm for odd N: modulo 3 alternating
+    // squirm: 3-round alternating (all N)
+    {
       const sq: number[][] = [];
       for (let r = 0; r < 3; r++) {
         const g: number[] = [];
