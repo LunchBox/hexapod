@@ -191,52 +191,115 @@ export class GaitController {
     const n = bot.legs.length;
     this.all_legs = Array.from({ length: n }, (_, i) => i);
 
-    if (n === 3) {
-      this.gaits = {
-        tripod: [[0, 1], [2]],
-        wave1: [[0], [1], [2]],
-        wave2: [[0], [2], [1]],
-      };
-    } else if (n === 5) {
-      this.gaits = {
-        tripod: [[0, 2], [1, 3], [4]],
-        ripple: [[1, 2], [3, 4], [0]],
-        wave1: [[0], [1], [2], [3], [4]],
-        wave2: [[0], [2], [4], [1], [3]],
-      };
-    } else if (n === 4) {
-      this.gaits = {
-        tripod: [[0, 2], [1, 3]],
-        ripple: [[0, 1], [2, 3]],
-        wave1: [[0], [1], [2], [3]],
-        wave2: [[0], [2], [1], [3]],
-      };
-    } else {
-      // 6+ legs — dynamic gait generation
-      const evens = Array.from({ length: Math.ceil(n / 2) }, (_, i) => i * 2);
-      const odds = Array.from({ length: Math.floor(n / 2) }, (_, i) => i * 2 + 1);
-
-      // ripple: distribute legs into 3 groups by modulo
-      const ripple = Array.from({ length: 3 }, (_, r) =>
-        Array.from({ length: n }, (_, i) => i).filter(i => i % 3 === r)
-      ).filter(g => g.length > 0);
-
-      // squirm: 4 rounds of alternating half-leg groups
-      const squirm = Array.from({ length: 4 }, (_, r) =>
-        Array.from({ length: n }, (_, i) => i).filter(i => (i + r * 2) % 3 === 0)
-      );
-
-      this.gaits = {
-        tripod: [evens, odds],
-        squirm,
-        ripple,
-        wave1: Array.from({ length: n }, (_, i) => [i]),
-        wave2: [
-          ...Array.from({ length: Math.ceil(n / 2) }, (_, i) => [i * 2]),
-          ...Array.from({ length: Math.floor(n / 2) }, (_, i) => [i * 2 + 1]),
-        ],
-      };
+    // Build sides classification for gait validation
+    const leftLegs: number[] = [];
+    const rightLegs: number[] = [];
+    let centerLeg: number | null = null;
+    for (let i = 0; i < n; i++) {
+      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+      const c = Math.cos(angle);
+      if (Math.abs(c) < 0.001) centerLeg = i;
+      else if (c > 0) rightLegs.push(i);
+      else leftLegs.push(i);
     }
+    const isOdd = n % 2 !== 0;
+
+    function isValid(groups: number[][]): boolean {
+      for (const g of groups) {
+        const gSet = new Set(g);
+        const allLeft = leftLegs.length > 0 && leftLegs.every(l => gSet.has(l));
+        const allRight = rightLegs.length > 0 && rightLegs.every(l => gSet.has(l));
+        if ((allLeft || allRight) && !(isOdd && centerLeg !== null && !gSet.has(centerLeg))) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function add(name: string, groups: number[][]) {
+      const filtered = groups.filter(g => g.length > 0);
+      if (filtered.length >= 2 && isValid(filtered)) gaits[name] = filtered;
+    }
+
+    const gaits: Record<string, number[][]> = {};
+
+    // wave1 / wave2 — always valid (single-leg groups)
+    add('wave1', Array.from({ length: n }, (_, i) => [i]));
+    add('wave2', [
+      ...Array.from({ length: Math.ceil(n / 2) }, (_, i) => [i * 2]),
+      ...Array.from({ length: Math.floor(n / 2) }, (_, i) => [i * 2 + 1]),
+    ]);
+
+    // Alternating K-group patterns (tripod-like)
+    for (let k = 2; k <= Math.min(n, Math.ceil(n / 2) + 1); k++) {
+      const grps: number[][] = Array.from({ length: k }, () => []);
+      for (let i = 0; i < n; i++) grps[i % k].push(i);
+      const label = k === 2 ? 'tripod' : 'tripod' + k;
+      add(label, grps);
+    }
+
+    // Adjacent blocks (ripple-like)
+    for (let size = 2; size <= Math.ceil(n / 2); size++) {
+      const grps: number[][] = [];
+      for (let start = 0; start < n; start += size) {
+        const g = [];
+        for (let j = 0; j < size && start + j < n; j++) g.push(start + j);
+        if (g.length > 0) grps.push(g);
+      }
+      const label = size === 2 ? 'ripple' : 'ripple' + size;
+      add(label, grps);
+    }
+
+    // Sliding windows
+    for (let w = 2; w <= Math.min(3, Math.ceil(n / 2)); w++) {
+      const grps: number[][] = [];
+      for (let start = 0; start < n; start++) {
+        const g = [];
+        for (let j = 0; j < w; j++) g.push((start + j) % n);
+        grps.push(g);
+      }
+      const label = w === 2 ? 'slide2' : 'slide3';
+      add(label, grps);
+    }
+
+    // Mirror / opposite pairs (even N only)
+    if (n % 2 === 0) {
+      const half = n / 2;
+      const grps: number[][] = [];
+      // Pair i with i+half, with groups of 2
+      for (let r = 0; r < 2; r++) {
+        const g: number[] = [];
+        for (let i = r; i < half; i += 2) {
+          g.push(i, i + half);
+        }
+        if (g.length > 0) grps.push(g);
+      }
+      add('mirror', grps);
+
+      // squirm-like: 4 rounds
+      const sq: number[][] = [];
+      for (let r = 0; r < 4; r++) {
+        const g: number[] = [];
+        for (let i = 0; i < n; i++) {
+          if ((i + r * 2) % 3 === 0) g.push(i);
+        }
+        if (g.length > 0) sq.push(g);
+      }
+      add('squirm', sq);
+    } else {
+      // squirm for odd N: modulo 3 alternating
+      const sq: number[][] = [];
+      for (let r = 0; r < 3; r++) {
+        const g: number[] = [];
+        for (let i = 0; i < n; i++) {
+          if (i % 3 === r) g.push(i);
+        }
+        if (g.length > 0) sq.push(g);
+      }
+      add('squirm', sq);
+    }
+
+    this.gaits = gaits;
 
     // Restore gait from options or default to tripod
     let gaitName = this.bot.options.gait || 'tripod';

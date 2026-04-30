@@ -24,13 +24,11 @@ const stepButtons = [
   { action: 'act_step', value: '68', label: 'Rotate Right(d)' },
 ];
 
-const gaits = [
-  { value: 'tripod', label: 'Tripod' },
-  { value: 'squirm', label: 'Squirm' },
-  { value: 'ripple', label: 'Ripple' },
-  { value: 'wave1', label: 'Wave1' },
-  { value: 'wave2', label: 'Wave2' },
-];
+function getGaitList(bot: any) {
+  const gc = bot?.gait_controller;
+  if (!gc?.gaits) return [];
+  return Object.keys(gc.gaits).map(k => ({ value: k, label: k }));
+}
 
 const actionTypes = [
   { value: 'power', label: 'power' },
@@ -172,12 +170,21 @@ export default function ControlPanel() {
         setLegCount(newLegCount);
         bot.options.leg_count = newLegCount;
         bot.apply_attributes(bot.options);
+        // Reset gait if current one no longer exists in new gait set
+        if (!bot.gait_controller.gaits[bot.options.gait || 'tripod']) {
+          bot.options.gait = 'tripod';
+          setGait('tripod');
+        }
         bumpBotVersion();
         break;
       case 'act_body_shape_switch':
         setBodyShape(value!);
         bot.options.body_shape = value;
         bot.apply_attributes(bot.options);
+        if (!bot.gait_controller.gaits[bot.options.gait || 'tripod']) {
+          bot.options.gait = 'tripod';
+          setGait('tripod');
+        }
         bumpBotVersion();
         break;
       case 'act_poly_placement_switch':
@@ -408,7 +415,7 @@ export default function ControlPanel() {
 
       <fieldset className="btns">
         <legend>Gaits</legend>
-        {gaits.map((item) => (
+        {getGaitList(botRef.current).map((item) => (
           <a
             key={item.value}
             href="#"
