@@ -70,6 +70,7 @@ export class Hexapod {
       this.scene.remove(this.mesh);
     }
 
+    this.on_servo_values = null;
     this.draw();
 
     this.gait_controller = new GaitController(this);
