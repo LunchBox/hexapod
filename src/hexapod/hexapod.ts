@@ -46,9 +46,11 @@ function computeLegLayout(
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2;
       // init_angle so mirror*init_rad = angle (coxa points at angle `a`)
       const onRight = Math.cos(angle) >= 0;
+      // mirror=1: rz=-PI/2→+X, ry=init_rad, world dir = -init_rad → need init_rad = -angle
+      // mirror=-1: rz=+PI/2→-X, ry=-init_rad, world dir = PI+init_rad → need init_rad = angle-PI
       const initDeg = onRight
-        ? angle * 180 / Math.PI           // mirror=1: rotation.y = init_rad = angle
-        : (angle - Math.PI) * 180 / Math.PI; // mirror=-1: rotation.y = -init_rad = PI-angle = -angle+PI
+        ? -angle * 180 / Math.PI
+        : (angle - Math.PI) * 180 / Math.PI;
       layouts.push({
         x: bodyRadius * Math.cos(angle),
         z: bodyRadius * Math.sin(angle),
@@ -180,7 +182,8 @@ export class Hexapod {
   }
 
   draw_body() {
-    let geometry: any, mesh: any, material: any;
+    let geometry: any, bodyVisual: any, material: any;
+    let container = new THREE.Object3D();
     let color = this.options.color ? this.options.color : 0x333333;
     let bodyHeight = this.options.body_height || 20;
     let bodyShape = this.options.body_shape || 'rectangle';
@@ -198,30 +201,69 @@ export class Hexapod {
         geometry = new THREE.Geometry();
         legPositions.forEach(v => geometry.vertices.push(v.clone()));
         geometry.vertices.push(legPositions[0].clone());
-        mesh = new THREE.Line(geometry, material);
+        bodyVisual = new THREE.Line(geometry, material);
         break;
       case "points":
         material = new THREE.PointsMaterial({ color: color });
         geometry = new THREE.Geometry();
         legPositions.forEach(v => geometry.vertices.push(v.clone()));
-        mesh = new THREE.Points(geometry, material);
+        bodyVisual = new THREE.Points(geometry, material);
         break;
       default:
         if (bodyShape === 'polygon' && legCount >= 3) {
-          // N-gon prism via CylinderGeometry, aligned with leg positions
-          geometry = new (THREE as any).CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, legCount, 1, false, -Math.PI / 2);
-          mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
+          // Build N-gon prism manually — vertex positions match leg layout exactly
+          geometry = new THREE.Geometry();
+          const halfH = bodyHeight / 2;
+
+          // Center vertices for top/bottom caps
+          const btmCenter = geometry.vertices.length;
+          geometry.vertices.push(new THREE.Vector3(0, -halfH, 0));
+          const topCenter = geometry.vertices.length;
+          geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
+
+          // Outer ring vertices at same angles as legs
+          const btmRing: number[] = [], topRing: number[] = [];
+          for (let i = 0; i < legCount; i++) {
+            const a = (2 * Math.PI * i) / legCount - Math.PI / 2;
+            const x = bodyRadius * Math.cos(a);
+            const z = bodyRadius * Math.sin(a);
+            btmRing.push(geometry.vertices.length);
+            geometry.vertices.push(new THREE.Vector3(x, -halfH, z));
+            topRing.push(geometry.vertices.length);
+            geometry.vertices.push(new THREE.Vector3(x, halfH, z));
+          }
+
+          // Bottom & top caps
+          for (let i = 0; i < legCount; i++) {
+            const next = (i + 1) % legCount;
+            geometry.faces.push(new (THREE as any).Face3(btmCenter, btmRing[next], btmRing[i]));
+            geometry.faces.push(new (THREE as any).Face3(topCenter, topRing[i], topRing[next]));
+          }
+
+          // Side faces (2 triangles per quad)
+          for (let i = 0; i < legCount; i++) {
+            const next = (i + 1) % legCount;
+            geometry.faces.push(new (THREE as any).Face3(btmRing[i], btmRing[next], topRing[next]));
+            geometry.faces.push(new (THREE as any).Face3(btmRing[i], topRing[next], topRing[i]));
+          }
+
+          geometry.computeFaceNormals();
+          bodyVisual = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
+          // Rotate body polygon so legs sit at edge midpoints (or stay at vertices)
+          const polyOffset = this.options.polygon_leg_placement === 'edge' ? Math.PI / legCount : 0;
+          bodyVisual.rotation.y = polyOffset;
         } else {
           // Rectangle body with thickness
           geometry = new THREE.BoxGeometry(this.options.body_width, bodyHeight, this.options.body_length);
-          mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
+          bodyVisual = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
         }
         let axisHelper = new THREE.AxisHelper(30);
-        mesh.add(axisHelper);
+        bodyVisual.add(axisHelper);
     }
 
-    mesh.position.y = bodyHeight / 2;
-    return mesh;
+    container.add(bodyVisual);
+    container.position.y = bodyHeight / 2;
+    return container;
   }
 
   draw_gait_guide() {

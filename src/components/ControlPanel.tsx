@@ -60,6 +60,7 @@ export default function ControlPanel() {
   const [dof, setDof] = useState(3);
   const [legCount, setLegCount] = useState(6);
   const [bodyShape, setBodyShape] = useState('rectangle');
+  const [polyPlacement, setPolyPlacement] = useState('vertex');
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
@@ -147,6 +148,11 @@ export default function ControlPanel() {
       case 'act_body_shape_switch':
         setBodyShape(value!);
         bot.options.body_shape = value;
+        bot.apply_attributes(bot.options);
+        break;
+      case 'act_poly_placement_switch':
+        setPolyPlacement(value!);
+        bot.options.polygon_leg_placement = value;
         bot.apply_attributes(bot.options);
         break;
     }
@@ -237,6 +243,15 @@ export default function ControlPanel() {
           onClick={(e) => { e.preventDefault(); handleAction('act_body_shape_switch', 'rectangle'); }}>Rect</a>
         <a href="#" className={`control_btn${bodyShape === 'polygon' ? ' active' : ''}`}
           onClick={(e) => { e.preventDefault(); handleAction('act_body_shape_switch', 'polygon'); }}>Poly</a>
+        {bodyShape === 'polygon' && (
+          <>
+            {' | '}
+            <a href="#" className={`control_btn${polyPlacement === 'vertex' ? ' active' : ''}`}
+              onClick={(e) => { e.preventDefault(); handleAction('act_poly_placement_switch', 'vertex'); }}>Vertex</a>
+            <a href="#" className={`control_btn${polyPlacement === 'edge' ? ' active' : ''}`}
+              onClick={(e) => { e.preventDefault(); handleAction('act_poly_placement_switch', 'edge'); }}>Edge</a>
+          </>
+        )}
       </fieldset>
 
       <fieldset className="btns">

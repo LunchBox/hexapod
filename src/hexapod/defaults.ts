@@ -77,6 +77,7 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   leg_count: DEFAULT_LEG_COUNT,
   body_shape: 'rectangle',
   body_radius: 80,
+  polygon_leg_placement: 'vertex',
 
   color: 0x333333,
 
