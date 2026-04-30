@@ -196,6 +196,15 @@ export default function LegEditor() {
 
   // Redraw when bot or options change externally
   useEffect(() => {
+    const canvas = canvasRef.current;
+    const bot = botRef.current;
+    console.log('LegEditor effect: canvas=%s bot=%s botVersion=%d',
+      !!canvas, !!bot, botVersion);
+    if (!canvas || !bot) {
+      // Bot may not be ready on initial mount — retry next frame
+      const id = requestAnimationFrame(() => draw());
+      return () => cancelAnimationFrame(id);
+    }
     console.time('LegEditor draw');
     draw();
     console.timeEnd('LegEditor draw');
