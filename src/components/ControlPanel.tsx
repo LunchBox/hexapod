@@ -1,6 +1,10 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { JoyStick } from '../hexapod/joystick2';
+import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
+
+// Read persisted state once on mount so UI matches saved config
+const saved = get_bot_options();
 
 const drawTypes = [
   { value: 'mesh', label: 'Mesh' },
@@ -50,18 +54,18 @@ export default function ControlPanel() {
   const gaitIntervalRef = useRef(null);
 
   // Active states for toggle groups
-  const [drawType, setDrawType] = useState('mesh');
-  const [moveMode, setMoveMode] = useState('move');
-  const [gait, setGait] = useState('tripod');
-  const [actionType, setActionType] = useState('efficient');
-  const [targetMode, setTargetMode] = useState('target');
-  const [syncMode, setSyncMode] = useState('manual');
-  const [tipCircleScale, setTipCircleScale] = useState(1);
-  const [dof, setDof] = useState(3);
-  const [legCount, setLegCount] = useState(6);
-  const [bodyShape, setBodyShape] = useState('rectangle');
-  const [polyPlacement, setPolyPlacement] = useState('vertex');
-  const [oddOrientation, setOddOrientation] = useState('back');
+  const [drawType, setDrawType] = useState(saved.draw_type || 'mesh');
+  const [moveMode, setMoveMode] = useState(saved.move_mode || 'move');
+  const [gait, setGait] = useState(saved.gait || 'tripod');
+  const [actionType, setActionType] = useState(saved.action_type || 'efficient');
+  const [targetMode, setTargetMode] = useState(saved.target_mode || 'target');
+  const [syncMode, setSyncMode] = useState(saved.sync_cmd ? 'sync' : 'manual');
+  const [tipCircleScale, setTipCircleScale] = useState(saved.tip_circle_scale ?? 1);
+  const [dof, setDof] = useState(saved.dof || 3);
+  const [legCount, setLegCount] = useState(saved.leg_count || 6);
+  const [bodyShape, setBodyShape] = useState(saved.body_shape || 'rectangle');
+  const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'vertex');
+  const [oddOrientation, setOddOrientation] = useState(saved.polygon_odd_orientation || 'back');
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
@@ -73,6 +77,7 @@ export default function ControlPanel() {
       case 'act_draw_type_switch':
         setDrawType(value!);
         bot.draw_type = value;
+        bot.options.draw_type = value;
         bot.scene.remove(bot.mesh);
         bot.draw();
         bot.apply_status(bot.get_status());
@@ -80,6 +85,8 @@ export default function ControlPanel() {
       case 'mode_switch':
         setMoveMode(value!);
         if (gc()) gc().move_mode = value;
+        bot.options.move_mode = value;
+        set_bot_options(bot.options);
         break;
       case 'act_stop_motion':
         if (gc()) gc().stop();
@@ -98,6 +105,8 @@ export default function ControlPanel() {
         setTipCircleScale((s) => {
           const next = Math.min(1.5, +(s + 0.1).toFixed(1));
           bot.tip_circle_scale = next;
+          bot.options.tip_circle_scale = next;
+          set_bot_options(bot.options);
           return next;
         });
         break;
@@ -105,20 +114,28 @@ export default function ControlPanel() {
         setTipCircleScale((s) => {
           const next = Math.max(0.5, +(s - 0.1).toFixed(1));
           bot.tip_circle_scale = next;
+          bot.options.tip_circle_scale = next;
+          set_bot_options(bot.options);
           return next;
         });
         break;
       case 'gait_switch':
         setGait(value!);
         if (gc()) gc().switch_gait(value);
+        bot.options.gait = value;
+        set_bot_options(bot.options);
         break;
       case 'action_switch':
         setActionType(value!);
         if (gc()) gc().switch_action_type(value);
+        bot.options.action_type = value;
+        set_bot_options(bot.options);
         break;
       case 'target_mode_switch':
         setTargetMode(value!);
         if (gc()) gc().switch_target_mode(value);
+        bot.options.target_mode = value;
+        set_bot_options(bot.options);
         break;
       case 'act_send_cmd':
         bot.send_status();
@@ -126,6 +143,8 @@ export default function ControlPanel() {
       case 'act_sync_cmd':
         setSyncMode(value === 'sync' ? 'sync' : 'manual');
         bot.sync_cmd = value === 'sync';
+        bot.options.sync_cmd = value === 'sync';
+        set_bot_options(bot.options);
         break;
       case 'act_reset_configs':
         localStorage.removeItem('hexapod_options');
@@ -336,7 +355,11 @@ export default function ControlPanel() {
           onChange={(e) => {
             const v = parseFloat(e.target.value);
             setTipCircleScale(v);
-            if (botRef.current) botRef.current.tip_circle_scale = v;
+            if (botRef.current) {
+              botRef.current.tip_circle_scale = v;
+              botRef.current.options.tip_circle_scale = v;
+              set_bot_options(botRef.current.options);
+            }
           }}
         />
       </fieldset>

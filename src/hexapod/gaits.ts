@@ -238,7 +238,9 @@ export class GaitController {
       };
     }
 
-    this.leg_groups = this.gaits.tripod;
+    // Restore gait from options or default to tripod
+    let gaitName = this.bot.options.gait || 'tripod';
+    this.leg_groups = this.gaits[gaitName] || this.gaits.tripod;
     this.leg_group_idx = 0;
     this.reset_steps();
 
@@ -255,9 +257,18 @@ export class GaitController {
     this.actions[ACT_PUTDOWN_TIPS] = new GaitPutdownTips(this);
 
     this.target_modes = ["translate", "target"];
-    this.target_mode = "target";
+    this.target_mode = this.bot.options.target_mode || "target";
 
-    this.move_mode = "move";
+    this.move_mode = this.bot.options.move_mode || "move";
+
+    // Apply persisted action type to all actions
+    let actionType = this.bot.options.action_type || 'efficient';
+    for (let key in this.actions) {
+      let action = this.actions[key];
+      if (action.step_types && action.step_types[actionType]) {
+        action.steps = action.step_types[actionType];
+      }
+    }
   }
 
   reset_steps() {

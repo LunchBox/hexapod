@@ -89,6 +89,15 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
 
   first_servo_idx: 0,
 
+  // UI state persisted across reloads
+  draw_type: 'mesh',
+  gait: 'tripod',
+  action_type: 'efficient',
+  target_mode: 'target',
+  move_mode: 'move',
+  sync_cmd: false,
+  tip_circle_scale: 1,
+
   leg_options: [
     // Left front / Right front (leg_count=3 uses these + left mid)
     {

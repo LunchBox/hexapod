@@ -105,12 +105,13 @@ export class Hexapod {
     }
     this.scene = scene;
 
-    this.apply_attributes(options);
-
+    // Restore display/UI state from options (or defaults)
     this.draw_types = ["mesh", "bone", "points"];
-    this.draw_type = "mesh";
+    this.draw_type = options.draw_type || "mesh";
+    this.tip_circle_scale = options.tip_circle_scale ?? 1;
+    this.sync_cmd = options.sync_cmd ?? false;
 
-    this.tip_circle_scale = 1;
+    this.apply_attributes(options);
 
     this.socket = io('http://localhost:8888', { reconnection: false });
     this.socket.on('message', (data: any) => {
@@ -119,7 +120,6 @@ export class Hexapod {
     this.socket.on('disconnect', () => {
       console.log("-- lost socket connect.");
     });
-    this.sync_cmd = false;
   }
 
   apply_attributes(options: any) {
