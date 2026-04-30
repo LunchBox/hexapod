@@ -208,8 +208,8 @@ export class Hexapod {
         break;
       default:
         if (bodyShape === 'polygon' && legCount >= 3) {
-          // N-gon prism via CylinderGeometry (flat on ground)
-          geometry = new (THREE as any).CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, legCount);
+          // N-gon prism via CylinderGeometry, aligned with leg positions
+          geometry = new (THREE as any).CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, legCount, 1, false, -Math.PI / 2);
           mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
         } else {
           // Rectangle body with thickness
