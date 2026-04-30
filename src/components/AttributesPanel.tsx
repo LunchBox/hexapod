@@ -10,6 +10,7 @@ function HexapodAttributesController(container: HTMLElement, bot: any) {
   this.special_attrs = [
     'coxa_length', 'femur_length', 'tibia_length', 'tarsus_length',
     'rotate_step', 'fb_step', 'lr_step',
+    'body_radius', 'edge_length',
   ];
 }
 
@@ -64,6 +65,7 @@ HexapodAttributesController.prototype.make_input = function (container, attr_nam
 
   let input = document.createElement('input');
   input.setAttribute('type', input_type);
+  input.setAttribute('id', attr_name);
   input.controller = this;
 
   if (this.special_attrs.indexOf(attr_name) > -1) {
@@ -144,6 +146,51 @@ HexapodAttributesController.prototype.handle_lr_step = function (attr_name, inpu
   });
 };
 
+HexapodAttributesController.prototype.handle_body_radius = function (attr_name, input) {
+  let self = this;
+  input.setAttribute('value', parseFloat(this.get_attr(attr_name)));
+  input.addEventListener('change', function () {
+    let val = parseFloat(this.value);
+    if (isNaN(val) || val <= 0) return;
+    self.set_attr(attr_name, val);
+
+    // Sync edge_length display
+    let edgeInput = document.getElementById('edge_length') as HTMLInputElement;
+    if (edgeInput) {
+      let legCount = self.attributes.leg_count || 6;
+      let edgeLen = 2 * val * Math.sin(Math.PI / legCount);
+      edgeInput.value = edgeLen.toFixed(1);
+    }
+
+    self.redraw_bot();
+  });
+};
+
+HexapodAttributesController.prototype.handle_edge_length = function (attr_name, input) {
+  let self = this;
+  // Display value computed from body_radius
+  let bodyRadius = parseFloat(this.get_attr('body_radius')) || 80;
+  let legCount = this.attributes.leg_count || 6;
+  let edgeLen = 2 * bodyRadius * Math.sin(Math.PI / legCount);
+  input.setAttribute('value', edgeLen.toFixed(1));
+
+  input.addEventListener('change', function () {
+    let val = parseFloat(this.value);
+    if (isNaN(val) || val <= 0) return;
+    let legCount = self.attributes.leg_count || 6;
+    let newRadius = val / (2 * Math.sin(Math.PI / legCount));
+    self.set_attr('body_radius', newRadius);
+
+    // Sync body_radius input display
+    let radiusInput = document.getElementById('body_radius') as HTMLInputElement;
+    if (radiusInput) {
+      radiusInput.value = newRadius.toFixed(1);
+    }
+
+    self.redraw_bot();
+  });
+};
+
 export default function AttributesPanel() {
   const { botRef } = useHexapod();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -167,6 +214,8 @@ export default function AttributesPanel() {
     attrs_control.make_input(body_attrs, 'body_height', 'number', 'Body Height');
     attrs_control.make_input(body_attrs, 'body_width', 'number', 'Body Width');
     attrs_control.make_input(body_attrs, 'body_length', 'number', 'Body Length');
+    attrs_control.make_input(body_attrs, 'body_radius', 'number', 'Body Radius');
+    attrs_control.make_input(body_attrs, 'edge_length', 'number', 'Edge Length');
 
     // Legs
     let leg_attrs = attrs_control.make_fieldset(container, 'Legs Attrs');
