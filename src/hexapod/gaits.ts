@@ -302,7 +302,7 @@ GaitController.prototype.target_with_joystick = function (joystick) {
   var fb_rate = max_fb_distance / joystick.radius;
   var lr_rate = max_lr_distance / joystick.radius;
 
-  var diff_distance = Math.sqrt(Math.pow(pos.y, 2), Math.pow(pos.x, 2));
+  var diff_distance = Math.sqrt(Math.pow(pos.y, 2) + Math.pow(pos.x, 2));
 
   gait.fb_direction = -Math.sign(pos.y);
   this.fb_step = diff_distance * fb_rate;
@@ -324,7 +324,8 @@ GaitController.prototype.target_with_joystick = function (joystick) {
 };
 
 // GaitAction base
-export function GaitAction(controller) {
+export function GaitAction(controller?: any) {
+  if (controller) this.controller = controller;
   this.acting_idx = 0;
   this.up_distance = DEFAULT_HEXAPOD_OPTIONS.up_step;
   this.fb_direction = 0;
@@ -403,7 +404,7 @@ GaitPutdownTips.prototype.active_legs = function () {
 };
 
 // GaitMove
-export function GaitMove(controller, fb_direction, lr_direction, rotate_direction) {
+export function GaitMove(controller: any, fb_direction?: any, lr_direction?: any, rotate_direction?: any) {
   this.controller = controller;
   this.fb_direction = fb_direction;
   this.lr_direction = lr_direction;

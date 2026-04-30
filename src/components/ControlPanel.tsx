@@ -55,7 +55,7 @@ export default function ControlPanel() {
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
   // Button click handler
-  const handleAction = useCallback((action, value) => {
+  const handleAction = useCallback((action: string, value?: string) => {
     const bot = botRef.current;
     if (!bot) return;
 

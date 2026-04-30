@@ -121,8 +121,11 @@ export function rotateAroundWorldAxis(object, axis, radians) {
 }
 
 export var logger = (function () {
-  var oldConsoleLog = null;
-  var pub = {};
+  var oldConsoleLog: any = null;
+  var pub: { enableLogger: () => void; disableLogger: () => void } = {
+    enableLogger: function () { },
+    disableLogger: function () { },
+  };
 
   pub.enableLogger = function enableLogger() {
     if (oldConsoleLog == null) return;
@@ -136,3 +139,4 @@ export var logger = (function () {
 
   return pub;
 })();
+

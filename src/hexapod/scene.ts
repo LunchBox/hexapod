@@ -1,8 +1,8 @@
 import appState from './appState.js';
 
-export function initScene(container) {
+export function initScene(container: HTMLElement) {
   appState.container = container;
-  appState.keyboard = new THREEx.KeyboardState();
+  appState.keyboard = new (THREEx.KeyboardState as any)();
   appState.clock = new THREE.Clock();
 
   var SCREEN_WIDTH = container.offsetWidth;
@@ -16,19 +16,19 @@ export function initScene(container) {
     ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT,
     NEAR = 1,
     FAR = 10000;
-  appState.camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
-  appState.scene.add(appState.camera);
-  appState.camera.position.set(-300, 300, -300);
+  appState.camera = new (THREE.PerspectiveCamera as any)(VIEW_ANGLE, ASPECT, NEAR, FAR);
+  appState.scene!.add(appState.camera!);
+  appState.camera!.position.set(-300, 300, -300);
 
   // Renderer
   if (Detector.webgl) {
-    appState.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    appState.renderer = new (THREE.WebGLRenderer as any)({ antialias: true, alpha: true });
   } else {
-    appState.renderer = new THREE.CanvasRenderer();
+    appState.renderer = new (THREE.CanvasRenderer as any)();
   }
-  appState.renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-  appState.renderer.setClearColor(0xdddddd, 0);
-  container.appendChild(appState.renderer.domElement);
+  appState.renderer!.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+  appState.renderer!.setClearColor(0xdddddd, 0);
+  container.appendChild(appState.renderer!.domElement);
 
   // Window resize
   window.addEventListener('resize', onWindowResize, false);
@@ -36,41 +36,41 @@ export function initScene(container) {
   function onWindowResize() {
     var w = container.offsetWidth;
     var h = container.offsetHeight;
-    appState.camera.aspect = w / h;
-    appState.camera.updateProjectionMatrix();
-    appState.renderer.setSize(w, h);
+    appState.camera!.aspect = w / h;
+    appState.camera!.updateProjectionMatrix();
+    appState.renderer!.setSize(w, h);
   }
 
   // OrbitControls
-  appState.controls = new THREE.OrbitControls(appState.camera, container);
+  appState.controls = new (THREE.OrbitControls as any)(appState.camera, container);
   appState.controls.addEventListener('change', render);
 
   // Stats
   appState.stats = new Stats();
   appState.stats.domElement.style.position = "absolute";
   appState.stats.domElement.style.bottom = "0px";
-  appState.stats.domElement.style.zIndex = 10;
+  (appState.stats.domElement.style as any).zIndex = 10;
   container.appendChild(appState.stats.domElement);
 
   // Directional light
-  var dLight = new THREE.DirectionalLight(0xffffff);
+  var dLight = new (THREE.DirectionalLight as any)(0xffffff);
   dLight.position.set(1, 300, 0);
 
   // Particle light
-  var particleLight = new THREE.Mesh(
-    new THREE.SphereGeometry(10, 10, 10),
+  var particleLight = new (THREE.Mesh as any)(
+    new (THREE.SphereGeometry as any)(10, 10, 10),
     new THREE.MeshBasicMaterial({ color: 0x44ff44 })
   );
   particleLight.position.set(1, 500, 0);
 
   // Grid
-  var gridHelper = new THREE.GridHelper(500, 100);
+  var gridHelper = new (THREE.GridHelper as any)(500, 100);
   gridHelper.position.set(0, 0, 0);
   gridHelper.rotation.set(0, 0, 0);
-  appState.scene.add(gridHelper);
+  appState.scene!.add(gridHelper);
 
   function render() {
-    appState.renderer.render(appState.scene, appState.camera);
+    appState.renderer!.render(appState.scene!, appState.camera!);
   }
 
   function update() {
@@ -81,8 +81,8 @@ export function initScene(container) {
     dLight.position.x = Math.sin(timer * 5) * 300;
     dLight.position.z = Math.cos(timer * 5) * 300;
 
-    appState.controls.update(appState.clock.getDelta());
-    appState.stats.update();
+    appState.controls!.update(appState.clock!.getDelta());
+    appState.stats!.update();
   }
 
   function animate() {
@@ -107,12 +107,12 @@ export function initScene(container) {
   };
 }
 
-export function apply_position(mesh, position) {
+export function apply_position(mesh: any, position: any) {
   mesh.position.x = position.x;
   mesh.position.y = position.y;
   mesh.position.z = position.z;
 }
 
-export function clone_vector(v) {
+export function clone_vector(v: any) {
   return new THREE.Vector3(v.x, v.y, v.z);
 }

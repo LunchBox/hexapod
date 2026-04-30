@@ -26,13 +26,14 @@ export default function ServoPanel() {
     };
 
     for (var idx in bot.legs) {
+      const legIdx = parseInt(idx);
       var limbs = bot.legs[idx].limbs;
 
       for (var jdx = 0; jdx < limbs.length - 1; jdx++) {
         var limb = limbs[jdx];
 
         if (!bot_options.leg_options[idx][limb.type].servo_idx) {
-          bot_options.leg_options[idx][limb.type].servo_idx = idx * 3 + jdx;
+          bot_options.leg_options[idx][limb.type].servo_idx = legIdx * 3 + jdx;
         }
         limb.servo_idx = bot_options.leg_options[idx][limb.type].servo_idx;
 
@@ -43,7 +44,7 @@ export default function ServoPanel() {
         var mark = make_input({ type: 'number', value: limb.servo_idx, style: 'width: 3em;' });
         controlElem.appendChild(mark);
         mark.leg = bot.legs[idx];
-        mark.leg_idx = idx;
+        mark.leg_idx = legIdx;
         mark.limb_idx = jdx;
 
         mark.addEventListener('change', function () {
@@ -70,7 +71,7 @@ export default function ServoPanel() {
         currentInput.addEventListener('change', updateLeg);
 
         // End position display
-        var endPosition = getWorldPosition(bot.mesh, limbs[parseInt(jdx) + 1]);
+        var endPosition: any = getWorldPosition(bot.mesh, limbs[jdx + 1]);
         var labels = ['x', 'y', 'z'];
         for (var kdx in labels) {
           var label = labels[kdx];
@@ -103,7 +104,7 @@ export default function ServoPanel() {
         }
 
         // Revert checkbox
-        var revertOpts = { type: 'checkbox', name: 'revert_input' };
+        var revertOpts: any = { type: 'checkbox', name: 'revert_input' };
         if (bot_options.leg_options[idx][limb.type].revert) {
           revertOpts.checked = true;
         }
@@ -112,7 +113,7 @@ export default function ServoPanel() {
 
         revertInput.range_input = rangeInput;
         revertInput.leg = bot.legs[idx];
-        revertInput.leg_idx = idx;
+        (revertInput as any).leg_idx = legIdx;
         revertInput.limb_idx = jdx;
 
         var revertLabel = document.createElement('label');

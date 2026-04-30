@@ -61,7 +61,7 @@ Hexapod.prototype.draw = function () {
 
   this.legs = [];
   for (var idx in this.options.leg_options) {
-    var leg = new HexapodLeg(this, this.options.leg_options[idx]);
+    var leg = new (HexapodLeg as any)(this, this.options.leg_options[idx]);
     this.body_mesh.add(leg.mesh);
     this.legs.push(leg);
   }
@@ -455,9 +455,9 @@ Hexapod.prototype.send_cmd = function (cmd) {
 };
 
 Hexapod.prototype.draw_time_interval = function (time_interval) {
-  var canvas = document.getElementById('chart');
+  var canvas = document.getElementById('chart') as HTMLCanvasElement | null;
   if (!canvas) return;
-  var context = canvas.getContext('2d');
+  var context = canvas.getContext('2d')!;
   context.fillStyle = '#333';
 
   var max_number = 100;
@@ -469,11 +469,11 @@ Hexapod.prototype.draw_time_interval = function (time_interval) {
 
   context.beginPath();
   context.rect(0, 25, canvas.width, 0.5);
-  context.fillText(25 / scale, 0, canvas.height - 25 + 4);
+  context.fillText(String(25 / scale), 0, canvas.height - 25 + 4);
   context.rect(0, 50, canvas.width, 0.5);
-  context.fillText(50 / scale, 0, canvas.height - 50 + 4);
+  context.fillText(String(50 / scale), 0, canvas.height - 50 + 4);
   context.rect(0, 75, canvas.width, 0.5);
-  context.fillText(75 / scale, 0, canvas.height - 75 + 4);
+  context.fillText(String(75 / scale), 0, canvas.height - 75 + 4);
   context.fillStyle = '#ccc';
   context.fill();
 
@@ -772,6 +772,6 @@ export function set_bot_options(hexapod_options) {
 }
 
 export function build_bot(bot_options) {
-  var bot = new Hexapod(appState.scene, bot_options);
+  var bot = new (Hexapod as any)(appState.scene, bot_options);
   return bot;
 }
