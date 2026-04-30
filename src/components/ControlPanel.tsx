@@ -61,6 +61,7 @@ export default function ControlPanel() {
   const [legCount, setLegCount] = useState(6);
   const [bodyShape, setBodyShape] = useState('rectangle');
   const [polyPlacement, setPolyPlacement] = useState('vertex');
+  const [oddOrientation, setOddOrientation] = useState('back');
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
@@ -153,6 +154,11 @@ export default function ControlPanel() {
       case 'act_poly_placement_switch':
         setPolyPlacement(value!);
         bot.options.polygon_leg_placement = value;
+        bot.apply_attributes(bot.options);
+        break;
+      case 'act_odd_orientation_switch':
+        setOddOrientation(value!);
+        bot.options.polygon_odd_orientation = value;
         bot.apply_attributes(bot.options);
         break;
     }
@@ -250,6 +256,15 @@ export default function ControlPanel() {
               onClick={(e) => { e.preventDefault(); handleAction('act_poly_placement_switch', 'vertex'); }}>Vertex</a>
             <a href="#" className={`control_btn${polyPlacement === 'edge' ? ' active' : ''}`}
               onClick={(e) => { e.preventDefault(); handleAction('act_poly_placement_switch', 'edge'); }}>Edge</a>
+            {legCount % 2 !== 0 && (
+              <>
+                {' | '}
+                <a href="#" className={`control_btn${oddOrientation === 'back' ? ' active' : ''}`}
+                  onClick={(e) => { e.preventDefault(); handleAction('act_odd_orientation_switch', 'back'); }}>1-Back</a>
+                <a href="#" className={`control_btn${oddOrientation === 'front' ? ' active' : ''}`}
+                  onClick={(e) => { e.preventDefault(); handleAction('act_odd_orientation_switch', 'front'); }}>1-Front</a>
+              </>
+            )}
           </>
         )}
       </fieldset>

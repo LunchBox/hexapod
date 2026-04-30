@@ -25,6 +25,7 @@ function computeLegLayout(
   bodyRadius: number,
   bodyLength: number,
   polyPlacement: string = 'vertex',
+  orientation: string = 'back',
 ): LegLayout[] {
   const layouts: LegLayout[] = [];
 
@@ -47,8 +48,10 @@ function computeLegLayout(
     // Edge mode: legs at edge midpoints at radius R * cos(PI/N)
     const edgeOffset = polyPlacement === 'edge' ? Math.PI / legCount : 0;
     const edgeRadius = polyPlacement === 'edge' ? bodyRadius * Math.cos(Math.PI / legCount) : bodyRadius;
+    // orientOffset: 'back' = single leg at rear (π), 'front' = single leg at front (0)
+    const orientOffset = orientation === 'back' ? Math.PI : 0;
     for (let i = 0; i < legCount; i++) {
-      const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset;
+      const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset + orientOffset;
       // mirror=1: rz=-PI/2→+X, ry=init_rad, world dir = -init_rad → need init_rad = -angle
       // mirror=-1: rz=+PI/2→-X, ry=-init_rad, world dir = PI+init_rad → need init_rad = angle-PI
       const onRight = Math.cos(angle) >= 0;
@@ -154,9 +157,10 @@ export class Hexapod {
     const legRadius = bodyShape === 'polygon' ? bodyRadius : bodyWidth / 2;
 
     let polyPlacement = this.options.polygon_leg_placement || 'vertex';
+    let orientation = this.options.polygon_odd_orientation || 'back';
 
     // Compute leg positions dynamically
-    this.leg_layout = computeLegLayout(legCount, bodyShape, legRadius, bodyLength, polyPlacement);
+    this.leg_layout = computeLegLayout(legCount, bodyShape, legRadius, bodyLength, polyPlacement, orientation);
 
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
@@ -231,9 +235,10 @@ export class Hexapod {
           geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
 
           // Outer ring vertices at same angles as legs
+          const orientOffset = this.options.polygon_odd_orientation === 'front' ? 0 : Math.PI;
           const btmRing: number[] = [], topRing: number[] = [];
           for (let i = 0; i < legCount; i++) {
-            const a = (2 * Math.PI * i) / legCount - Math.PI / 2;
+            const a = (2 * Math.PI * i) / legCount - Math.PI / 2 + orientOffset;
             const x = bodyRadius * Math.cos(a);
             const z = bodyRadius * Math.sin(a);
             btmRing.push(geometry.vertices.length);
