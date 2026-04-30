@@ -25,24 +25,25 @@ function computeLegLayout(
   bodyLength: number,
 ): LegLayout[] {
   const layouts: LegLayout[] = [];
+  // x is always positive distance from center; mirror determines L (-1) vs R (1)
+  // angle is the radial direction from body center (0=right, PI/2=front)
 
   if (bodyShape === 'rectangle' && legCount % 2 === 0) {
     const pairs = legCount / 2;
     for (let i = 0; i < pairs; i++) {
       const z = pairs === 1 ? 0 : -bodyLength / 2 + (i * bodyLength) / (pairs - 1);
-      layouts.push({ x: -bodyRadius, z, angle: Math.PI / 2, mirror: -1 });
+      // Left leg: mirror=-1, angle=PI/2 (faces outward to left)
+      layouts.push({ x: bodyRadius, z, angle: Math.PI / 2, mirror: -1 });
+      // Right leg: mirror=1, angle=-PI/2 (faces outward to right)
       layouts.push({ x: bodyRadius, z, angle: -Math.PI / 2, mirror: 1 });
     }
   } else {
-    // Polygon mode — legs radiate evenly from body center
+    // Polygon — legs at vertices of regular N-gon, radiating outward
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2;
-      layouts.push({
-        x: bodyRadius * Math.cos(angle),
-        z: bodyRadius * Math.sin(angle),
-        angle,
-        mirror: Math.cos(angle) >= 0 ? 1 : -1,
-      });
+      // Determine side: left half = mirror -1, right half = mirror 1
+      const mirror = Math.cos(angle) < 0 ? -1 : 1;
+      layouts.push({ x: bodyRadius, z: 0, angle, mirror });
     }
   }
 
@@ -138,12 +139,24 @@ export class Hexapod {
     for (let idx = 0; idx < legCount; idx++) {
       let opt = { ...this.options.leg_options[idx] };
       const layout = this.leg_layout[idx];
-      opt.x = layout.x;
-      opt.z = layout.z;
-      opt.coxa = {
-        ...opt.coxa,
-        init_angle: layout.angle * 180 / Math.PI,
-      };
+
+      if (bodyShape === 'polygon') {
+        // Polygon: position legs at computed world coordinates, no mirror flip
+        opt.mirror = 1;
+        opt.x = bodyRadius * Math.cos(layout.angle);
+        opt.z = bodyRadius * Math.sin(layout.angle);
+        opt.coxa = {
+          ...opt.coxa,
+          init_angle: layout.angle * 180 / Math.PI,
+        };
+      } else {
+        // Rectangle: use mirror system (original behavior)
+        opt.x = layout.x;
+        opt.z = layout.z;
+        opt.mirror = layout.mirror;
+        // Keep original init_angle from defaults (front=30, mid=0, rear=-30)
+      }
+
       let leg = new HexapodLeg(this, opt);
       leg.radial_angle = layout.angle;
       this.body_mesh.add(leg.mesh);
@@ -161,44 +174,41 @@ export class Hexapod {
     let geometry: any, mesh: any, material: any;
     let color = this.options.color ? this.options.color : 0x333333;
     let bodyHeight = this.options.body_height || 20;
+    let bodyShape = this.options.body_shape || 'rectangle';
+    let legCount = this.options.leg_count || 6;
+    let bodyRadius = this.options.body_radius || this.options.body_width / 2;
 
-    // Collect leg attachment vertices from computed layout
-    let vertices = this.leg_layout.map((l: LegLayout) =>
-      new THREE.Vector3(l.x, 0, l.z)
-    );
+    // Collect leg positions for wireframe views
+    let legPositions = this.leg_layout.map((l: LegLayout) => {
+      if (bodyShape === 'polygon') {
+        return new THREE.Vector3(bodyRadius * Math.cos(l.angle), 0, bodyRadius * Math.sin(l.angle));
+      } else {
+        return new THREE.Vector3(l.mirror * l.x, 0, l.z);
+      }
+    });
 
     switch (this.draw_type) {
       case "bone":
         material = new THREE.LineBasicMaterial({ color: color });
         geometry = new THREE.Geometry();
-        vertices.forEach(v => geometry.vertices.push(v.clone()));
-        // Close the loop
-        geometry.vertices.push(vertices[0].clone());
+        legPositions.forEach(v => geometry.vertices.push(v.clone()));
+        geometry.vertices.push(legPositions[0].clone());
         mesh = new THREE.Line(geometry, material);
         break;
       case "points":
         material = new THREE.PointsMaterial({ color: color });
         geometry = new THREE.Geometry();
-        vertices.forEach(v => geometry.vertices.push(v.clone()));
+        legPositions.forEach(v => geometry.vertices.push(v.clone()));
         mesh = new THREE.Points(geometry, material);
         break;
       default:
-        // Draw filled polygon matching leg count
-        if (vertices.length >= 3) {
-          let shape = new THREE.Shape();
-          shape.moveTo(vertices[0].x, vertices[0].z);
-          for (let i = 1; i < vertices.length; i++) {
-            shape.lineTo(vertices[i].x, vertices[i].z);
-          }
-          shape.lineTo(vertices[0].x, vertices[0].z);
-
-          geometry = new THREE.ShapeGeometry(shape);
-          geometry.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
-          let bodyMat = new THREE.MeshBasicMaterial({ color: color });
-          (bodyMat as any).side = 2; // DoubleSide
-          mesh = new THREE.Mesh(geometry, bodyMat);
+        if (bodyShape === 'polygon' && legCount >= 3) {
+          // N-gon prism via CylinderGeometry (has thickness)
+          geometry = new (THREE as any).CylinderGeometry(bodyRadius * 0.85, bodyRadius * 0.85, bodyHeight, legCount);
+          geometry.applyMatrix(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+          mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
         } else {
-          // Fallback for 2 or fewer legs
+          // Rectangle body with thickness
           geometry = new THREE.BoxGeometry(this.options.body_width, bodyHeight, this.options.body_length);
           mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
         }
