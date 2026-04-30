@@ -203,9 +203,8 @@ export class Hexapod {
         break;
       default:
         if (bodyShape === 'polygon' && legCount >= 3) {
-          // N-gon prism via CylinderGeometry (has thickness)
+          // N-gon prism via CylinderGeometry (flat on ground, axis along Y)
           geometry = new (THREE as any).CylinderGeometry(bodyRadius * 0.85, bodyRadius * 0.85, bodyHeight, legCount);
-          geometry.applyMatrix(new THREE.Matrix4().makeRotationX(Math.PI / 2));
           mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
         } else {
           // Rectangle body with thickness
