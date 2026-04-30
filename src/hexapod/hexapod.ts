@@ -24,6 +24,7 @@ function computeLegLayout(
   bodyShape: string,
   bodyRadius: number,
   bodyLength: number,
+  polyPlacement: string = 'vertex',
 ): LegLayout[] {
   const layouts: LegLayout[] = [];
 
@@ -42,18 +43,21 @@ function computeLegLayout(
     }
   } else {
     // Polygon — legs radiate outward from body center
+    // Vertex mode: legs at polygon corners at radius R
+    // Edge mode: legs at edge midpoints at radius R * cos(PI/N)
+    const edgeOffset = polyPlacement === 'edge' ? Math.PI / legCount : 0;
+    const edgeRadius = polyPlacement === 'edge' ? bodyRadius * Math.cos(Math.PI / legCount) : bodyRadius;
     for (let i = 0; i < legCount; i++) {
-      const angle = (2 * Math.PI * i) / legCount - Math.PI / 2;
-      // init_angle so mirror*init_rad = angle (coxa points at angle `a`)
-      const onRight = Math.cos(angle) >= 0;
+      const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset;
       // mirror=1: rz=-PI/2→+X, ry=init_rad, world dir = -init_rad → need init_rad = -angle
       // mirror=-1: rz=+PI/2→-X, ry=-init_rad, world dir = PI+init_rad → need init_rad = angle-PI
+      const onRight = Math.cos(angle) >= 0;
       const initDeg = onRight
         ? -angle * 180 / Math.PI
         : (angle - Math.PI) * 180 / Math.PI;
       layouts.push({
-        x: bodyRadius * Math.cos(angle),
-        z: bodyRadius * Math.sin(angle),
+        x: edgeRadius * Math.cos(angle),
+        z: edgeRadius * Math.sin(angle),
         angle,
         yaw: angle,
         init_angle: initDeg,
@@ -146,8 +150,10 @@ export class Hexapod {
     // Rectangle uses body_width/2 for leg spacing; polygon uses body_radius
     const legRadius = bodyShape === 'polygon' ? bodyRadius : bodyWidth / 2;
 
+    let polyPlacement = this.options.polygon_leg_placement || 'vertex';
+
     // Compute leg positions dynamically
-    this.leg_layout = computeLegLayout(legCount, bodyShape, legRadius, bodyLength);
+    this.leg_layout = computeLegLayout(legCount, bodyShape, legRadius, bodyLength, polyPlacement);
 
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
@@ -249,9 +255,6 @@ export class Hexapod {
 
           geometry.computeFaceNormals();
           bodyVisual = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
-          // Rotate body polygon so legs sit at edge midpoints (or stay at vertices)
-          const polyOffset = this.options.polygon_leg_placement === 'edge' ? Math.PI / legCount : 0;
-          bodyVisual.rotation.y = polyOffset;
         } else {
           // Rectangle body with thickness
           geometry = new THREE.BoxGeometry(this.options.body_width, bodyHeight, this.options.body_length);
