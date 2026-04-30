@@ -29,22 +29,16 @@ function computeLegLayout(
 
   if (bodyShape === 'rectangle' && legCount % 2 === 0) {
     const pairs = legCount / 2;
+    // init_angle per pair: front=+30°, rear=-30°, linear interpolation for mid
+    const frontInit = 30, rearInit = -30;
     for (let i = 0; i < pairs; i++) {
       const z = pairs === 1 ? 0 : -bodyLength / 2 + (i * bodyLength) / (pairs - 1);
-      // Right leg (+X)
-      layouts.push({
-        x: bodyRadius, z,
-        angle: -Math.PI / 2,
-        yaw: -Math.PI / 2,    // points right
-        init_angle: 30,       // default forward tilt
-      });
-      // Left leg (-X)
-      layouts.push({
-        x: -bodyRadius, z,
-        angle: Math.PI / 2,
-        yaw: Math.PI / 2,     // points left
-        init_angle: -30,      // mirrored tilt
-      });
+      const initDeg = pairs === 1 ? 0 : frontInit + ((rearInit - frontInit) * i) / (pairs - 1);
+      const initRad = initDeg * Math.PI / 180;
+      // Right leg: yaw = init_rad (points right with tilt)
+      layouts.push({ x: bodyRadius, z, angle: 0, yaw: initRad, init_angle: initDeg });
+      // Left leg: yaw = PI + init_rad (points left with opposite tilt)
+      layouts.push({ x: -bodyRadius, z, angle: Math.PI, yaw: Math.PI + initRad, init_angle: -initDeg });
     }
   } else {
     // Polygon — legs at vertices, radiating outward
