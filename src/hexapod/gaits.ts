@@ -212,13 +212,29 @@ export class GaitController {
         wave2: [[0], [2], [1], [3]],
       };
     } else {
-      // 6 legs (default)
+      // 6+ legs — dynamic gait generation
+      const evens = Array.from({ length: Math.ceil(n / 2) }, (_, i) => i * 2);
+      const odds = Array.from({ length: Math.floor(n / 2) }, (_, i) => i * 2 + 1);
+
+      // ripple: distribute legs into 3 groups by modulo
+      const ripple = Array.from({ length: 3 }, (_, r) =>
+        Array.from({ length: n }, (_, i) => i).filter(i => i % 3 === r)
+      ).filter(g => g.length > 0);
+
+      // squirm: 4 rounds of alternating half-leg groups
+      const squirm = Array.from({ length: 4 }, (_, r) =>
+        Array.from({ length: n }, (_, i) => i).filter(i => (i + r * 2) % 3 === 0)
+      );
+
       this.gaits = {
-        tripod: [[0, 2, 4], [1, 3, 5]],
-        squirm: [[1, 4], [0, 3], [1, 4], [2, 5]],
-        ripple: [[2, 3], [1, 5], [0, 4]],
-        wave1: [[0], [1], [2], [3], [4], [5]],
-        wave2: [[0], [3], [1], [4], [2], [5]],
+        tripod: [evens, odds],
+        squirm,
+        ripple,
+        wave1: Array.from({ length: n }, (_, i) => [i]),
+        wave2: [
+          ...Array.from({ length: Math.ceil(n / 2) }, (_, i) => [i * 2]),
+          ...Array.from({ length: Math.floor(n / 2) }, (_, i) => [i * 2 + 1]),
+        ],
       };
     }
 
