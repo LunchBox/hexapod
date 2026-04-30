@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useLayoutEffect, useRef, useCallback } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import './LegEditor.css';
@@ -194,13 +194,13 @@ export default function LegEditor() {
     return -1;
   }, [getOpts]);
 
-  // Initial draw + redraw when bot or options change externally
-  useEffect(() => {
+  // Draw synchronously before paint so canvas is never blank
+  useLayoutEffect(() => {
     draw();
   }, [draw, botVersion]);
 
   // Canvas size
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
