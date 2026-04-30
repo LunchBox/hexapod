@@ -126,11 +126,14 @@ export class Hexapod {
 
     const legCount = this.options.leg_count || 6;
     const bodyShape = this.options.body_shape || 'rectangle';
-    const bodyRadius = this.options.body_radius || this.options.body_width / 2;
     const bodyLength = this.options.body_length || 100;
+    const bodyWidth = this.options.body_width || 50;
+    const bodyRadius = this.options.body_radius || 50;
+    // Rectangle uses body_width/2 for leg spacing; polygon uses body_radius
+    const legRadius = bodyShape === 'polygon' ? bodyRadius : bodyWidth / 2;
 
     // Compute leg positions dynamically
-    this.leg_layout = computeLegLayout(legCount, bodyShape, bodyRadius, bodyLength);
+    this.leg_layout = computeLegLayout(legCount, bodyShape, legRadius, bodyLength);
 
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
@@ -143,8 +146,8 @@ export class Hexapod {
       if (bodyShape === 'polygon') {
         // Polygon: position legs at computed world coordinates, no mirror flip
         opt.mirror = 1;
-        opt.x = bodyRadius * Math.cos(layout.angle);
-        opt.z = bodyRadius * Math.sin(layout.angle);
+        opt.x = legRadius * Math.cos(layout.angle);
+        opt.z = legRadius * Math.sin(layout.angle);
         opt.coxa = {
           ...opt.coxa,
           init_angle: layout.angle * 180 / Math.PI,
@@ -176,12 +179,13 @@ export class Hexapod {
     let bodyHeight = this.options.body_height || 20;
     let bodyShape = this.options.body_shape || 'rectangle';
     let legCount = this.options.leg_count || 6;
-    let bodyRadius = this.options.body_radius || this.options.body_width / 2;
+    let bodyRadius = this.options.body_radius || 50;
 
     // Collect leg positions for wireframe views
     let legPositions = this.leg_layout.map((l: LegLayout) => {
       if (bodyShape === 'polygon') {
-        return new THREE.Vector3(bodyRadius * Math.cos(l.angle), 0, bodyRadius * Math.sin(l.angle));
+        let lr = bodyRadius;
+        return new THREE.Vector3(lr * Math.cos(l.angle), 0, lr * Math.sin(l.angle));
       } else {
         return new THREE.Vector3(l.mirror * l.x, 0, l.z);
       }
@@ -203,8 +207,8 @@ export class Hexapod {
         break;
       default:
         if (bodyShape === 'polygon' && legCount >= 3) {
-          // N-gon prism via CylinderGeometry (flat on ground, axis along Y)
-          geometry = new (THREE as any).CylinderGeometry(bodyRadius * 0.85, bodyRadius * 0.85, bodyHeight, legCount);
+          // N-gon prism via CylinderGeometry (flat on ground)
+          geometry = new (THREE as any).CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, legCount);
           mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
         } else {
           // Rectangle body with thickness
