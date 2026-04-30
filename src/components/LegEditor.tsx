@@ -99,7 +99,7 @@ export default function LegEditor() {
     ctx.clearRect(0, 0, W, H);
 
     // Grid
-    ctx.strokeStyle = '#1a1a1a';
+    ctx.strokeStyle = '#ddd';
     ctx.lineWidth = 1;
     for (let x = ox % (20 * scale); x < W; x += 20 * scale) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -123,7 +123,7 @@ export default function LegEditor() {
       const len = Math.sqrt(
         (pts[i + 1].x - pts[i].x) ** 2 + (pts[i + 1].y - pts[i].y) ** 2
       );
-      ctx.fillStyle = '#aaa';
+      ctx.fillStyle = '#555';
       ctx.font = '10px monospace';
       ctx.fillText(len.toFixed(0), mx + 4, my - 4);
     }
