@@ -37,8 +37,9 @@ function computeLegLayout(
       const initRad = initDeg * Math.PI / 180;
       // Right leg: yaw = init_rad (points right with tilt)
       layouts.push({ x: bodyRadius, z, angle: 0, yaw: initRad, init_angle: initDeg });
-      // Left leg: yaw = PI + init_rad (points left with opposite tilt)
-      layouts.push({ x: -bodyRadius, z, angle: Math.PI, yaw: Math.PI + initRad, init_angle: -initDeg });
+      // Left leg: points from -X direction, yaw = initRad - PI (normalized to [-PI, PI])
+      const leftYaw = initRad > 0 ? initRad - Math.PI : initRad + Math.PI;
+      layouts.push({ x: -bodyRadius, z, angle: Math.PI, yaw: leftYaw, init_angle: -initDeg });
     }
   } else {
     // Polygon — legs at vertices, radiating outward
