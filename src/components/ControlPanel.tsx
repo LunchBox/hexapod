@@ -59,6 +59,7 @@ export default function ControlPanel() {
   const [tipCircleScale, setTipCircleScale] = useState(1);
   const [dof, setDof] = useState(3);
   const [legCount, setLegCount] = useState(6);
+  const [bodyShape, setBodyShape] = useState('rectangle');
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
@@ -141,6 +142,11 @@ export default function ControlPanel() {
         const newLegCount = parseInt(value!);
         setLegCount(newLegCount);
         bot.options.leg_count = newLegCount;
+        bot.apply_attributes(bot.options);
+        break;
+      case 'act_body_shape_switch':
+        setBodyShape(value!);
+        bot.options.body_shape = value;
         bot.apply_attributes(bot.options);
         break;
     }
@@ -226,6 +232,14 @@ export default function ControlPanel() {
       </fieldset>
 
       <fieldset className="btns">
+        <legend>Body</legend>
+        <a href="#" className={`control_btn${bodyShape === 'rectangle' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_body_shape_switch', 'rectangle'); }}>Rect</a>
+        <a href="#" className={`control_btn${bodyShape === 'polygon' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_body_shape_switch', 'polygon'); }}>Poly</a>
+      </fieldset>
+
+      <fieldset className="btns">
         <legend>DOF</legend>
         <a href="#" className={`control_btn${dof === 3 ? ' active' : ''}`}
           onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', '3'); }}>3-DOF</a>
@@ -239,6 +253,8 @@ export default function ControlPanel() {
           onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '3'); }}>3</a>
         <a href="#" className={`control_btn${legCount === 4 ? ' active' : ''}`}
           onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '4'); }}>4</a>
+        <a href="#" className={`control_btn${legCount === 5 ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '5'); }}>5</a>
         <a href="#" className={`control_btn${legCount === 6 ? ' active' : ''}`}
           onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '6'); }}>6</a>
       </fieldset>

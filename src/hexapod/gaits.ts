@@ -197,6 +197,13 @@ export class GaitController {
         wave1: [[0], [1], [2]],
         wave2: [[0], [2], [1]],
       };
+    } else if (n === 5) {
+      this.gaits = {
+        tripod: [[0, 2], [1, 3], [4]],
+        ripple: [[1, 2], [3, 4], [0]],
+        wave1: [[0], [1], [2], [3], [4]],
+        wave2: [[0], [2], [4], [1], [3]],
+      };
     } else if (n === 4) {
       this.gaits = {
         tripod: [[0, 2], [1, 3]],

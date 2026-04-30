@@ -9,6 +9,46 @@ import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_loc
 import { GaitController } from './gaits.js';
 import { PosCalculator } from './pos_calculator.js';
 
+// ── Leg layout computation ─────────────────────────────────────
+
+interface LegLayout {
+  x: number;
+  z: number;
+  angle: number;   // radial angle from body center (radians)
+  mirror: number;  // 1 or -1 for coxa orientation
+}
+
+function computeLegLayout(
+  legCount: number,
+  bodyShape: string,
+  bodyRadius: number,
+  bodyLength: number,
+): LegLayout[] {
+  const layouts: LegLayout[] = [];
+
+  if (bodyShape === 'rectangle' && legCount % 2 === 0) {
+    const pairs = legCount / 2;
+    for (let i = 0; i < pairs; i++) {
+      const z = pairs === 1 ? 0 : -bodyLength / 2 + (i * bodyLength) / (pairs - 1);
+      layouts.push({ x: -bodyRadius, z, angle: Math.PI / 2, mirror: -1 });
+      layouts.push({ x: bodyRadius, z, angle: -Math.PI / 2, mirror: 1 });
+    }
+  } else {
+    // Polygon mode — legs radiate evenly from body center
+    for (let i = 0; i < legCount; i++) {
+      const angle = (2 * Math.PI * i) / legCount - Math.PI / 2;
+      layouts.push({
+        x: bodyRadius * Math.cos(angle),
+        z: bodyRadius * Math.sin(angle),
+        angle,
+        mirror: Math.cos(angle) >= 0 ? 1 : -1,
+      });
+    }
+  }
+
+  return layouts;
+}
+
 // ── Hexapod ────────────────────────────────────────────────────
 
 export class Hexapod {
@@ -35,6 +75,7 @@ export class Hexapod {
   hold_time: number;
   time_interval_stack: number[];
   onServoUpdate: (() => void) | null;
+  leg_layout: LegLayout[];
 
   constructor(scene: any, options: any) {
     if (!scene) {
@@ -82,13 +123,29 @@ export class Hexapod {
     this.mesh = new THREE.Object3D();
     this.scene.add(this.mesh);
 
+    const legCount = this.options.leg_count || 6;
+    const bodyShape = this.options.body_shape || 'rectangle';
+    const bodyRadius = this.options.body_radius || this.options.body_width / 2;
+    const bodyLength = this.options.body_length || 100;
+
+    // Compute leg positions dynamically
+    this.leg_layout = computeLegLayout(legCount, bodyShape, bodyRadius, bodyLength);
+
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
 
-    const legCount = this.options.leg_count || 6;
     this.legs = [];
     for (let idx = 0; idx < legCount; idx++) {
-      let leg = new HexapodLeg(this, this.options.leg_options[idx]);
+      let opt = { ...this.options.leg_options[idx] };
+      const layout = this.leg_layout[idx];
+      opt.x = layout.x;
+      opt.z = layout.z;
+      opt.coxa = {
+        ...opt.coxa,
+        init_angle: layout.angle * 180 / Math.PI,
+      };
+      let leg = new HexapodLeg(this, opt);
+      leg.radial_angle = layout.angle;
       this.body_mesh.add(leg.mesh);
       this.legs.push(leg);
     }
@@ -102,37 +159,54 @@ export class Hexapod {
 
   draw_body() {
     let geometry: any, mesh: any, material: any;
-
     let color = this.options.color ? this.options.color : 0x333333;
+    let bodyHeight = this.options.body_height || 20;
+
+    // Collect leg attachment vertices from computed layout
+    let vertices = this.leg_layout.map((l: LegLayout) =>
+      new THREE.Vector3(l.x, 0, l.z)
+    );
 
     switch (this.draw_type) {
       case "bone":
         material = new THREE.LineBasicMaterial({ color: color });
         geometry = new THREE.Geometry();
-        for (let i = 0; i < this.options.leg_options.length; i++) {
-          let opt = this.options.leg_options[i];
-          geometry.vertices.push(new THREE.Vector3(opt.mirror * opt.x, opt.y, opt.mirror * opt.z));
-        }
+        vertices.forEach(v => geometry.vertices.push(v.clone()));
+        // Close the loop
+        geometry.vertices.push(vertices[0].clone());
         mesh = new THREE.Line(geometry, material);
         break;
       case "points":
         material = new THREE.PointsMaterial({ color: color });
         geometry = new THREE.Geometry();
-        for (let j = 0; j < this.options.leg_options.length; j++) {
-          let opt2 = this.options.leg_options[j];
-          geometry.vertices.push(new THREE.Vector3(opt2.mirror * opt2.x, opt2.y, opt2.mirror * opt2.z));
-        }
+        vertices.forEach(v => geometry.vertices.push(v.clone()));
         mesh = new THREE.Points(geometry, material);
         break;
       default:
-        material = new THREE.MeshBasicMaterial({ color: color });
-        geometry = new THREE.BoxGeometry(this.options.body_width, this.options.body_height, this.options.body_length);
-        mesh = new THREE.Mesh(geometry, material);
+        // Draw filled polygon matching leg count
+        if (vertices.length >= 3) {
+          let shape = new THREE.Shape();
+          shape.moveTo(vertices[0].x, vertices[0].z);
+          for (let i = 1; i < vertices.length; i++) {
+            shape.lineTo(vertices[i].x, vertices[i].z);
+          }
+          shape.lineTo(vertices[0].x, vertices[0].z);
+
+          geometry = new THREE.ShapeGeometry(shape);
+          geometry.applyMatrix(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+          let bodyMat = new THREE.MeshBasicMaterial({ color: color });
+          (bodyMat as any).side = 2; // DoubleSide
+          mesh = new THREE.Mesh(geometry, bodyMat);
+        } else {
+          // Fallback for 2 or fewer legs
+          geometry = new THREE.BoxGeometry(this.options.body_width, bodyHeight, this.options.body_length);
+          mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
+        }
         let axisHelper = new THREE.AxisHelper(30);
         mesh.add(axisHelper);
     }
 
-    mesh.position.y = this.options.body_height / 2;
+    mesh.position.y = bodyHeight / 2;
     return mesh;
   }
 
@@ -560,6 +634,7 @@ export class HexapodLeg {
   tip: any;
   limbs: any[];
   joint_count: number;
+  radial_angle: number;
 
   constructor(bot: any, options: any) {
     this.bot = bot;
