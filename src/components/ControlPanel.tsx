@@ -58,6 +58,7 @@ export default function ControlPanel() {
   const [syncMode, setSyncMode] = useState('manual');
   const [tipCircleScale, setTipCircleScale] = useState(1);
   const [dof, setDof] = useState(3);
+  const [legCount, setLegCount] = useState(6);
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
@@ -134,6 +135,12 @@ export default function ControlPanel() {
         const newDof = parseInt(value!);
         setDof(newDof);
         bot.options.dof = newDof;
+        bot.apply_attributes(bot.options);
+        break;
+      case 'act_leg_count_switch':
+        const newLegCount = parseInt(value!);
+        setLegCount(newLegCount);
+        bot.options.leg_count = newLegCount;
         bot.apply_attributes(bot.options);
         break;
     }
@@ -224,6 +231,16 @@ export default function ControlPanel() {
           onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', '3'); }}>3-DOF</a>
         <a href="#" className={`control_btn${dof === 4 ? ' active' : ''}`}
           onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', '4'); }}>4-DOF</a>
+      </fieldset>
+
+      <fieldset className="btns">
+        <legend>Legs</legend>
+        <a href="#" className={`control_btn${legCount === 3 ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '3'); }}>3</a>
+        <a href="#" className={`control_btn${legCount === 4 ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '4'); }}>4</a>
+        <a href="#" className={`control_btn${legCount === 6 ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '6'); }}>6</a>
       </fieldset>
 
       <fieldset className="btns">

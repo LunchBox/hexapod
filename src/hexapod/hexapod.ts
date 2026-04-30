@@ -84,8 +84,9 @@ export class Hexapod {
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
 
+    const legCount = this.options.leg_count || 6;
     this.legs = [];
-    for (let idx = 0; idx < this.options.leg_options.length; idx++) {
+    for (let idx = 0; idx < legCount; idx++) {
       let leg = new HexapodLeg(this, this.options.leg_options[idx]);
       this.body_mesh.add(leg.mesh);
       this.legs.push(leg);

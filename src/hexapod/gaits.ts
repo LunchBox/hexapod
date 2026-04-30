@@ -188,15 +188,32 @@ export class GaitController {
   constructor(bot: any) {
     this.bot = bot;
 
-    this.all_legs = [0, 1, 2, 3, 4, 5];
+    const n = bot.legs.length;
+    this.all_legs = Array.from({ length: n }, (_, i) => i);
 
-    this.gaits = {
-      tripod: [[0, 2, 4], [1, 3, 5]],
-      squirm: [[1, 4], [0, 3], [1, 4], [2, 5]],
-      ripple: [[2, 3], [1, 5], [0, 4]],
-      wave1: [[0], [1], [2], [3], [4], [5]],
-      wave2: [[0], [3], [1], [4], [2], [5]],
-    };
+    if (n === 3) {
+      this.gaits = {
+        tripod: [[0, 1], [2]],
+        wave1: [[0], [1], [2]],
+        wave2: [[0], [2], [1]],
+      };
+    } else if (n === 4) {
+      this.gaits = {
+        tripod: [[0, 2], [1, 3]],
+        ripple: [[0, 1], [2, 3]],
+        wave1: [[0], [1], [2], [3]],
+        wave2: [[0], [2], [1], [3]],
+      };
+    } else {
+      // 6 legs (default)
+      this.gaits = {
+        tripod: [[0, 2, 4], [1, 3, 5]],
+        squirm: [[1, 4], [0, 3], [1, 4], [2, 5]],
+        ripple: [[2, 3], [1, 5], [0, 4]],
+        wave1: [[0], [1], [2], [3], [4], [5]],
+        wave2: [[0], [3], [1], [4], [2], [5]],
+      };
+    }
 
     this.leg_groups = this.gaits.tripod;
     this.leg_group_idx = 0;

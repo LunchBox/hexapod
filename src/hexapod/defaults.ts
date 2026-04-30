@@ -47,6 +47,7 @@ export const TARSUS = 3;
 
 // DOF
 export const DEFAULT_DOF = 3;
+export const DEFAULT_LEG_COUNT = 6;
 
 // Keyboard
 export const FORWARD_KEY = 87;
@@ -73,6 +74,7 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   tarsus_length: DEFAULT_TARSUS_LENGTH,
 
   dof: DEFAULT_DOF,
+  leg_count: DEFAULT_LEG_COUNT,
 
   color: 0x333333,
 
@@ -84,10 +86,27 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   first_servo_idx: 0,
 
   leg_options: [
-    // Left side
+    // Left front / Right front (leg_count=3 uses these + left mid)
     {
       x: DEFAULT_BODY_WIDTH / 2, y: 0, z: -DEFAULT_BODY_LENGTH / 2,
       coxa: { length: DEFAULT_COXA_LENGTH, radius: DEFAULT_COXA_RADIUS, init_angle: DEFAULT_COXA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      femur: { length: DEFAULT_FEMUR_LENGTH, radius: DEFAULT_FEMUR_RADIUS, init_angle: DEFAULT_FEMUR_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      tibia: { length: DEFAULT_TIBIA_LENGTH, radius: DEFAULT_TIBIA_RADIUS, init_angle: DEFAULT_TIBIA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      tarsus: { length: DEFAULT_TARSUS_LENGTH, radius: DEFAULT_TARSUS_RADIUS, init_angle: DEFAULT_TARSUS_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      mirror: -1,
+    },
+    {
+      x: DEFAULT_BODY_WIDTH / 2, y: 0, z: -DEFAULT_BODY_LENGTH / 2,
+      coxa: { length: DEFAULT_COXA_LENGTH, radius: DEFAULT_COXA_RADIUS, init_angle: DEFAULT_COXA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      femur: { length: DEFAULT_FEMUR_LENGTH, radius: DEFAULT_FEMUR_RADIUS, init_angle: DEFAULT_FEMUR_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      tibia: { length: DEFAULT_TIBIA_LENGTH, radius: DEFAULT_TIBIA_RADIUS, init_angle: DEFAULT_TIBIA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      tarsus: { length: DEFAULT_TARSUS_LENGTH, radius: DEFAULT_TARSUS_RADIUS, init_angle: DEFAULT_TARSUS_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
+      mirror: 1,
+    },
+    // Left middle / Right middle (leg_count=3,4 use these)
+    {
+      x: DEFAULT_BODY_WIDTH / 2, y: 0, z: 0,
+      coxa: { length: DEFAULT_COXA_LENGTH, radius: DEFAULT_COXA_RADIUS, init_angle: 0, servo_value: SERVO_CURRENT_VALUE, revert: false },
       femur: { length: DEFAULT_FEMUR_LENGTH, radius: DEFAULT_FEMUR_RADIUS, init_angle: DEFAULT_FEMUR_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
       tibia: { length: DEFAULT_TIBIA_LENGTH, radius: DEFAULT_TIBIA_RADIUS, init_angle: DEFAULT_TIBIA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
       tarsus: { length: DEFAULT_TARSUS_LENGTH, radius: DEFAULT_TARSUS_RADIUS, init_angle: DEFAULT_TARSUS_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
@@ -99,8 +118,9 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
       femur: { length: DEFAULT_FEMUR_LENGTH, radius: DEFAULT_FEMUR_RADIUS, init_angle: DEFAULT_FEMUR_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
       tibia: { length: DEFAULT_TIBIA_LENGTH, radius: DEFAULT_TIBIA_RADIUS, init_angle: DEFAULT_TIBIA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
       tarsus: { length: DEFAULT_TARSUS_LENGTH, radius: DEFAULT_TARSUS_RADIUS, init_angle: DEFAULT_TARSUS_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      mirror: -1,
+      mirror: 1,
     },
+    // Left rear / Right rear (only leg_count=6 uses these)
     {
       x: DEFAULT_BODY_WIDTH / 2, y: 0, z: DEFAULT_BODY_LENGTH / 2,
       coxa: { length: DEFAULT_COXA_LENGTH, radius: DEFAULT_COXA_RADIUS, init_angle: -DEFAULT_COXA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
@@ -108,23 +128,6 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
       tibia: { length: DEFAULT_TIBIA_LENGTH, radius: DEFAULT_TIBIA_RADIUS, init_angle: DEFAULT_TIBIA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
       tarsus: { length: DEFAULT_TARSUS_LENGTH, radius: DEFAULT_TARSUS_RADIUS, init_angle: DEFAULT_TARSUS_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
       mirror: -1,
-    },
-    // Right side
-    {
-      x: DEFAULT_BODY_WIDTH / 2, y: 0, z: -DEFAULT_BODY_LENGTH / 2,
-      coxa: { length: DEFAULT_COXA_LENGTH, radius: DEFAULT_COXA_RADIUS, init_angle: DEFAULT_COXA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      femur: { length: DEFAULT_FEMUR_LENGTH, radius: DEFAULT_FEMUR_RADIUS, init_angle: DEFAULT_FEMUR_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      tibia: { length: DEFAULT_TIBIA_LENGTH, radius: DEFAULT_TIBIA_RADIUS, init_angle: DEFAULT_TIBIA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      tarsus: { length: DEFAULT_TARSUS_LENGTH, radius: DEFAULT_TARSUS_RADIUS, init_angle: DEFAULT_TARSUS_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      mirror: 1,
-    },
-    {
-      x: DEFAULT_BODY_WIDTH / 2, y: 0, z: 0,
-      coxa: { length: DEFAULT_COXA_LENGTH, radius: DEFAULT_COXA_RADIUS, init_angle: 0, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      femur: { length: DEFAULT_FEMUR_LENGTH, radius: DEFAULT_FEMUR_RADIUS, init_angle: DEFAULT_FEMUR_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      tibia: { length: DEFAULT_TIBIA_LENGTH, radius: DEFAULT_TIBIA_RADIUS, init_angle: DEFAULT_TIBIA_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      tarsus: { length: DEFAULT_TARSUS_LENGTH, radius: DEFAULT_TARSUS_RADIUS, init_angle: DEFAULT_TARSUS_INIT_ANGLE, servo_value: SERVO_CURRENT_VALUE, revert: false },
-      mirror: 1,
     },
     {
       x: DEFAULT_BODY_WIDTH / 2, y: 0, z: DEFAULT_BODY_LENGTH / 2,
