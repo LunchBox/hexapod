@@ -1,7 +1,7 @@
 export function uniq(array) {
-  var n = [];
-  for (var i = 0; i < array.length; i++) {
-    if (n.indexOf(array[i]) == -1) n.push(array[i]);
+  let n = [];
+  for (let i = 0; i < array.length; i++) {
+    if (n.indexOf(array[i]) === -1) n.push(array[i]);
   }
   return n;
 }
@@ -21,19 +21,19 @@ export function clearSelection() {
 }
 
 export function has_class(elem, class_name) {
-  var class_names = elem.getAttribute("class").split(" ");
+  let class_names = elem.getAttribute("class").split(" ");
   return class_names.indexOf(class_name) > -1;
 }
 
 export function add_class(elem, class_name) {
-  var class_names = elem.getAttribute("class").split(" ");
+  let class_names = elem.getAttribute("class").split(" ");
   class_names.push(class_name);
   elem.setAttribute("class", uniq(class_names).join(" "));
 }
 
 export function remove_class(elem, class_name) {
-  var class_names = uniq(elem.getAttribute("class").split(" "));
-  var idx = class_names.indexOf(class_name);
+  let class_names = uniq(elem.getAttribute("class").split(" "));
+  let idx = class_names.indexOf(class_name);
   if (idx > -1) {
     class_names.splice(idx, 1);
   }
@@ -41,8 +41,8 @@ export function remove_class(elem, class_name) {
 }
 
 export function sleep(milliseconds) {
-  var start = new Date().getTime();
-  for (var i = 0; i < 1e7; i++) {
+  let start = new Date().getTime();
+  for (let i = 0; i < 1e7; i++) {
     if ((new Date().getTime() - start) > milliseconds) {
       break;
     }
@@ -50,15 +50,15 @@ export function sleep(milliseconds) {
 }
 
 export function make_input(options) {
-  var input = document.createElement('input');
-  for (var key in options) {
+  let input = document.createElement('input');
+  for (let key in options) {
     input.setAttribute(key, options[key]);
   }
   return input;
 }
 
 export function make_label(name, label_for) {
-  var label = document.createElement('label');
+  let label = document.createElement('label');
   label.setAttribute("for", label_for);
   label.innerHTML = name;
   return label;
@@ -66,15 +66,15 @@ export function make_label(name, label_for) {
 
 export function getWorldPosition(root_mesh, mesh) {
   root_mesh.updateMatrixWorld();
-  var vector = new THREE.Vector3();
+  let vector = new THREE.Vector3();
   vector.setFromMatrixPosition(mesh.matrixWorld);
   return vector;
 }
 
 export function get_obj_from_local_storage(key, default_value) {
   if (typeof (Storage) !== "undefined") {
-    var obj_string = localStorage[key];
-    var obj;
+    let obj_string = localStorage[key];
+    let obj;
     if (obj_string) {
       obj = JSON.parse(obj_string);
       if (obj == null) {
@@ -102,7 +102,7 @@ export function degree_to_redius(degree) {
 }
 
 // Rotate an object around an arbitrary axis in object space
-var rotObjectMatrix;
+let rotObjectMatrix;
 export function rotateAroundObjectAxis(object, axis, radians) {
   rotObjectMatrix = new THREE.Matrix4();
   rotObjectMatrix.makeRotationAxis(axis.normalize(), radians);
@@ -111,7 +111,7 @@ export function rotateAroundObjectAxis(object, axis, radians) {
 }
 
 // Rotate an object around an arbitrary axis in world space
-var rotWorldMatrix;
+let rotWorldMatrix;
 export function rotateAroundWorldAxis(object, axis, radians) {
   rotWorldMatrix = new THREE.Matrix4();
   rotWorldMatrix.makeRotationAxis(axis.normalize(), radians);
@@ -120,9 +120,9 @@ export function rotateAroundWorldAxis(object, axis, radians) {
   object.rotation.setFromRotationMatrix(object.matrix);
 }
 
-export var logger = (function () {
-  var oldConsoleLog: any = null;
-  var pub: { enableLogger: () => void; disableLogger: () => void } = {
+export let logger = (function () {
+  let oldConsoleLog: any = null;
+  let pub: { enableLogger: () => void; disableLogger: () => void } = {
     enableLogger: function () { },
     disableLogger: function () { },
   };

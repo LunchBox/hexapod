@@ -12,9 +12,7 @@ export function HexapodProvider({ children }) {
   const updateServoDisplay = useCallback(() => {
     const bot = botRef.current;
     if (!bot) return;
-    const values = bot.get_servo_values();
-    const cmd = bot.build_cmd(values);
-    setServoValues(cmd);
+    setServoValues(bot.build_cmd(bot.get_servo_values()));
     if (bot.on_servo_values) {
       setLastServoValues(bot.format_servo_values(bot.on_servo_values));
     }

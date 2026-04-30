@@ -5,8 +5,8 @@ import { get_bot_options, build_bot } from '../hexapod/hexapod';
 import appState from '../hexapod/appState';
 
 export default function SceneCanvas() {
-  const containerRef = useRef(null);
-  const { botRef } = useHexapod();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { botRef, updateServoDisplay } = useHexapod();
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -23,6 +23,7 @@ export default function SceneCanvas() {
 
     const bot_options = get_bot_options();
     const bot = build_bot(bot_options);
+    bot.onServoUpdate = updateServoDisplay;
     botRef.current = bot;
     appState.current_bot = bot;
 
@@ -31,10 +32,11 @@ export default function SceneCanvas() {
       if (bot.mesh && sceneObjs.scene) {
         sceneObjs.scene.remove(bot.mesh);
       }
+      bot.onServoUpdate = null;
       botRef.current = null;
       appState.current_bot = null;
     };
-  }, [botRef]);
+  }, [botRef, updateServoDisplay]);
 
   return (
     <div

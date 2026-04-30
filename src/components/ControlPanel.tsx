@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useHexapod } from '../context/HexapodContext';
-import appState from '../hexapod/appState';
 import { JoyStick } from '../hexapod/joystick2';
 
 // Button groups as data to keep JSX concise
@@ -62,7 +61,7 @@ export default function ControlPanel() {
     switch (action) {
       case 'act_draw_type_switch':
         bot.draw_type = value;
-        appState.scene.remove(bot.mesh);
+        bot.scene.remove(bot.mesh);
         bot.draw();
         bot.apply_status(bot.get_status());
         break;

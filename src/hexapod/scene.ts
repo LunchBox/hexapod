@@ -5,14 +5,14 @@ export function initScene(container: HTMLElement) {
   appState.keyboard = new (THREEx.KeyboardState as any)();
   appState.clock = new THREE.Clock();
 
-  var SCREEN_WIDTH = container.offsetWidth;
-  var SCREEN_HEIGHT = container.offsetHeight;
+  let SCREEN_WIDTH = container.offsetWidth;
+  let SCREEN_HEIGHT = container.offsetHeight;
 
   // Scene
   appState.scene = new THREE.Scene();
 
   // Camera
-  var VIEW_ANGLE = 45,
+  let VIEW_ANGLE = 45,
     ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT,
     NEAR = 1,
     FAR = 10000;
@@ -34,8 +34,8 @@ export function initScene(container: HTMLElement) {
   window.addEventListener('resize', onWindowResize, false);
 
   function onWindowResize() {
-    var w = container.offsetWidth;
-    var h = container.offsetHeight;
+    let w = container.offsetWidth;
+    let h = container.offsetHeight;
     appState.camera!.aspect = w / h;
     appState.camera!.updateProjectionMatrix();
     appState.renderer!.setSize(w, h);
@@ -53,18 +53,18 @@ export function initScene(container: HTMLElement) {
   container.appendChild(appState.stats.domElement);
 
   // Directional light
-  var dLight = new (THREE.DirectionalLight as any)(0xffffff);
+  let dLight = new (THREE.DirectionalLight as any)(0xffffff);
   dLight.position.set(1, 300, 0);
 
   // Particle light
-  var particleLight = new (THREE.Mesh as any)(
+  let particleLight = new (THREE.Mesh as any)(
     new (THREE.SphereGeometry as any)(10, 10, 10),
     new THREE.MeshBasicMaterial({ color: 0x44ff44 })
   );
   particleLight.position.set(1, 500, 0);
 
   // Grid
-  var gridHelper = new (THREE.GridHelper as any)(500, 100);
+  let gridHelper = new (THREE.GridHelper as any)(500, 100);
   gridHelper.position.set(0, 0, 0);
   gridHelper.rotation.set(0, 0, 0);
   appState.scene!.add(gridHelper);
@@ -75,7 +75,7 @@ export function initScene(container: HTMLElement) {
 
   function update() {
     // Particle light animation
-    var timer = Date.now() * 0.000025;
+    let timer = Date.now() * 0.000025;
     particleLight.position.x = Math.sin(timer * 5) * 300;
     particleLight.position.z = Math.cos(timer * 5) * 300;
     dLight.position.x = Math.sin(timer * 5) * 300;
@@ -105,14 +105,4 @@ export function initScene(container: HTMLElement) {
     keyboard: appState.keyboard,
     clock: appState.clock,
   };
-}
-
-export function apply_position(mesh: any, position: any) {
-  mesh.position.x = position.x;
-  mesh.position.y = position.y;
-  mesh.position.z = position.z;
-}
-
-export function clone_vector(v: any) {
-  return new THREE.Vector3(v.x, v.y, v.z);
 }

@@ -16,7 +16,6 @@ export const SERVO_MAX_VALUE = 2500;
 export const SERVO_CURRENT_VALUE = 1500;
 export const MAX_ANGLE_UNIT = 60 / 120;
 export const SERVO_VALUE_TIME_UNIT = 120 / 60 * ANGLE_RANGE / (SERVO_MAX_VALUE - SERVO_MIN_VALUE);
-export const DIST_ERROR = 0.2;
 export const DEFAULT_MOVE_STEP = 30;
 
 // Body
