@@ -1,0 +1,19 @@
+.app {
+  font-family: arial;
+  font-size: 13px;
+  color: #444;
+  text-align: left;
+}
+
+.main-content {
+  overflow: hidden;
+}
+
+.left-column {
+  float: left;
+  width: 480px;
+}
+
+.right-column {
+  margin-left: 490px;
+}

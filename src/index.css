@@ -1,0 +1,12 @@
+body {
+  margin: 0;
+  overflow-y: scroll;
+  font-family: arial;
+  font-size: 13px;
+  color: #444;
+}
+
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+}
