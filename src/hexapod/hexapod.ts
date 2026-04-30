@@ -29,28 +29,32 @@ function computeLegLayout(
 
   if (bodyShape === 'rectangle' && legCount % 2 === 0) {
     const pairs = legCount / 2;
-    // init_angle per pair: front=+30°, rear=-30°, linear interpolation for mid
     const frontInit = 30, rearInit = -30;
     for (let i = 0; i < pairs; i++) {
       const z = pairs === 1 ? 0 : -bodyLength / 2 + (i * bodyLength) / (pairs - 1);
       const initDeg = pairs === 1 ? 0 : frontInit + ((rearInit - frontInit) * i) / (pairs - 1);
       const initRad = initDeg * Math.PI / 180;
-      // Right leg: yaw = init_rad (points right with tilt)
+      // Same init_angle for both sides; mirror in draw_coxa handles L/R flip
+      // Right: mirror=1 → rotation.y = +initRad → coxa from +X tilted by +initDeg°
+      // Left:  mirror=-1 → rotation.y = -initRad → coxa from -X tilted by -initDeg°
       layouts.push({ x: bodyRadius, z, angle: 0, yaw: initRad, init_angle: initDeg });
-      // Left leg: points from -X direction, yaw = initRad - PI (normalized to [-PI, PI])
-      const leftYaw = initRad > 0 ? initRad - Math.PI : initRad + Math.PI;
-      layouts.push({ x: -bodyRadius, z, angle: Math.PI, yaw: leftYaw, init_angle: -initDeg });
+      layouts.push({ x: -bodyRadius, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
     }
   } else {
-    // Polygon — legs at vertices, radiating outward
+    // Polygon — legs radiate outward from body center
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2;
+      // init_angle so mirror*init_rad = angle (coxa points at angle `a`)
+      const onRight = Math.cos(angle) >= 0;
+      const initDeg = onRight
+        ? angle * 180 / Math.PI           // mirror=1: rotation.y = init_rad = angle
+        : (angle - Math.PI) * 180 / Math.PI; // mirror=-1: rotation.y = -init_rad = PI-angle = -angle+PI
       layouts.push({
         x: bodyRadius * Math.cos(angle),
         z: bodyRadius * Math.sin(angle),
         angle,
-        yaw: angle,           // coxa points radially outward
-        init_angle: angle * 180 / Math.PI,
+        yaw: angle,
+        init_angle: initDeg,
       });
     }
   }
@@ -151,10 +155,10 @@ export class Hexapod {
       let opt = { ...this.options.leg_options[idx] };
       const layout = this.leg_layout[idx];
 
-      // Direct signed positions for coxa
+      // Direct signed positions for coxa (no mirror on position)
       opt.x = layout.x;
       opt.z = layout.z;
-      // Mirror only for femur/tibia/tarsus bend direction
+      // Mirror for transform hierarchy consistency (rotation.z + rotation.y + femur/tibia)
       opt.mirror = layout.x >= 0 ? 1 : -1;
       opt.coxa = {
         ...opt.coxa,
@@ -755,14 +759,10 @@ export class HexapodLeg {
     mesh.position.y = this.options.y;
     mesh.position.z = this.options.z;
 
-    // Coxa always starts along +X, then rotated by yaw
-    mesh.rotation.z = -Math.PI / 2;
-    const yaw = (this.options)._yaw != null
-      ? (this.options)._yaw
-      : degree_to_redius(this.options.coxa.init_angle);
-    mesh.rotation.y = yaw;
-
-    mesh.init_radius = yaw;
+    // Mirror controls both rotation.z (initial direction) and rotation.y (yaw)
+    mesh.rotation.z = this.options.mirror * (-Math.PI / 2);
+    mesh.rotation.y = this.options.mirror * degree_to_redius(this.options.coxa.init_angle);
+    mesh.init_radius = degree_to_redius(this.options.coxa.init_angle);
     mesh.init_angle = this.options.coxa.init_angle;
 
     mesh.servo_value = this.options.coxa.servo_value;
@@ -949,7 +949,7 @@ export class HexapodLeg {
     }
 
     if (limb_idx === 0) {
-      limb_mesh.rotation.y = limb_mesh.init_radius + delta_radius;
+      limb_mesh.rotation.y = this.mirror * limb_mesh.init_radius + delta_radius;
     } else {
       limb_mesh.rotation.z = this.mirror * limb_mesh.init_radius + delta_radius;
     }
