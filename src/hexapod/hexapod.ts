@@ -151,15 +151,15 @@ export class Hexapod {
       let opt = { ...this.options.leg_options[idx] };
       const layout = this.leg_layout[idx];
 
-      // Direct signed positions — no mirror indirection
+      // Direct signed positions for coxa
       opt.x = layout.x;
       opt.z = layout.z;
-      opt.mirror = 1; // always 1, no more L/R mirroring
+      // Mirror only for femur/tibia/tarsus bend direction
+      opt.mirror = layout.x >= 0 ? 1 : -1;
       opt.coxa = {
         ...opt.coxa,
         init_angle: layout.init_angle,
       };
-      // Store yaw for draw_coxa
       (opt as any)._yaw = layout.yaw;
 
       let leg = new HexapodLeg(this, opt);
@@ -785,7 +785,7 @@ export class HexapodLeg {
     mesh.type = "femur";
 
     mesh.position.y = this.options.coxa.length;
-    mesh.rotation.z = degree_to_redius(this.options.femur.init_angle);
+    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.femur.init_angle);
     mesh.init_radius = degree_to_redius(this.options.femur.init_angle);
     mesh.init_angle = this.options.femur.init_angle;
 
@@ -828,7 +828,7 @@ export class HexapodLeg {
     mesh.type = "tibia";
 
     mesh.position.y = this.options.femur.length;
-    mesh.rotation.z = degree_to_redius(this.options.tibia.init_angle);
+    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.tibia.init_angle);
     mesh.init_radius = degree_to_redius(this.options.tibia.init_angle);
     mesh.init_angle = this.options.tibia.init_angle;
 
@@ -871,7 +871,7 @@ export class HexapodLeg {
     mesh.type = "tarsus";
 
     mesh.position.y = this.options.tibia.length;
-    mesh.rotation.z = degree_to_redius(this.options.tarsus.init_angle);
+    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.tarsus.init_angle);
     mesh.init_radius = degree_to_redius(this.options.tarsus.init_angle);
     mesh.init_angle = this.options.tarsus.init_angle;
 
@@ -891,7 +891,7 @@ export class HexapodLeg {
     if (limb_idx === 0) {
       limb_mesh.rotation.y = new_radius;
     } else {
-      limb_mesh.rotation.z = new_radius;
+      limb_mesh.rotation.z = this.mirror * new_radius;
     }
   }
 
@@ -900,14 +900,14 @@ export class HexapodLeg {
     if (limb_idx === 0) {
       return limb.rotation.y / Math.PI * 180;
     } else {
-      return limb.rotation.z / Math.PI * 180;
+      return this.mirror * limb.rotation.z / Math.PI * 180;
     }
   }
 
   set_angle(limb_idx: number, angle: number) {
     let limb = this.limbs[limb_idx];
     let current_angle = this.get_angle(limb_idx);
-    let diff_servo_value = ((SERVO_MAX_VALUE - SERVO_MIN_VALUE) / 2) * (angle - current_angle) / 90;
+    let diff_servo_value = this.mirror * ((SERVO_MAX_VALUE - SERVO_MIN_VALUE) / 2) * (angle - current_angle) / 90;
     let new_servo_value = limb.servo_value + diff_servo_value;
     this.set_servo_value(limb_idx, new_servo_value);
   }
@@ -932,7 +932,7 @@ export class HexapodLeg {
     if (limb_idx === 0) {
       limb_mesh.rotation.y = limb_mesh.init_radius + delta_radius;
     } else {
-      limb_mesh.rotation.z = limb_mesh.init_radius + delta_radius;
+      limb_mesh.rotation.z = this.mirror * limb_mesh.init_radius + delta_radius;
     }
 
     let _value = Math.round(value);
