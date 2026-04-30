@@ -18,9 +18,11 @@ function computeJoints(opts: any): Point[] {
   const tibiaLen = opts.tibia_length || 62;
   const tarsusLen = opts.tarsus_length || 30;
   const leg = opts.leg_options[0];
-  const fAng = ((leg.femur.init_angle || 30) * Math.PI) / 180;
-  const tAng = fAng + ((leg.tibia.init_angle || -105) * Math.PI) / 180;
-  const aAng = tAng + ((leg.tarsus.init_angle || -60) * Math.PI) / 180;
+  // 3D rotation.z = mirror * init_angle. For right-leg view: positive = CCW = upward.
+  // Canvas Y is down, so negate to map 3D upward → canvas negative Y.
+  const fAng = -((leg.femur.init_angle || 30) * Math.PI) / 180;
+  const tAng = fAng - ((leg.tibia.init_angle || -105) * Math.PI) / 180;
+  const aAng = tAng - ((leg.tarsus.init_angle || -60) * Math.PI) / 180;
 
   const pts: Point[] = [{ x: 0, y: 0 }];
   pts.push({ x: coxaLen, y: 0 });
@@ -148,28 +150,35 @@ export default function LegEditor() {
 
     // Helper: draw angle arc at joint index j, from angle a1 to a2
     function drawArc(j: number, a1Deg: number, a2Deg: number, color: string) {
-      if (j < 2) return; // no arc for body or coxa tip
+      if (j < 2) return;
       const center = sp[j];
-      const a1 = (a1Deg * Math.PI) / 180;
-      const a2 = (a2Deg * Math.PI) / 180;
+      let a1 = (a1Deg * Math.PI) / 180;
+      let a2 = (a2Deg * Math.PI) / 180;
+      let diff = a2 - a1;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      const ccw = diff < 0;
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
-      ctx.arc(center.x, center.y, arcR, a1, a2, false);
+      ctx.arc(center.x, center.y, arcR, a1, a2, ccw);
       ctx.stroke();
       ctx.setLineDash([]);
     }
 
-    // Femur arc at joint 1 (coxa tip)
-    drawArc(1, 0, fAng, COLORS[1]);
+    // Femur arc at joint 1 (coxa tip): from horizontal (0) to femur angle
+    const fAngDeg = -(leg.femur.init_angle || 30); // canvas-space femur angle
+    drawArc(1, 0, fAngDeg, COLORS[1]);
     // Tibia arc at joint 2 (femur tip): from femur direction
-    const tStart = fAng;
-    const tEnd = fAng + tAng;
-    drawArc(2, tStart * Math.PI / 180 <= Math.PI ? tStart : tStart, tEnd, COLORS[2]);
+    const tAngDeg = -(leg.tibia.init_angle || -105); // canvas-space relative tibia angle (negate 3D)
+    const tStartDeg = fAngDeg;
+    const tEndDeg = fAngDeg + tAngDeg;
+    drawArc(2, tStartDeg, tEndDeg, COLORS[2]);
     // Tarsus arc at joint 3 (tibia tip)
     if (dof >= 4) {
-      drawArc(3, tEnd, tEnd + aAng, COLORS[3]);
+      const aAngDeg = -(leg.tarsus.init_angle || -60);
+      drawArc(3, tEndDeg, tEndDeg + aAngDeg, COLORS[3]);
     }
   }, [getOpts]);
 
@@ -267,15 +276,17 @@ export default function LegEditor() {
         const partIdx = d.joint - 1; // 1=femur, 2=tibia, 3=tarsus
         const part = partNames[partIdx];
 
-        // Compute new init_angle for this segment
+        // Convert absolute canvas angle back to 3D init_angle (negated)
         let newInitAngle: number;
         if (d.joint === 2) {
-          newInitAngle = absAngleDeg; // femur is first bend
+          newInitAngle = -absAngleDeg; // femur: canvas down = positive init_angle (3D up)
         } else if (d.joint === 3) {
-          newInitAngle = absAngleDeg - fAng; // tibia relative to femur
+          const fAng3D = opts.leg_options[0].femur.init_angle || 30;
+          newInitAngle = -absAngleDeg - fAng3D; // tibia relative to femur
         } else {
-          const tAng = fAng + (opts.leg_options[0].tibia.init_angle || -105);
-          newInitAngle = absAngleDeg - tAng; // tarsus relative to tibia
+          const fAng3D = opts.leg_options[0].femur.init_angle || 30;
+          const tAng3D = opts.leg_options[0].tibia.init_angle || -105;
+          newInitAngle = -absAngleDeg - fAng3D - tAng3D; // tarsus relative to tibia
         }
 
         // Update shared length and per-leg length + init_angle
