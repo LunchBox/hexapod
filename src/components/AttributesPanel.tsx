@@ -50,10 +50,16 @@ HexapodAttributesController.prototype.set_attr = function (attr_name, value) {
     obj = obj[attrs[i]];
   }
   obj[attrs[attrs.length - 1]] = value;
-  set_bot_options(this.attributes);
+  // Persistence is done in redraw_bot() after syncing with live bot.options
 };
 
 HexapodAttributesController.prototype.redraw_bot = function () {
+  // Sync top-level keys from live bot options (may have been changed via ControlPanel)
+  let botOpts = this.bot.options;
+  for (let key of ['leg_count', 'body_shape', 'dof', 'body_radius', 'body_width', 'body_length', 'body_height', 'polygon_leg_placement']) {
+    if (key in botOpts) this.attributes[key] = botOpts[key];
+  }
+  set_bot_options(this.attributes);
   this.bot.apply_attributes(this.attributes);
 };
 
@@ -99,7 +105,6 @@ HexapodAttributesController.prototype.make_input = function (container, attr_nam
       for (let idx = 0; idx < self.attributes.leg_options.length; idx++) {
         self.attributes.leg_options[idx][part].length = parseFloat(this.value);
       }
-      set_bot_options(self.attributes);
       self.redraw_bot();
     });
   };

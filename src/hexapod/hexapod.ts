@@ -136,6 +136,9 @@ export class Hexapod {
     this.gait_controller = new GaitController(this);
 
     this.on_servo_values = this.get_servo_values();
+
+    // Persist so AttributesPanel and page reload see latest state
+    set_bot_options(this.options);
   }
 
   draw() {
