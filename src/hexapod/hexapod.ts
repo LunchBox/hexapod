@@ -144,13 +144,17 @@ export class Hexapod {
       const layout = this.leg_layout[idx];
 
       if (bodyShape === 'polygon') {
-        // Polygon: position legs at computed world coordinates, no mirror flip
-        opt.mirror = 1;
-        opt.x = legRadius * Math.cos(layout.angle);
-        opt.z = legRadius * Math.sin(layout.angle);
+        // Polygon: legs radiate outward from body center
+        const a = layout.angle;
+        const onRight = Math.cos(a) >= 0;
+        opt.mirror = onRight ? 1 : -1;
+        opt.x = Math.abs(legRadius * Math.cos(a));
+        opt.z = legRadius * Math.sin(a);
+        // Compute init_angle so coxa points at radial angle `a`
+        const initDeg = onRight ? a : (a - Math.PI);
         opt.coxa = {
           ...opt.coxa,
-          init_angle: layout.angle * 180 / Math.PI,
+          init_angle: initDeg * 180 / Math.PI,
         };
       } else {
         // Rectangle: use mirror system (original behavior)
