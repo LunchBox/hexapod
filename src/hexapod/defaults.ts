@@ -76,7 +76,7 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   dof: DEFAULT_DOF,
   leg_count: DEFAULT_LEG_COUNT,
   body_shape: 'rectangle',
-  body_radius: 50,
+  body_radius: 80,
 
   color: 0x333333,
 
