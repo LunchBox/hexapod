@@ -457,8 +457,6 @@ export default function ControlPanel() {
             if (bot) {
               const delta = v - bot.body_mesh.position.y;
               if (Math.abs(delta) > 0.01) bot.move_body('y', delta);
-              bot.options.body_height = Math.round(v * 2);
-              set_bot_options(bot.options);
             }
           }}
         />
