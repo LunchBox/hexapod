@@ -192,23 +192,28 @@ export class GaitController {
     this.all_legs = Array.from({ length: n }, (_, i) => i);
 
     // Build sides classification for gait validation
+    const isOdd = n % 2 !== 0;
     const leftLegs: number[] = [];
     const rightLegs: number[] = [];
     let centerLeg: number | null = null;
     for (let i = 0; i < n; i++) {
       const angle = (2 * Math.PI * i) / n - Math.PI / 2;
       const c = Math.cos(angle);
-      if (Math.abs(c) < 0.001) centerLeg = i;
-      else if (c > 0) rightLegs.push(i);
-      else leftLegs.push(i);
+      if (isOdd && Math.abs(c) < 0.001) {
+        centerLeg = i; // odd N: exactly one leg at front (or back), exempt from side groups
+      } else if (c >= 0) {
+        rightLegs.push(i);
+      } else {
+        leftLegs.push(i);
+      }
     }
-    const isOdd = n % 2 !== 0;
 
     function isValid(groups: number[][]): boolean {
       for (const g of groups) {
         const gSet = new Set(g);
         const allLeft = leftLegs.length > 0 && leftLegs.every(l => gSet.has(l));
         const allRight = rightLegs.length > 0 && rightLegs.every(l => gSet.has(l));
+        // For odd N, exempt if center leg is grounded (not in lifted group)
         if ((allLeft || allRight) && !(isOdd && centerLeg !== null && !gSet.has(centerLeg))) {
           return false;
         }
