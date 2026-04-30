@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
+import LegEditor from './LegEditor';
 
 function HexapodAttributesController(container: HTMLElement, bot: any) {
   this.container = container;
@@ -275,5 +276,10 @@ export default function AttributesPanel() {
     });
   }, [botVersion]);
 
-  return <div id="attrs_control" ref={containerRef}></div>;
+  return (
+    <div id="attrs_control">
+      <LegEditor />
+      <div ref={containerRef}></div>
+    </div>
+  );
 }

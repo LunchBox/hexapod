@@ -1,0 +1,31 @@
+.leg-editor {
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 10px;
+  background: #1a1a1a;
+}
+
+.leg-editor__title {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: bold;
+  color: #ccc;
+}
+
+.leg-editor__canvas {
+  display: block;
+  cursor: default;
+  background: #111;
+  border-radius: 2px;
+}
+
+.leg-editor__canvas.grabbing {
+  cursor: grabbing;
+}
+
+.leg-editor__info {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+}
