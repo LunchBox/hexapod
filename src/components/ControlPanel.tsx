@@ -279,14 +279,10 @@ export default function ControlPanel() {
 
       <fieldset className="btns">
         <legend>Legs</legend>
-        <a href="#" className={`control_btn${legCount === 3 ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '3'); }}>3</a>
-        <a href="#" className={`control_btn${legCount === 4 ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '4'); }}>4</a>
-        <a href="#" className={`control_btn${legCount === 5 ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '5'); }}>5</a>
-        <a href="#" className={`control_btn${legCount === 6 ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', '6'); }}>6</a>
+        {[3,4,5,6,7,8,9].map(n => (
+          <a key={n} href="#" className={`control_btn${legCount === n ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', String(n)); }}>{n}</a>
+        ))}
       </fieldset>
 
       <fieldset className="btns">

@@ -167,7 +167,9 @@ export class Hexapod {
 
     this.legs = [];
     for (let idx = 0; idx < legCount; idx++) {
-      let opt = { ...this.options.leg_options[idx] };
+      // Fallback to first leg option if pool is shorter than leg count
+      let baseOpt = this.options.leg_options[idx] || this.options.leg_options[0];
+      let opt = { ...baseOpt };
       const layout = this.leg_layout[idx];
 
       // Direct signed positions for coxa (no mirror on position)
@@ -1026,10 +1028,17 @@ export class HexapodLeg {
 export function get_bot_options() {
   let options = get_obj_from_local_storage(HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS);
 
+  const legCount = options.leg_count || 6;
   const dof = options.dof || 3;
   const jointsPerLeg = Math.min(4, Math.max(3, dof));
 
-  for (let i = 0; i < options.leg_options.length; i++) {
+  // Pad leg_options if fewer entries than leg count (e.g. 7-9 legs)
+  while (options.leg_options.length < legCount) {
+    let template = options.leg_options[options.leg_options.length - 1] || options.leg_options[0];
+    options.leg_options.push(JSON.parse(JSON.stringify(template)));
+  }
+
+  for (let i = 0; i < legCount; i++) {
     let leg_option = options.leg_options[i];
     const base = options.first_servo_idx + i * jointsPerLeg;
     if (typeof leg_option.coxa.servo_idx === "undefined") {
