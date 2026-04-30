@@ -12,10 +12,11 @@ import { PosCalculator } from './pos_calculator.js';
 // ── Leg layout computation ─────────────────────────────────────
 
 interface LegLayout {
-  x: number;
-  z: number;
+  x: number;       // signed world X position
+  z: number;       // signed world Z position
   angle: number;   // radial angle from body center (radians)
-  mirror: number;  // 1 or -1 for coxa orientation
+  yaw: number;     // coxa.rotation.y in radians (points leg outward)
+  init_angle: number; // coxa init_angle in degrees (for backward compat)
 }
 
 function computeLegLayout(
@@ -25,25 +26,37 @@ function computeLegLayout(
   bodyLength: number,
 ): LegLayout[] {
   const layouts: LegLayout[] = [];
-  // x is always positive distance from center; mirror determines L (-1) vs R (1)
-  // angle is the radial direction from body center (0=right, PI/2=front)
 
   if (bodyShape === 'rectangle' && legCount % 2 === 0) {
     const pairs = legCount / 2;
     for (let i = 0; i < pairs; i++) {
       const z = pairs === 1 ? 0 : -bodyLength / 2 + (i * bodyLength) / (pairs - 1);
-      // Left leg: mirror=-1, angle=PI/2 (faces outward to left)
-      layouts.push({ x: bodyRadius, z, angle: Math.PI / 2, mirror: -1 });
-      // Right leg: mirror=1, angle=-PI/2 (faces outward to right)
-      layouts.push({ x: bodyRadius, z, angle: -Math.PI / 2, mirror: 1 });
+      // Right leg (+X)
+      layouts.push({
+        x: bodyRadius, z,
+        angle: -Math.PI / 2,
+        yaw: -Math.PI / 2,    // points right
+        init_angle: 30,       // default forward tilt
+      });
+      // Left leg (-X)
+      layouts.push({
+        x: -bodyRadius, z,
+        angle: Math.PI / 2,
+        yaw: Math.PI / 2,     // points left
+        init_angle: -30,      // mirrored tilt
+      });
     }
   } else {
-    // Polygon — legs at vertices of regular N-gon, radiating outward
+    // Polygon — legs at vertices, radiating outward
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2;
-      // Determine side: left half = mirror -1, right half = mirror 1
-      const mirror = Math.cos(angle) < 0 ? -1 : 1;
-      layouts.push({ x: bodyRadius, z: 0, angle, mirror });
+      layouts.push({
+        x: bodyRadius * Math.cos(angle),
+        z: bodyRadius * Math.sin(angle),
+        angle,
+        yaw: angle,           // coxa points radially outward
+        init_angle: angle * 180 / Math.PI,
+      });
     }
   }
 
@@ -143,26 +156,16 @@ export class Hexapod {
       let opt = { ...this.options.leg_options[idx] };
       const layout = this.leg_layout[idx];
 
-      if (bodyShape === 'polygon') {
-        // Polygon: legs radiate outward from body center
-        const a = layout.angle;
-        const onRight = Math.cos(a) >= 0;
-        opt.mirror = onRight ? 1 : -1;
-        opt.x = Math.abs(legRadius * Math.cos(a));
-        opt.z = legRadius * Math.sin(a);
-        // Compute init_angle so coxa points at radial angle `a`
-        const initDeg = onRight ? a : (a - Math.PI);
-        opt.coxa = {
-          ...opt.coxa,
-          init_angle: initDeg * 180 / Math.PI,
-        };
-      } else {
-        // Rectangle: use mirror system (original behavior)
-        opt.x = layout.x;
-        opt.z = layout.z;
-        opt.mirror = layout.mirror;
-        // Keep original init_angle from defaults (front=30, mid=0, rear=-30)
-      }
+      // Direct signed positions — no mirror indirection
+      opt.x = layout.x;
+      opt.z = layout.z;
+      opt.mirror = 1; // always 1, no more L/R mirroring
+      opt.coxa = {
+        ...opt.coxa,
+        init_angle: layout.init_angle,
+      };
+      // Store yaw for draw_coxa
+      (opt as any)._yaw = layout.yaw;
 
       let leg = new HexapodLeg(this, opt);
       leg.radial_angle = layout.angle;
@@ -185,15 +188,10 @@ export class Hexapod {
     let legCount = this.options.leg_count || 6;
     let bodyRadius = this.options.body_radius || 50;
 
-    // Collect leg positions for wireframe views
-    let legPositions = this.leg_layout.map((l: LegLayout) => {
-      if (bodyShape === 'polygon') {
-        let lr = bodyRadius;
-        return new THREE.Vector3(lr * Math.cos(l.angle), 0, lr * Math.sin(l.angle));
-      } else {
-        return new THREE.Vector3(l.mirror * l.x, 0, l.z);
-      }
-    });
+    // Collect leg positions for wireframe views (all signed directly)
+    let legPositions = this.leg_layout.map((l: LegLayout) =>
+      new THREE.Vector3(l.x, 0, l.z)
+    );
 
     switch (this.draw_type) {
       case "bone":
@@ -739,14 +737,18 @@ export class HexapodLeg {
 
     mesh.type = "coxa";
 
-    mesh.position.x = this.options.mirror * this.options.x;
+    mesh.position.x = this.options.x;
     mesh.position.y = this.options.y;
     mesh.position.z = this.options.z;
 
-    mesh.rotation.z = -this.options.mirror * Math.PI / 2;
-    mesh.rotation.y = this.options.mirror * degree_to_redius(this.options.coxa.init_angle);
+    // Coxa always starts along +X, then rotated by yaw
+    mesh.rotation.z = -Math.PI / 2;
+    const yaw = (this.options)._yaw != null
+      ? (this.options)._yaw
+      : degree_to_redius(this.options.coxa.init_angle);
+    mesh.rotation.y = yaw;
 
-    mesh.init_radius = degree_to_redius(this.options.coxa.init_angle);
+    mesh.init_radius = yaw;
     mesh.init_angle = this.options.coxa.init_angle;
 
     mesh.servo_value = this.options.coxa.servo_value;
@@ -788,7 +790,7 @@ export class HexapodLeg {
     mesh.type = "femur";
 
     mesh.position.y = this.options.coxa.length;
-    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.femur.init_angle);
+    mesh.rotation.z = degree_to_redius(this.options.femur.init_angle);
     mesh.init_radius = degree_to_redius(this.options.femur.init_angle);
     mesh.init_angle = this.options.femur.init_angle;
 
@@ -831,7 +833,7 @@ export class HexapodLeg {
     mesh.type = "tibia";
 
     mesh.position.y = this.options.femur.length;
-    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.tibia.init_angle);
+    mesh.rotation.z = degree_to_redius(this.options.tibia.init_angle);
     mesh.init_radius = degree_to_redius(this.options.tibia.init_angle);
     mesh.init_angle = this.options.tibia.init_angle;
 
@@ -874,7 +876,7 @@ export class HexapodLeg {
     mesh.type = "tarsus";
 
     mesh.position.y = this.options.tibia.length;
-    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.tarsus.init_angle);
+    mesh.rotation.z = degree_to_redius(this.options.tarsus.init_angle);
     mesh.init_radius = degree_to_redius(this.options.tarsus.init_angle);
     mesh.init_angle = this.options.tarsus.init_angle;
 
@@ -892,25 +894,25 @@ export class HexapodLeg {
     limb_mesh.init_radius = new_radius;
 
     if (limb_idx === 0) {
-      limb_mesh.rotation.y = this.mirror * new_radius;
+      limb_mesh.rotation.y = new_radius;
     } else {
-      limb_mesh.rotation.z = this.mirror * new_radius;
+      limb_mesh.rotation.z = new_radius;
     }
   }
 
   get_angle(limb_idx: number) {
     let limb = this.limbs[limb_idx];
     if (limb_idx === 0) {
-      return this.mirror * limb.rotation.y / Math.PI * 180;
+      return limb.rotation.y / Math.PI * 180;
     } else {
-      return this.mirror * limb.rotation.z / Math.PI * 180;
+      return limb.rotation.z / Math.PI * 180;
     }
   }
 
   set_angle(limb_idx: number, angle: number) {
     let limb = this.limbs[limb_idx];
     let current_angle = this.get_angle(limb_idx);
-    let diff_servo_value = this.mirror * ((SERVO_MAX_VALUE - SERVO_MIN_VALUE) / 2) * (angle - current_angle) / 90;
+    let diff_servo_value = ((SERVO_MAX_VALUE - SERVO_MIN_VALUE) / 2) * (angle - current_angle) / 90;
     let new_servo_value = limb.servo_value + diff_servo_value;
     this.set_servo_value(limb_idx, new_servo_value);
   }
@@ -933,9 +935,9 @@ export class HexapodLeg {
     }
 
     if (limb_idx === 0) {
-      limb_mesh.rotation.y = this.mirror * limb_mesh.init_radius + delta_radius;
+      limb_mesh.rotation.y = limb_mesh.init_radius + delta_radius;
     } else {
-      limb_mesh.rotation.z = this.mirror * limb_mesh.init_radius + delta_radius;
+      limb_mesh.rotation.z = limb_mesh.init_radius + delta_radius;
     }
 
     let _value = Math.round(value);
