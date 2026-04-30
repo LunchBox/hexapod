@@ -224,10 +224,31 @@ export default function ControlPanel() {
         return;
       }
 
-      if (gc()?.move_mode === 'move') {
+      const mode = gc()?.move_mode;
+
+      if (mode === 'move') {
         if (e.keyCode === 82) bot.move_body('y', 5);
         if (e.keyCode === 70) bot.move_body('y', -5);
         if (gc()) gc().expected_action = e.keyCode;
+      } else if (mode === 'move_body') {
+        e.preventDefault();
+        const fb = bot.options.fb_step || 15;
+        const lr = bot.options.lr_step || 10;
+        if (e.keyCode === 87) bot.move_body('z', -fb);        // W
+        else if (e.keyCode === 83) bot.move_body('z', fb);    // S
+        else if (e.keyCode === 65) bot.move_body('x', -lr);   // A
+        else if (e.keyCode === 68) bot.move_body('x', lr);    // D
+        else if (e.keyCode === 82) bot.move_body('y', 5);     // R
+        else if (e.keyCode === 70) bot.move_body('y', -5);    // F
+      } else if (mode === 'rotate_body') {
+        e.preventDefault();
+        const rot = bot.options.rotate_step || Math.PI / 18;
+        if (e.keyCode === 87) bot.rotate_body('x', rot);       // W: pitch fwd
+        else if (e.keyCode === 83) bot.rotate_body('x', -rot); // S: pitch back
+        else if (e.keyCode === 65) bot.rotate_body('z', rot);  // A: roll left
+        else if (e.keyCode === 68) bot.rotate_body('z', -rot); // D: roll right
+        else if (e.keyCode === 81) bot.rotate_body('y', rot);  // Q: yaw left
+        else if (e.keyCode === 69) bot.rotate_body('y', -rot); // E: yaw right
       }
     };
 
