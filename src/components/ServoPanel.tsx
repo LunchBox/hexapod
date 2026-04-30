@@ -7,17 +7,17 @@ import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { PosCalculator } from '../hexapod/pos_calculator';
 
 export default function ServoPanel() {
-  const { botRef, updateServoDisplay } = useHexapod();
+  const { botRef, updateServoDisplay, botVersion } = useHexapod();
   const containerRef = useRef(null);
-  const built = useRef(false);
 
   useEffect(() => {
-    if (built.current || !containerRef.current) return;
+    if (!containerRef.current) return;
     const bot = botRef.current;
     if (!bot) return;
-    built.current = true;
 
     const controller = containerRef.current;
+    // Clear and rebuild when bot structure changes
+    controller.innerHTML = '';
     const bot_options = get_bot_options();
 
     const updateLeg = function () {
@@ -134,7 +134,7 @@ export default function ServoPanel() {
         controller.appendChild(controlElem);
       }
     }
-  }, [botRef]);
+  }, [botVersion]);
 
   return (
     <div>

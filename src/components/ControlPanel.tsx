@@ -1,10 +1,7 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { JoyStick } from '../hexapod/joystick2';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
-
-// Read persisted state once on mount so UI matches saved config
-const saved = get_bot_options();
 
 const drawTypes = [
   { value: 'mesh', label: 'Mesh' },
@@ -52,6 +49,9 @@ export default function ControlPanel() {
   const joystickRef = useRef(null);
   const joystickContainerRef = useRef(null);
   const gaitIntervalRef = useRef(null);
+
+  // Re-read localStorage on every mount so tab re-mount picks up latest state
+  const saved = useMemo(() => get_bot_options(), []);
 
   // Active states for toggle groups
   const [drawType, setDrawType] = useState(saved.draw_type || 'mesh');
