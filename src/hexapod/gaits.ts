@@ -212,12 +212,17 @@ export class GaitController {
     function isValid(groups: number[][]): boolean {
       for (const g of groups) {
         const gSet = new Set(g);
-        const allLeft = leftLegs.length > 0 && leftLegs.every(l => gSet.has(l));
-        const allRight = rightLegs.length > 0 && rightLegs.every(l => gSet.has(l));
-        // For odd N only: one side may be fully lifted if center leg is grounded
-        if ((allLeft || allRight) && !(isOdd && centerLeg !== null && !gSet.has(centerLeg))) {
-          return false;
-        }
+        // Each side: lifted count must not exceed grounded count
+        let rightUp = 0, leftUp = 0;
+        for (const l of rightLegs) { if (gSet.has(l)) rightUp++; }
+        for (const l of leftLegs) { if (gSet.has(l)) leftUp++; }
+        const rightDown = rightLegs.length - rightUp;
+        const leftDown = leftLegs.length - leftUp;
+        // Exception 1: side with only 1 leg — lifting it is unavoidable
+        // Exception 2: odd N center leg on ground can stabilize imbalance
+        const centerGrounded = isOdd && centerLeg !== null && !gSet.has(centerLeg);
+        if (rightUp > rightDown && rightLegs.length >= 2 && !centerGrounded) return false;
+        if (leftUp > leftDown && leftLegs.length >= 2 && !centerGrounded) return false;
       }
       return true;
     }
