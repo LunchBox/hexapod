@@ -559,6 +559,25 @@ export class Hexapod {
     this.after_status_change();
   }
 
+  adjust_tip_spread(new_scale: number) {
+    let old_scale = this.tip_circle_scale;
+    if (old_scale === new_scale || old_scale <= 0) return;
+    let ratio = new_scale / old_scale;
+    this.tip_circle_scale = new_scale;
+
+    let current_tips = this.get_tip_pos();
+    let cx = this.body_mesh.position.x;
+    let cz = this.body_mesh.position.z;
+
+    for (let i = 0; i < this.legs.length; i++) {
+      let tip = current_tips[i];
+      tip.x = cx + (tip.x - cx) * ratio;
+      tip.z = cz + (tip.z - cz) * ratio;
+      this.legs[i].set_tip_pos(tip);
+    }
+    this.after_status_change();
+  }
+
   after_status_change(send_cmd?: boolean) {
     this.display_values();
 

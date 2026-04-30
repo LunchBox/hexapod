@@ -66,6 +66,7 @@ export default function ControlPanel() {
   const [bodyShape, setBodyShape] = useState(saved.body_shape || 'rectangle');
   const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'vertex');
   const [oddOrientation, setOddOrientation] = useState(saved.polygon_odd_orientation || 'back');
+  const [bodyHeightVal, setBodyHeightVal] = useState((saved.body_height || 20) / 2);
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
@@ -98,24 +99,30 @@ export default function ControlPanel() {
         if (gc()) gc().act(parseInt(value!));
         break;
       case 'act_motion2':
-        if (parseInt(value!) === 82) bot.move_body('y', 5);
-        if (parseInt(value!) === 70) bot.move_body('y', -5);
+        if (parseInt(value!) === 82) {
+          bot.move_body('y', 5);
+          setBodyHeightVal(bot.body_mesh.position.y);
+        }
+        if (parseInt(value!) === 70) {
+          bot.move_body('y', -5);
+          setBodyHeightVal(bot.body_mesh.position.y);
+        }
         break;
       case 'act_expend':
         setTipCircleScale((s) => {
           const next = Math.min(1.5, +(s + 0.1).toFixed(1));
-          bot.tip_circle_scale = next;
           bot.options.tip_circle_scale = next;
           set_bot_options(bot.options);
+          bot.adjust_tip_spread(next);
           return next;
         });
         break;
       case 'act_compact':
         setTipCircleScale((s) => {
           const next = Math.max(0.5, +(s - 0.1).toFixed(1));
-          bot.tip_circle_scale = next;
           bot.options.tip_circle_scale = next;
           set_bot_options(bot.options);
+          bot.adjust_tip_spread(next);
           return next;
         });
         break;
@@ -226,9 +233,18 @@ export default function ControlPanel() {
 
       const mode = gc()?.move_mode;
 
+      const handleRaise = () => {
+        bot.move_body('y', 5);
+        setBodyHeightVal(bot.body_mesh.position.y);
+      };
+      const handleFall = () => {
+        bot.move_body('y', -5);
+        setBodyHeightVal(bot.body_mesh.position.y);
+      };
+
       if (mode === 'move') {
-        if (e.keyCode === 82) bot.move_body('y', 5);
-        if (e.keyCode === 70) bot.move_body('y', -5);
+        if (e.keyCode === 82) handleRaise();
+        if (e.keyCode === 70) handleFall();
         if (gc()) gc().expected_action = e.keyCode;
       } else if (mode === 'move_body') {
         e.preventDefault();
@@ -238,8 +254,8 @@ export default function ControlPanel() {
         else if (e.keyCode === 83) bot.move_body('z', fb);    // S
         else if (e.keyCode === 65) bot.move_body('x', -lr);   // A
         else if (e.keyCode === 68) bot.move_body('x', lr);    // D
-        else if (e.keyCode === 82) bot.move_body('y', 5);     // R
-        else if (e.keyCode === 70) bot.move_body('y', -5);    // F
+        else if (e.keyCode === 82) handleRaise();
+        else if (e.keyCode === 70) handleFall();
       } else if (mode === 'rotate_body') {
         e.preventDefault();
         const rot = bot.options.rotate_step || Math.PI / 18;
@@ -382,9 +398,9 @@ export default function ControlPanel() {
             const v = parseFloat(e.target.value);
             setTipCircleScale(v);
             if (botRef.current) {
-              botRef.current.tip_circle_scale = v;
               botRef.current.options.tip_circle_scale = v;
               set_bot_options(botRef.current.options);
+              botRef.current.adjust_tip_spread(v);
             }
           }}
         />
@@ -429,7 +445,24 @@ export default function ControlPanel() {
         ))}
       </fieldset>
 
-      <div className="joystick-container" ref={joystickContainerRef}></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="joystick-container" ref={joystickContainerRef}></div>
+        <input type="range" min="10" max="150" value={bodyHeightVal}
+          title="Body height"
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 150, cursor: 'pointer' }}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            setBodyHeightVal(v);
+            const bot = botRef.current;
+            if (bot) {
+              const delta = v - bot.body_mesh.position.y;
+              if (Math.abs(delta) > 0.01) bot.move_body('y', delta);
+              bot.options.body_height = Math.round(v * 2);
+              set_bot_options(bot.options);
+            }
+          }}
+        />
+      </div>
 
       <div style={{ marginTop: 10 }}>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_send_cmd'); }}>Send</a>
