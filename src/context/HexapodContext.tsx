@@ -6,6 +6,7 @@ export function HexapodProvider({ children }) {
   const [servoValues, setServoValues] = useState('');
   const [lastServoValues, setLastServoValues] = useState('');
   const [statusHistory, setStatusHistory] = useState([]);
+  const [botVersion, setBotVersion] = useState(0);
   const botRef = useRef(null);
   const sceneRef = useRef(null);
 
@@ -22,6 +23,10 @@ export function HexapodProvider({ children }) {
     setStatusHistory(prev => [...prev, status]);
   }, []);
 
+  const bumpBotVersion = useCallback(() => {
+    setBotVersion(v => v + 1);
+  }, []);
+
   const value = {
     botRef,
     sceneRef,
@@ -33,6 +38,8 @@ export function HexapodProvider({ children }) {
     setStatusHistory,
     updateServoDisplay,
     addStatusHistory,
+    botVersion,
+    bumpBotVersion,
   };
 
   return (

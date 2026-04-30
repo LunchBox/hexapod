@@ -197,15 +197,16 @@ HexapodAttributesController.prototype.handle_edge_length = function (attr_name, 
 };
 
 export default function AttributesPanel() {
-  const { botRef } = useHexapod();
+  const { botRef, botVersion } = useHexapod();
   const containerRef = useRef<HTMLDivElement>(null);
-  const built = useRef(false);
 
   useEffect(() => {
-    if (built.current || !containerRef.current || !botRef.current) return;
-    built.current = true;
+    if (!containerRef.current || !botRef.current) return;
 
     let container = containerRef.current;
+    // Clear and rebuild when bot structure changes (leg_count etc.)
+    container.innerHTML = '';
+
     let attrs_control = new HexapodAttributesController(container, botRef.current);
 
     // Motions
@@ -272,7 +273,7 @@ export default function AttributesPanel() {
         }
       });
     });
-  }, []);
+  }, [botVersion]);
 
   return <div id="attrs_control" ref={containerRef}></div>;
 }

@@ -48,7 +48,7 @@ const targetModes = [
 ];
 
 export default function ControlPanel() {
-  const { botRef, updateServoDisplay } = useHexapod();
+  const { botRef, updateServoDisplay, bumpBotVersion } = useHexapod();
   const joystickRef = useRef(null);
   const joystickContainerRef = useRef(null);
   const gaitIntervalRef = useRef(null);
@@ -158,27 +158,32 @@ export default function ControlPanel() {
         setDof(newDof);
         bot.options.dof = newDof;
         bot.apply_attributes(bot.options);
+        bumpBotVersion();
         break;
       case 'act_leg_count_switch':
         const newLegCount = parseInt(value!);
         setLegCount(newLegCount);
         bot.options.leg_count = newLegCount;
         bot.apply_attributes(bot.options);
+        bumpBotVersion();
         break;
       case 'act_body_shape_switch':
         setBodyShape(value!);
         bot.options.body_shape = value;
         bot.apply_attributes(bot.options);
+        bumpBotVersion();
         break;
       case 'act_poly_placement_switch':
         setPolyPlacement(value!);
         bot.options.polygon_leg_placement = value;
         bot.apply_attributes(bot.options);
+        bumpBotVersion();
         break;
       case 'act_odd_orientation_switch':
         setOddOrientation(value!);
         bot.options.polygon_odd_orientation = value;
         bot.apply_attributes(bot.options);
+        bumpBotVersion();
         break;
     }
     updateServoDisplay();
