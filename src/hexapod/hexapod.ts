@@ -502,11 +502,28 @@ export class Hexapod {
 
   move_body(direction: string, distance: number) {
     let current_tips_pos = this.get_tip_pos();
+    let prev_pos = this.body_mesh.position[direction];
     this.body_mesh.position[direction] += distance;
 
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       this.legs[i].set_tip_pos(current_tips_pos[i]);
+    }
+
+    // Constraint: at least 2 tips must be on or below ground (Y >= 0 means tip can reach floor)
+    if (direction === 'y' && distance > 0) {
+      let grounded = 0;
+      let tips = this.get_tip_pos();
+      for (let i = 0; i < total_legs; i++) {
+        if (tips[i].y <= 0) grounded++;
+      }
+      if (grounded < 2) {
+        // Revert: not enough legs can reach the ground
+        this.body_mesh.position[direction] = prev_pos;
+        for (let i = 0; i < total_legs; i++) {
+          this.legs[i].set_tip_pos(current_tips_pos[i]);
+        }
+      }
     }
 
     this.after_status_change();
