@@ -1,8 +1,7 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { JoyStick } from '../hexapod/joystick2';
 
-// Button groups as data to keep JSX concise
 const drawTypes = [
   { value: 'mesh', label: 'Mesh' },
   { value: 'bone', label: 'Bone' },
@@ -50,22 +49,32 @@ export default function ControlPanel() {
   const joystickContainerRef = useRef(null);
   const gaitIntervalRef = useRef(null);
 
-  // Helper to get gait controller
+  // Active states for toggle groups
+  const [drawType, setDrawType] = useState('mesh');
+  const [moveMode, setMoveMode] = useState('move');
+  const [gait, setGait] = useState('tripod');
+  const [actionType, setActionType] = useState('efficient');
+  const [targetMode, setTargetMode] = useState('target');
+  const [syncMode, setSyncMode] = useState('manual');
+  const [tipCircleScale, setTipCircleScale] = useState(1);
+  const [dof, setDof] = useState(3);
+
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
-  // Button click handler
   const handleAction = useCallback((action: string, value?: string) => {
     const bot = botRef.current;
     if (!bot) return;
 
     switch (action) {
       case 'act_draw_type_switch':
+        setDrawType(value!);
         bot.draw_type = value;
         bot.scene.remove(bot.mesh);
         bot.draw();
         bot.apply_status(bot.get_status());
         break;
       case 'mode_switch':
+        setMoveMode(value!);
         if (gc()) gc().move_mode = value;
         break;
       case 'act_stop_motion':
@@ -75,31 +84,43 @@ export default function ControlPanel() {
         if (gc()) gc().expected_action = value;
         break;
       case 'act_step':
-        if (gc()) gc().act(parseInt(value));
+        if (gc()) gc().act(parseInt(value!));
         break;
       case 'act_motion2':
-        if (parseInt(value) === 82) bot.move_body('y', 5);
-        if (parseInt(value) === 70) bot.move_body('y', -5);
+        if (parseInt(value!) === 82) bot.move_body('y', 5);
+        if (parseInt(value!) === 70) bot.move_body('y', -5);
         break;
       case 'act_expend':
-        bot.tip_circle_scale += 0.1;
+        setTipCircleScale((s) => {
+          const next = Math.min(1.5, +(s + 0.1).toFixed(1));
+          bot.tip_circle_scale = next;
+          return next;
+        });
         break;
       case 'act_compact':
-        bot.tip_circle_scale -= 0.1;
+        setTipCircleScale((s) => {
+          const next = Math.max(0.5, +(s - 0.1).toFixed(1));
+          bot.tip_circle_scale = next;
+          return next;
+        });
         break;
       case 'gait_switch':
+        setGait(value!);
         if (gc()) gc().switch_gait(value);
         break;
       case 'action_switch':
+        setActionType(value!);
         if (gc()) gc().switch_action_type(value);
         break;
       case 'target_mode_switch':
+        setTargetMode(value!);
         if (gc()) gc().switch_target_mode(value);
         break;
       case 'act_send_cmd':
         bot.send_status();
         break;
       case 'act_sync_cmd':
+        setSyncMode(value === 'sync' ? 'sync' : 'manual');
         bot.sync_cmd = value === 'sync';
         break;
       case 'act_reset_configs':
@@ -109,7 +130,11 @@ export default function ControlPanel() {
       case 'act_disable_console':
         window['console']['log'] = function () { };
         break;
-      default:
+      case 'act_dof_switch':
+        const newDof = parseInt(value!);
+        setDof(newDof);
+        bot.options.dof = newDof;
+        bot.apply_attributes(bot.options);
         break;
     }
     updateServoDisplay();
@@ -131,7 +156,7 @@ export default function ControlPanel() {
 
   // Keyboard handler
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       const bot = botRef.current;
       if (!bot) return;
 
@@ -139,7 +164,6 @@ export default function ControlPanel() {
         if (gc()) gc().stop();
         if (e.keyCode === 83) {
           e.preventDefault();
-          // Save config
           const code = JSON.stringify(bot.options);
           const blob = new Blob([code], { type: 'text/plain' });
           const url = URL.createObjectURL(blob);
@@ -158,7 +182,7 @@ export default function ControlPanel() {
       }
     };
 
-    const handleKeyUp = (e) => {
+    const handleKeyUp = (e: KeyboardEvent) => {
       e.preventDefault();
       if (gc()) gc().stop();
     };
@@ -166,7 +190,6 @@ export default function ControlPanel() {
     document.body.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('keyup', handleKeyUp);
 
-    // Main gait loop
     gaitIntervalRef.current = setInterval(() => {
       if (gc()) gc().fire_action();
       updateServoDisplay();
@@ -179,32 +202,43 @@ export default function ControlPanel() {
     };
   }, [botRef, gc, updateServoDisplay]);
 
-  const SwitchGroup = ({ legend, items, action }) => (
-    <fieldset className="btns">
-      <legend>{legend}</legend>
-      {items.map((item) => (
-        <a
-          key={`${action}-${item.value}`}
-          href="#"
-          data-type="switch"
-          data-value={item.value}
-          data-action={action}
-          className={`control_btn${item.value === 'mesh' || item.value === 'move' || item.value === 'tripod' || item.value === 'efficient' || item.value === 'target' ? ' active' : ''}`}
-          onClick={(e) => {
-            e.preventDefault();
-            handleAction(action, item.value);
-          }}
-        >
-          {item.label}
-        </a>
-      ))}
-    </fieldset>
-  );
-
   return (
     <div>
-      <SwitchGroup legend="Draw Type" items={drawTypes} action="act_draw_type_switch" />
-      <SwitchGroup legend="Move Mode" items={moveModes} action="mode_switch" />
+      <fieldset className="btns">
+        <legend>Draw Type</legend>
+        {drawTypes.map((item) => (
+          <a
+            key={item.value}
+            href="#"
+            className={`control_btn${drawType === item.value ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleAction('act_draw_type_switch', item.value); }}
+          >
+            {item.label}
+          </a>
+        ))}
+      </fieldset>
+
+      <fieldset className="btns">
+        <legend>DOF</legend>
+        <a href="#" className={`control_btn${dof === 3 ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', '3'); }}>3-DOF</a>
+        <a href="#" className={`control_btn${dof === 4 ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', '4'); }}>4-DOF</a>
+      </fieldset>
+
+      <fieldset className="btns">
+        <legend>Move Mode</legend>
+        {moveModes.map((item) => (
+          <a
+            key={item.value}
+            href="#"
+            className={`control_btn${moveMode === item.value ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleAction('mode_switch', item.value); }}
+          >
+            {item.label}
+          </a>
+        ))}
+      </fieldset>
 
       <fieldset className="btns">
         <legend>...</legend>
@@ -239,14 +273,28 @@ export default function ControlPanel() {
         {' | '}
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_expend'); }}>Expand</a>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_compact'); }}>Compact</a>
-        <input type="range" max="1.5" min="0.5" step="0.1" defaultValue="1"
+        <input type="range" max="1.5" min="0.5" step="0.1" value={tipCircleScale}
           onChange={(e) => {
-            if (botRef.current) botRef.current.tip_circle_scale = parseFloat(e.target.value);
+            const v = parseFloat(e.target.value);
+            setTipCircleScale(v);
+            if (botRef.current) botRef.current.tip_circle_scale = v;
           }}
         />
       </fieldset>
 
-      <SwitchGroup legend="Gaits" items={gaits} action="gait_switch" />
+      <fieldset className="btns">
+        <legend>Gaits</legend>
+        {gaits.map((item) => (
+          <a
+            key={item.value}
+            href="#"
+            className={`control_btn${gait === item.value ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleAction('gait_switch', item.value); }}
+          >
+            {item.label}
+          </a>
+        ))}
+      </fieldset>
 
       <fieldset className="btns">
         <legend>...</legend>
@@ -254,14 +302,23 @@ export default function ControlPanel() {
           <a
             key={item.value}
             href="#"
-            className={`control_btn${item.value === 'efficient' ? ' active' : ''}`}
+            className={`control_btn${actionType === item.value ? ' active' : ''}`}
             onClick={(e) => { e.preventDefault(); handleAction('action_switch', item.value); }}
           >
             {item.value === 'fast' ? <>{item.label}<sub>beta</sub></> : item.label}
           </a>
         ))}
         {' | '}
-        <SwitchGroupContainerless items={targetModes} action="target_mode_switch" defaultActive="target" onClick={handleAction} />
+        {targetModes.map((item) => (
+          <a
+            key={item.value}
+            href="#"
+            className={`control_btn${targetMode === item.value ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleAction('target_mode_switch', item.value); }}
+          >
+            {item.label}
+          </a>
+        ))}
       </fieldset>
 
       <div className="joystick-container" ref={joystickContainerRef}></div>
@@ -269,23 +326,21 @@ export default function ControlPanel() {
       <div style={{ marginTop: 10 }}>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_send_cmd'); }}>Send</a>
         {' | '}
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_sync_cmd', 'sync'); }}>Sync</a>
-        <a href="#" className="control_btn active" onClick={(e) => { e.preventDefault(); handleAction('act_sync_cmd', ''); }}>Manually</a>
+        <a
+          href="#"
+          className={`control_btn${syncMode === 'sync' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_sync_cmd', 'sync'); }}
+        >
+          Sync
+        </a>
+        <a
+          href="#"
+          className={`control_btn${syncMode === 'manual' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); handleAction('act_sync_cmd', ''); }}
+        >
+          Manually
+        </a>
       </div>
     </div>
   );
-}
-
-// Small inline switch group (for target mode within fieldset)
-function SwitchGroupContainerless({ items, action, defaultActive, onClick }) {
-  return items.map((item) => (
-    <a
-      key={item.value}
-      href="#"
-      className={`control_btn${item.value === defaultActive ? ' active' : ''}`}
-      onClick={(e) => { e.preventDefault(); onClick(action, item.value); }}
-    >
-      {item.label}
-    </a>
-  ));
 }

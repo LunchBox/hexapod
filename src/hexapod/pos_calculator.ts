@@ -3,23 +3,24 @@ import { SERVO_MIN_VALUE, SERVO_MAX_VALUE } from './defaults.js';
 
 export class PosCalculator {
   leg: any;
-  ori_a: number;
-  ori_b: number;
-  ori_c: number;
+  original_values: number[];
+  joint_count: number;
   target_tip_pos: any;
 
   constructor(hexapod_leg: any, target_tip_pos: any) {
     this.leg = hexapod_leg;
+    this.joint_count = hexapod_leg.joint_count || 3;
 
-    this.ori_a = this.leg.limbs[0].servo_value;
-    this.ori_b = this.leg.limbs[1].servo_value;
-    this.ori_c = this.leg.limbs[2].servo_value;
+    this.original_values = [];
+    for (let i = 0; i < this.joint_count; i++) {
+      this.original_values.push(this.leg.limbs[i].servo_value);
+    }
 
     this.target_tip_pos = target_tip_pos;
   }
 
-  calc_distance(coxa_value: number, femur_value: number, tibia_value: number) {
-    this.leg.set_servo_values([coxa_value, femur_value, tibia_value]);
+  calc_distance(values: number[]) {
+    this.leg.set_servo_values(values);
 
     let c = getWorldPosition(this.leg.bot.mesh, this.leg.tip);
     let t = this.target_tip_pos;
@@ -28,71 +29,68 @@ export class PosCalculator {
   }
 
   run() {
-    let a = this.leg.limbs[0].servo_value;
-    let b = this.leg.limbs[1].servo_value;
-    let c = this.leg.limbs[2].servo_value;
+    const n = this.joint_count;
+    let values: number[] = [];
+    for (let i = 0; i < n; i++) {
+      values.push(this.leg.limbs[i].servo_value);
+    }
 
-    let dist = this.calc_distance(a, b, c);
+    let dist = this.calc_distance(values);
 
     let count = 0;
-    let step = 20;
-    let max_loops = 200;
-    let last_gradient_a = 0;
-    let last_gradient_b = 0;
-    let last_gradient_c = 0;
-    let speed_a = 0;
-    let speed_b = 0;
-    let speed_c = 0;
+    const step = 20;
+    const max_loops = 200;
+    const dist_error = 0.01;
+
+    let last_gradients: number[] = new Array(n).fill(0);
+    let speeds: number[] = new Array(n).fill(0);
 
     let success = true;
-    let dist_error = 0.01;
 
     while (dist > dist_error && count < max_loops) {
-      let gradient_a = this.calc_distance(a + step, b, c) - this.calc_distance(a - step, b, c);
-      let gradient_b = this.calc_distance(a, b + step, c) - this.calc_distance(a, b - step, c);
-      let gradient_c = this.calc_distance(a, b, c + step) - this.calc_distance(a, b, c - step);
-
-      if (Math.sign(last_gradient_a) !== Math.sign(gradient_a)) {
-        a -= speed_a * last_gradient_a / (gradient_a - last_gradient_a);
-        speed_a = 0;
-      } else {
-        speed_a += gradient_a;
-      }
-      last_gradient_a = gradient_a;
-
-      if (Math.sign(last_gradient_b) !== Math.sign(gradient_b)) {
-        b -= speed_b * last_gradient_b / (gradient_b - last_gradient_b);
-        speed_b = 0;
-      } else {
-        speed_b += gradient_b;
-      }
-      last_gradient_b = gradient_b;
-
-      if (Math.sign(last_gradient_c) !== Math.sign(gradient_c)) {
-        c -= speed_c * last_gradient_c / (gradient_c - last_gradient_c);
-        speed_c = 0;
-      } else {
-        speed_c += gradient_c;
-      }
-      last_gradient_c = gradient_c;
-
-      a -= speed_a;
-      b -= speed_b;
-      c -= speed_c;
-
-      if (a < SERVO_MIN_VALUE || b < SERVO_MIN_VALUE || c < SERVO_MIN_VALUE || a > SERVO_MAX_VALUE || b > SERVO_MAX_VALUE || c > SERVO_MAX_VALUE) {
-        break;
+      // Compute gradients for each joint
+      let gradients: number[] = [];
+      for (let i = 0; i < n; i++) {
+        let plus = [...values];
+        plus[i] += step;
+        let minus = [...values];
+        minus[i] -= step;
+        gradients.push(this.calc_distance(plus) - this.calc_distance(minus));
       }
 
-      dist = this.calc_distance(a, b, c);
+      // Update each joint value with momentum + backtrack
+      for (let i = 0; i < n; i++) {
+        if (Math.sign(last_gradients[i]) !== Math.sign(gradients[i])) {
+          values[i] -= speeds[i] * last_gradients[i] / (gradients[i] - last_gradients[i]);
+          speeds[i] = 0;
+        } else {
+          speeds[i] += gradients[i];
+        }
+        last_gradients[i] = gradients[i];
+
+        values[i] -= speeds[i];
+      }
+
+      // Check bounds
+      let out_of_bounds = false;
+      for (let i = 0; i < n; i++) {
+        if (values[i] < SERVO_MIN_VALUE || values[i] > SERVO_MAX_VALUE) {
+          out_of_bounds = true;
+          break;
+        }
+      }
+      if (out_of_bounds) break;
+
+      dist = this.calc_distance(values);
       count++;
     }
 
     if (dist > dist_error) {
       success = false;
-      this.calc_distance(this.ori_a, this.ori_b, this.ori_c);
+      this.calc_distance(this.original_values);
     } else {
-      this.calc_distance(Math.round(a), Math.round(b), Math.round(c));
+      let rounded = values.map(v => Math.round(v));
+      this.calc_distance(rounded);
     }
 
     return success;

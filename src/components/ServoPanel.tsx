@@ -25,8 +25,8 @@ export default function ServoPanel() {
       bot.after_status_change();
     };
 
-    for (let idx in bot.legs) {
-      const legIdx = parseInt(idx);
+    for (let idx = 0; idx < bot.legs.length; idx++) {
+      const legIdx = idx;
       let limbs = bot.legs[idx].limbs;
 
       for (let jdx = 0; jdx < limbs.length - 1; jdx++) {
@@ -73,7 +73,7 @@ export default function ServoPanel() {
         // End position display
         let endPosition: any = getWorldPosition(bot.mesh, limbs[jdx + 1]);
         let labels = ['x', 'y', 'z'];
-        for (let kdx in labels) {
+        for (let kdx = 0; kdx < labels.length; kdx++) {
           let label = labels[kdx];
           let roundedValue = endPosition[label].toFixed(2);
 

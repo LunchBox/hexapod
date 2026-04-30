@@ -8,7 +8,7 @@ function HexapodAttributesController(container: HTMLElement, bot: any) {
   this.attributes = get_bot_options();
 
   this.special_attrs = [
-    'coxa_length', 'femur_length', 'tibia_length',
+    'coxa_length', 'femur_length', 'tibia_length', 'tarsus_length',
     'rotate_step', 'fb_step', 'lr_step',
   ];
 }
@@ -36,7 +36,7 @@ HexapodAttributesController.prototype.make_fieldset = function (container, legen
 HexapodAttributesController.prototype.get_attr = function (attr_name) {
   let attrs = attr_name.split('.');
   let value = this.attributes;
-  for (let idx in attrs) {
+  for (let idx = 0; idx < attrs.length; idx++) {
     value = value[attrs[idx]];
   }
   return value;
@@ -88,13 +88,13 @@ HexapodAttributesController.prototype.make_input = function (container, attr_nam
 };
 
 // Special handlers
-['coxa', 'femur', 'tibia'].forEach(function (part) {
+['coxa', 'femur', 'tibia', 'tarsus'].forEach(function (part) {
   HexapodAttributesController.prototype['handle_' + part + '_length'] = function (attr_name, input) {
     let self = this;
     input.setAttribute('value', this.get_attr(attr_name));
     input.addEventListener('change', function () {
       self.set_attr(attr_name, parseFloat(this.value));
-      for (let idx in self.attributes.leg_options) {
+      for (let idx = 0; idx < self.attributes.leg_options.length; idx++) {
         self.attributes.leg_options[idx][part].length = parseFloat(this.value);
       }
       set_bot_options(self.attributes);
@@ -173,9 +173,10 @@ export default function AttributesPanel() {
     attrs_control.make_input(leg_attrs, 'coxa_length', 'number', 'Coxa Length');
     attrs_control.make_input(leg_attrs, 'femur_length', 'number', 'Femur Length');
     attrs_control.make_input(leg_attrs, 'tibia_length', 'number', 'Tibia Length');
+    attrs_control.make_input(leg_attrs, 'tarsus_length', 'number', 'Tarsus Length');
 
     // Per-leg attributes
-    for (let idx in attrs_control.attributes.leg_options) {
+    for (let idx = 0; idx < attrs_control.attributes.leg_options.length; idx++) {
       let leg_fieldset = attrs_control.make_fieldset(container, 'Leg ' + idx + ' Attrs', 'leg_' + idx + '_attrs', 'tab leg_attrs');
       let leg_content = attrs_control.make_container(leg_fieldset, null, 'tab_content');
 
@@ -198,6 +199,11 @@ export default function AttributesPanel() {
       attrs_control.make_input(tibia_attrs, 'leg_options.' + idx + '.tibia.length', 'number', 'Length');
       attrs_control.make_input(tibia_attrs, 'leg_options.' + idx + '.tibia.radius', 'number', 'Radius');
       attrs_control.make_input(tibia_attrs, 'leg_options.' + idx + '.tibia.init_angle', 'number', 'Init Angle');
+
+      let tarsus_attrs = attrs_control.make_fieldset(leg_content, 'Tarsus');
+      attrs_control.make_input(tarsus_attrs, 'leg_options.' + idx + '.tarsus.length', 'number', 'Length');
+      attrs_control.make_input(tarsus_attrs, 'leg_options.' + idx + '.tarsus.radius', 'number', 'Radius');
+      attrs_control.make_input(tarsus_attrs, 'leg_options.' + idx + '.tarsus.init_angle', 'number', 'Init Angle');
     }
 
     // Tab legend click handlers

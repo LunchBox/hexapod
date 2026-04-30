@@ -23,51 +23,76 @@ function App() {
   return (
     <HexapodProvider>
       <div className="app">
-        <h2>JS Hexapod Ver. 0.7.10 - developing (React)</h2>
+        <h2 className="app-title">JS Hexapod Ver. 0.7.10 - developing (React)</h2>
 
-        <SceneCanvas />
+        <div className="grid-scene">
+          <SceneCanvas />
+        </div>
 
-        <div className="main-content">
-          <div className="left-column">
-            <TimeChart />
-
-            <CommandDisplay />
+        <div className="grid-controls">
+          <div className="tab" style={{ marginBottom: 10 }}>
+            {TABS.map((tab) => (
+              <a
+                key={tab.id}
+                href="#"
+                className={`tab-item${activeTab === tab.id ? ' active' : ''}`}
+                onClick={(e) => { e.preventDefault(); setActiveTab(tab.id); }}
+              >
+                {tab.label}
+              </a>
+            ))}
           </div>
 
-          <div className="right-column">
-            <div className="tab" style={{ marginBottom: 10 }}>
-              {TABS.map((tab) => (
-                <a
-                  key={tab.id}
-                  href="#"
-                  className={`tab-item${activeTab === tab.id ? ' active' : ''}`}
-                  onClick={(e) => { e.preventDefault(); setActiveTab(tab.id); }}
-                >
-                  {tab.label}
-                </a>
-              ))}
+          {activeTab === 'move_control' && (
+            <div className="tab_content active">
+              <ControlPanel />
+            </div>
+          )}
+          {activeTab === 'servo_control' && (
+            <div className="tab_content active">
+              <ServoPanel />
+            </div>
+          )}
+          {activeTab === 'attrs_control' && (
+            <div className="tab_content active">
+              <AttributesPanel />
+            </div>
+          )}
+          {activeTab === 'status_control' && (
+            <div className="tab_content active">
+              <StatusPanel />
+            </div>
+          )}
+        </div>
+
+        <div className="grid-info">
+          <TimeChart />
+          <CommandDisplay />
+
+          <div className="app-footer">
+            <div>
+              Old version video: <a href="https://www.youtube.com/watch?v=2jqCGz36oH4">Youtube</a>
             </div>
 
-            {activeTab === 'move_control' && (
-              <div className="tab_content active">
-                <ControlPanel />
-              </div>
-            )}
-            {activeTab === 'servo_control' && (
-              <div className="tab_content active">
-                <ServoPanel />
-              </div>
-            )}
-            {activeTab === 'attrs_control' && (
-              <div className="tab_content active">
-                <AttributesPanel />
-              </div>
-            )}
-            {activeTab === 'status_control' && (
-              <div className="tab_content active">
-                <StatusPanel />
-              </div>
-            )}
+            <div>
+              <p>For connecting to your physical bot:</p>
+              <ul>
+                <li>Install <a href="http://nodejs.org/">Node.js</a></li>
+                <li>Download the <a href="node_server/server.js">server.js</a> (it is a nodejs module)</li>
+                <li>Connect your bot to some COM port</li>
+                <li>run the server.js by typing "node PATH/TO/YOUR/server.js" and follow the instruction</li>
+                <li>no guarantee it works...</li>
+              </ul>
+            </div>
+
+            <p>
+              Thanks to the author:
+              <a href="http://freespace.virgin.net/hugo.elias/models/m_ik2.htm">
+                http://freespace.virgin.net/hugo.elias/models/m_ik2.htm
+              </a>
+            </p>
+
+            <div>By Daniel Cheang @ 2015</div>
           </div>
         </div>
       </div>

@@ -85,7 +85,7 @@ export class Hexapod {
     this.mesh.add(this.body_mesh);
 
     this.legs = [];
-    for (let idx in this.options.leg_options) {
+    for (let idx = 0; idx < this.options.leg_options.length; idx++) {
       let leg = new HexapodLeg(this, this.options.leg_options[idx]);
       this.body_mesh.add(leg.mesh);
       this.legs.push(leg);
@@ -107,7 +107,7 @@ export class Hexapod {
       case "bone":
         material = new THREE.LineBasicMaterial({ color: color });
         geometry = new THREE.Geometry();
-        for (let i in this.options.leg_options) {
+        for (let i = 0; i < this.options.leg_options.length; i++) {
           let opt = this.options.leg_options[i];
           geometry.vertices.push(new THREE.Vector3(opt.mirror * opt.x, opt.y, opt.mirror * opt.z));
         }
@@ -116,7 +116,7 @@ export class Hexapod {
       case "points":
         material = new THREE.PointsMaterial({ color: color });
         geometry = new THREE.Geometry();
-        for (let j in this.options.leg_options) {
+        for (let j = 0; j < this.options.leg_options.length; j++) {
           let opt2 = this.options.leg_options[j];
           geometry.vertices.push(new THREE.Vector3(opt2.mirror * opt2.x, opt2.y, opt2.mirror * opt2.z));
         }
@@ -169,7 +169,7 @@ export class Hexapod {
 
     let material = new THREE.LineBasicMaterial({ color: 0xcc3300 });
     this.guideline = new THREE.Object3D();
-    for (let idx in this.legs) {
+    for (let idx = 0; idx < this.legs.length; idx++) {
       let geometry = new THREE.Geometry();
       let mesh_pos = this.mesh.position.clone();
       let tip_pos = this.legs[idx].get_tip_pos();
@@ -201,6 +201,7 @@ export class Hexapod {
       values.push(leg.coxa.servo_value);
       values.push(leg.femur.servo_value);
       values.push(leg.tibia.servo_value);
+      if (leg.tarsus) values.push(leg.tarsus.servo_value);
     }
     return values;
   }
@@ -220,14 +221,16 @@ export class Hexapod {
     };
 
     status["legs"] = {};
-    let limbs = ["coxa", "femur", "tibia"];
+    let joint_names = this.legs[0]?.joint_count >= 4
+      ? ["coxa", "femur", "tibia", "tarsus"]
+      : ["coxa", "femur", "tibia"];
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let leg = this.legs[i];
       status["legs"][i] = { "on_floor": leg.on_floor };
 
-      for (let j in limbs) {
-        let limb_idx = limbs[j];
+      for (let j = 0; j < joint_names.length; j++) {
+        let limb_idx = joint_names[j];
         let limb = this.legs[i][limb_idx];
         status["legs"][i][limb_idx] = {
           "position": limb.position.clone(),
@@ -259,7 +262,9 @@ export class Hexapod {
 
     this.center_offset = status.center_offset;
 
-    let limb_names = ["coxa", "femur", "tibia"];
+    let limb_names = this.legs[0]?.joint_count >= 4
+      ? ["coxa", "femur", "tibia", "tarsus"]
+      : ["coxa", "femur", "tibia"];
     let total_limb_names = limb_names.length;
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
@@ -282,10 +287,11 @@ export class Hexapod {
 
   format_servo_values(servo_values: number[]) {
     let formatted_value: string[] = [];
+    let joints_per_leg = this.legs[0]?.joint_count || 3;
     let total_values = servo_values.length;
     for (let idx = 0; idx < total_values; idx++) {
-      let i = Math.floor(idx / 3);
-      let j = idx % 3;
+      let i = Math.floor(idx / joints_per_leg);
+      let j = idx % joints_per_leg;
       formatted_value.push("#" + this.legs[i].limbs[j].servo_idx + " P" + servo_values[idx]);
     }
     return formatted_value.join(" ");
@@ -442,7 +448,7 @@ export class Hexapod {
     let limb: any, next_limb: any, servo_value: any, vector: any;
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
-      for (let jdx in this.legs[i].limbs) {
+      for (let jdx = 0; jdx < this.legs[i].limbs.length; jdx++) {
         limb = this.legs[i].limbs[jdx];
         servo_value = limb.servo_value;
 
@@ -451,7 +457,7 @@ export class Hexapod {
           limb.current_control.value = servo_value;
         }
 
-        next_limb = this.legs[i].limbs[parseInt(jdx) + 1];
+        next_limb = this.legs[i].limbs[jdx + 1];
         if (next_limb && limb.end_x_control) {
           vector = getWorldPosition(this.mesh, next_limb);
           limb.end_x_control.value = vector.x.toFixed(2);
@@ -548,8 +554,10 @@ export class HexapodLeg {
   coxa: any;
   femur: any;
   tibia: any;
+  tarsus: any;
   tip: any;
   limbs: any[];
+  joint_count: number;
 
   constructor(bot: any, options: any) {
     this.bot = bot;
@@ -560,6 +568,9 @@ export class HexapodLeg {
     this.on_floor = true;
     this.center_offset = 0;
     this.color = 0xbb1100;
+
+    const dof = this.bot.options.dof || 3;
+    this.joint_count = Math.min(4, Math.max(3, dof));
 
     // coxa
     this.coxa = this.draw_coxa();
@@ -573,20 +584,34 @@ export class HexapodLeg {
     this.tibia = this.draw_tibia();
     this.femur.add(this.tibia);
 
+    // tarsus (4th joint, only if DOF >= 4)
+    if (this.joint_count >= 4) {
+      this.tarsus = this.draw_tarsus();
+      this.tibia.add(this.tarsus);
+    }
+
     // tip
     let geometry = new THREE.Geometry();
     geometry.vertices.push(new THREE.Vector3(0, 0, 0));
     let tip = new THREE.Points(geometry, new THREE.PointsMaterial());
     tip.type = "tip";
 
-    tip.position.y = options.tibia.length;
+    if (this.joint_count >= 4) {
+      tip.position.y = options.tarsus.length;
+      this.tarsus.add(tip);
+    } else {
+      tip.position.y = options.tibia.length;
+      this.tibia.add(tip);
+    }
     tip.visible = false;
-
-    this.tibia.add(tip);
 
     this.tip = tip;
 
-    this.limbs = [this.coxa, this.femur, this.tibia, this.tip];
+    if (this.joint_count >= 4) {
+      this.limbs = [this.coxa, this.femur, this.tibia, this.tarsus, this.tip];
+    } else {
+      this.limbs = [this.coxa, this.femur, this.tibia, this.tip];
+    }
   }
 
   draw_coxa() {
@@ -723,6 +748,49 @@ export class HexapodLeg {
     return mesh;
   }
 
+  draw_tarsus() {
+    let geometry: any, mesh: any, material: any;
+
+    switch (this.bot.draw_type) {
+      case "bone":
+        material = new THREE.LineBasicMaterial({ color: this.color });
+        geometry = new THREE.Geometry();
+        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tarsus.length / 2, 0));
+        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
+        geometry.vertices.push(new THREE.Vector3(0, this.options.tarsus.length, 0));
+        mesh = new THREE.Line(geometry, material);
+        break;
+      case "points":
+        material = new THREE.PointsMaterial({ color: this.color });
+        geometry = new THREE.Geometry();
+        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tarsus.length / 2, 0));
+        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
+        geometry.vertices.push(new THREE.Vector3(0, this.options.tarsus.length, 0));
+        mesh = new THREE.Points(geometry, material);
+        break;
+      default:
+        material = new THREE.MeshBasicMaterial({ color: this.color });
+        geometry = new THREE.BoxGeometry(this.options.tarsus.radius, this.options.tarsus.length, this.options.tarsus.radius);
+        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tarsus.length / 2, 0));
+        mesh = new THREE.Mesh(geometry, material);
+        let axisHelper = new THREE.AxisHelper(15);
+        mesh.add(axisHelper);
+    }
+
+    mesh.type = "tarsus";
+
+    mesh.position.y = this.options.tibia.length;
+    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.tarsus.init_angle);
+    mesh.init_radius = degree_to_redius(this.options.tarsus.init_angle);
+    mesh.init_angle = this.options.tarsus.init_angle;
+
+    mesh.servo_value = this.options.tarsus.servo_value;
+    mesh.servo_idx = this.options.tarsus.servo_idx;
+    mesh.revert = this.options.tarsus.revert;
+
+    return mesh;
+  }
+
   set_init_angle(limb_idx: number, angle: number) {
     let ori_radius = this.limbs[limb_idx].init_radius;
     let new_radius = degree_to_redius(angle);
@@ -795,16 +863,23 @@ export class HexapodLeg {
 export function get_bot_options() {
   let options = get_obj_from_local_storage(HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS);
 
+  const dof = options.dof || 3;
+  const jointsPerLeg = Math.min(4, Math.max(3, dof));
+
   for (let i = 0; i < options.leg_options.length; i++) {
     let leg_option = options.leg_options[i];
+    const base = options.first_servo_idx + i * jointsPerLeg;
     if (typeof leg_option.coxa.servo_idx === "undefined") {
-      leg_option.coxa.servo_idx = options.first_servo_idx + i * 3;
+      leg_option.coxa.servo_idx = base;
     }
     if (typeof leg_option.femur.servo_idx === "undefined") {
-      leg_option.femur.servo_idx = options.first_servo_idx + i * 3 + 1;
+      leg_option.femur.servo_idx = base + 1;
     }
     if (typeof leg_option.tibia.servo_idx === "undefined") {
-      leg_option.tibia.servo_idx = options.first_servo_idx + i * 3 + 2;
+      leg_option.tibia.servo_idx = base + 2;
+    }
+    if (jointsPerLeg >= 4 && leg_option.tarsus && typeof leg_option.tarsus.servo_idx === "undefined") {
+      leg_option.tarsus.servo_idx = base + 3;
     }
   }
 

@@ -3,17 +3,35 @@
   font-size: 13px;
   color: #444;
   text-align: left;
+
+  display: grid;
+  grid-template-columns: 480px 1fr;
+  grid-template-rows: auto auto 1fr;
+  gap: 0 16px;
 }
 
-.main-content {
-  overflow: hidden;
+.app-title {
+  grid-column: 1 / -1;
+  grid-row: 1;
 }
 
-.left-column {
-  float: left;
-  width: 480px;
+.grid-scene {
+  grid-column: 1;
+  grid-row: 2;
 }
 
-.right-column {
-  margin-left: 490px;
+.grid-info {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.grid-controls {
+  grid-column: 2;
+  grid-row: 2 / 4;
+}
+
+.app-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #ccc;
 }
