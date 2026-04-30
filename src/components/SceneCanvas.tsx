@@ -27,6 +27,10 @@ export default function SceneCanvas() {
     botRef.current = bot;
     appState.current_bot = bot;
 
+    // Debug: log joint positions, also expose globally
+    setTimeout(() => bot.debug_joint_positions(), 500);
+    (window as any).debugBot = () => bot.debug_joint_positions();
+
     return () => {
       initialized.current = false;
       if (bot.mesh && sceneObjs.scene) {

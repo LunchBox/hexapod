@@ -411,6 +411,25 @@ export class Hexapod {
     container.scrollTop = container.scrollHeight;
   }
 
+  debug_joint_positions() {
+    this.mesh.updateMatrixWorld();
+    const names = ['coxa', 'femur', 'tibia', 'tarsus', 'tip'];
+    console.group('=== Joint World Positions ===');
+    for (let i = 0; i < this.legs.length; i++) {
+      const leg = this.legs[i];
+      const opt = leg.options;
+      console.group(`Leg ${i} (x=${opt.x.toFixed(1)}, z=${opt.z.toFixed(1)}, mirror=${opt.mirror}, yaw=${((opt as any)._yaw * 180 / Math.PI).toFixed(1)}°)`);
+      for (const name of names) {
+        const limb = leg[name];
+        if (!limb) continue;
+        const wp = getWorldPosition(this.mesh, limb);
+        console.log(`${name}: (${wp.x.toFixed(1)}, ${wp.y.toFixed(1)}, ${wp.z.toFixed(1)})`);
+      }
+      console.groupEnd();
+    }
+    console.groupEnd();
+  }
+
   get_tip_pos() {
     let tips_pos: any[] = [];
     let total_legs = this.legs.length;
