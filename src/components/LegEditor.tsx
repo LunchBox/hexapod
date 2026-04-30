@@ -194,26 +194,12 @@ export default function LegEditor() {
     return -1;
   }, [getOpts]);
 
-  // Redraw when bot or options change externally
+  // Size canvas then draw — must be ONE effect because sizing clears the buffer
   useEffect(() => {
     const canvas = canvasRef.current;
     const bot = botRef.current;
-    console.log('LegEditor effect: canvas=%s bot=%s botVersion=%d',
-      !!canvas, !!bot, botVersion);
-    if (!canvas || !bot) {
-      // Bot may not be ready on initial mount — retry next frame
-      const id = requestAnimationFrame(() => draw());
-      return () => cancelAnimationFrame(id);
-    }
-    console.time('LegEditor draw');
-    draw();
-    console.timeEnd('LegEditor draw');
-  }, [draw, botVersion]);
+    if (!canvas || !bot) return;
 
-  // Canvas size
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = W * dpr;
     canvas.height = H * dpr;
@@ -221,7 +207,11 @@ export default function LegEditor() {
     canvas.style.height = H + 'px';
     const ctx = canvas.getContext('2d');
     if (ctx) ctx.scale(dpr, dpr);
-  }, []);
+
+    console.time('LegEditor draw');
+    draw();
+    console.timeEnd('LegEditor draw');
+  }, [draw, botVersion]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
