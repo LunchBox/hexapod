@@ -492,8 +492,7 @@ export class GaitController {
   move_tips(leg_idxs: number[], fb_direction: number, lr_direction: number, rotate_direction: number) {
     let fb_offset = fb_direction * this.fb_step;
     let lr_offset = lr_direction * this.lr_step;
-    // Tip rotation matches body rotation per step
-    let rotate_offset = -rotate_direction * this.rotate_step / this.leg_groups.length;
+    let rotate_offset = rotate_direction * this.rotate_step / this.leg_groups.length;
 
     for (let i = 0; i < leg_idxs.length; i++) {
       let idx = leg_idxs[i];
