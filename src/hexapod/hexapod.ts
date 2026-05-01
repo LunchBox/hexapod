@@ -578,16 +578,8 @@ export class Hexapod {
     let prevPos = this.body_mesh.position.clone();
     let prevRot = this.body_mesh.rotation.clone();
 
-    // Compute max delta to determine sub-steps (~0.5° or 5mm per step)
-    let maxD = 0;
-    if (opts.dx != null) maxD = Math.max(maxD, Math.abs(opts.dx) / 5);
-    if (opts.dy != null) maxD = Math.max(maxD, Math.abs(opts.dy) / 5);
-    if (opts.dz != null) maxD = Math.max(maxD, Math.abs(opts.dz) / 5);
-    if (opts.rx != null) maxD = Math.max(maxD, Math.abs(opts.rx) / 0.008);
-    if (opts.ry != null) maxD = Math.max(maxD, Math.abs(opts.ry) / 0.008);
-    if (opts.rz != null) maxD = Math.max(maxD, Math.abs(opts.rz) / 0.008);
-    let steps = Math.ceil(maxD);
-    if (steps < 1) steps = 1;
+    // Subdivide into at most 3 steps for smooth IK
+    let steps = 3;
 
     let total_legs = this.legs.length;
     for (let s = 0; s < steps; s++) {
