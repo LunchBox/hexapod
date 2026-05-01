@@ -234,7 +234,7 @@ export default function SceneControls() {
         <button className="control_btn" title="Reset to saved home pose"
           onClick={() => { botRef.current?.reset_body_to_home?.(); syncSliders(); }}>↩ Home</button>
         <button className="control_btn" title="Reset to factory default pose"
-          onClick={() => { botRef.current?.reset_body_to_init?.(); syncSliders(); }}>↺ Init</button>
+          onClick={() => { botRef.current?.reset_body_to_init?.(); syncSliders(); }}>↺ Reset Pose</button>
       </div>
     </div>
   );
