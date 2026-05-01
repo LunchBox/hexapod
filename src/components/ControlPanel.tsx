@@ -114,7 +114,7 @@ export default function ControlPanel() {
         break;
       case 'act_compact':
         setTipCircleScale((s) => {
-          const next = Math.max(0.5, +(s - 0.1).toFixed(1));
+          const next = Math.max(0.1, +(s - 0.1).toFixed(1));
           bot.options.tip_circle_scale = next;
           set_bot_options(bot.options);
           bot.adjust_tip_spread(next);

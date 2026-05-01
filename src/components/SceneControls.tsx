@@ -116,11 +116,11 @@ export default function SceneControls() {
       {/* Expand/Compact */}
       <div style={colStyle}>
         <button style={btnH} onClick={() => handleSpreadChange(Math.min(1.5, +(tipScale + 0.1).toFixed(1)))}>▲</button>
-        <input type="range" max="1.5" min="0.5" step="0.1" value={tipScale} title="Tip spread"
+        <input type="range" max="1.5" min="0.1" step="0.1" value={tipScale} title="Tip spread"
           style={sliderStyle}
           onChange={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
         />
-        <button style={btnH} onClick={() => handleSpreadChange(Math.max(0.5, +(tipScale - 0.1).toFixed(1)))}>▼</button>
+        <button style={btnH} onClick={() => handleSpreadChange(Math.max(0.1, +(tipScale - 0.1).toFixed(1)))}>▼</button>
         <span style={labelStyle}>↔</span>
         <span style={valStyle}>{tipScale.toFixed(1)}</span>
       </div>
