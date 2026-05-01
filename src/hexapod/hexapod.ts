@@ -165,6 +165,17 @@ export class Hexapod {
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
 
+    // Head indicator — small sphere at front-top of body
+    {
+      const headGeom = new (THREE as any).SphereGeometry(5, 8, 8);
+      const headMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+      const head = new THREE.Mesh(headGeom, headMat);
+      const frontZ = bodyShape === 'polygon' ? -bodyRadius : -bodyLength / 2;
+      const bodyH = this.options.body_height || 20;
+      head.position.set(0, bodyH + 8, frontZ);
+      this.mesh.add(head);
+    }
+
     this.legs = [];
     for (let idx = 0; idx < legCount; idx++) {
       // Fallback to first leg option if pool is shorter than leg count
