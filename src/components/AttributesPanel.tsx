@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
-import { get_bot_options } from '../hexapod/hexapod';
+import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
 import { history } from '../hexapod/history';
 import LegEditor from './LegEditor';
@@ -50,8 +50,61 @@ export default function AttributesPanel() {
     bumpBotVersion();
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = () => {
+    const b = botRef.current;
+    const data = b?.options || get_bot_options();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.download = `hexapod-profile-${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        if (!data.leg_options || !Array.isArray(data.leg_options)) {
+          alert('Invalid profile file: missing leg_options');
+          return;
+        }
+        const b = botRef.current;
+        if (b) {
+          history.push(b.options);
+          set_bot_options(data);
+          b.apply_attributes(data);
+          bumpBotVersion();
+        } else {
+          set_bot_options(data);
+        }
+      } catch (err: any) {
+        alert('Failed to parse profile: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be re-imported
+    e.target.value = '';
+  };
+
   return (
     <div id="attrs_control">
+      <fieldset className="btns">
+        <legend>Profile</legend>
+        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleExport(); }}>Export</a>
+        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); fileInputRef.current?.click(); }}>Import</a>
+        <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
+          onChange={handleImport} />
+      </fieldset>
+
       <LegEditor />
 
       <fieldset className="btns">
