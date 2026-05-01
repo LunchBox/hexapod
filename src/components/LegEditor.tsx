@@ -263,10 +263,6 @@ export default function LegEditor() {
 
       const dx = legPt.x - prevPt.x;
       const dy = legPt.y - prevPt.y;
-      console.log('DRAG pt', legPt.x.toFixed(1), legPt.y.toFixed(1),
-        'prev', prevPt.x.toFixed(1), prevPt.y.toFixed(1),
-        'dx', dx.toFixed(1), 'dy', dy.toFixed(1));
-
       const newLen = Math.max(5, Math.sqrt(dx * dx + dy * dy));
 
       const segNames = getSegNames(opts);
