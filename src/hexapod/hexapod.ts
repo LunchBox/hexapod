@@ -216,7 +216,6 @@ export class Hexapod {
     this.putdown_tips();
     this.auto_level_body();
 
-    this.draw_gait_guide();
     this.draw_gait_guidelines();
 
     // Restore saved body home pose
@@ -235,6 +234,8 @@ export class Hexapod {
         for (let i = 0; i < this.legs.length; i++) this.legs[i].set_tip_pos(tips[i]);
       }
     }
+
+    this.draw_gait_guide();
   }
 
   draw_body() {
@@ -331,10 +332,16 @@ export class Hexapod {
       sq.position.copy(tip);
       sq.rotation.x = -Math.PI / 2; // flat on ground
       this.guide_pos.add(sq);
-      // Store reference for position updates
-      (this.guide_pos as any)['_sq' + i] = sq;
     }
     this.mesh.add(this.guide_pos);
+  }
+
+  sync_guide_circles() {
+    if (!this.guide_pos) return;
+    for (let i = 0; i < this.legs.length; i++) {
+      const sq = this.guide_pos.children[i] as any;
+      if (sq) sq.position.copy(this.legs[i].get_tip_pos());
+    }
   }
 
   reset_guide_pos() {
@@ -637,6 +644,7 @@ export class Hexapod {
         return false;
       }
     }
+    this.sync_guide_circles();
     this.after_status_change();
     return true;
   }
@@ -735,6 +743,7 @@ export class Hexapod {
       this.legs[i].set_tip_pos(tip);
     }
 
+    this.sync_guide_circles();
     this.after_status_change();
   }
 

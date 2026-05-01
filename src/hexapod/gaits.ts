@@ -526,7 +526,7 @@ export class GaitController {
 
     gp.position.x -= lr_offset / this.leg_groups.length * 3;
 
-    let target_pos = this.bot.get_guide_pos(this.bot.legs.length);
+    let target_pos = this.bot.get_guide_pos(0);
     this.bot.mesh.position.x = target_pos.x;
     this.bot.mesh.position.z = target_pos.z;
 
