@@ -65,11 +65,11 @@ function computeLegLayout(
     // Polygon — legs radiate outward, stretched by width (X) and length (Z)
     // Vertex: legs at polygon corners (full radius)
     // Edge:   legs at edge midpoints (reduced radius, offset by π/N)
-    // polyPlacement 'vertex' means legs closer to center (edge midpoint pattern)
-    // polyPlacement 'edge' means legs at body outline (vertex pattern)
-    const atBodyOutline = polyPlacement === 'edge';
-    const edgeOffset = atBodyOutline ? 0 : Math.PI / legCount;
-    const edgeScale  = atBodyOutline ? 1 : Math.cos(Math.PI / legCount);
+    // Vertex: legs at polygon corners → full radius, no angle offset
+    // Edge:   legs at edge midpoints → reduced radius, offset by π/N
+    const isVertex = polyPlacement === 'vertex';
+    const edgeOffset = isVertex ? 0 : Math.PI / legCount;
+    const edgeScale  = isVertex ? 1 : Math.cos(Math.PI / legCount);
     const rx = bodyRadiusX * edgeScale;
     const rz = bodyRadiusZ * edgeScale;
     // orientOffset = desired first-leg angle - base angle
