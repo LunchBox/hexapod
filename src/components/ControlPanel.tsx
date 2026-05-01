@@ -110,22 +110,18 @@ export default function ControlPanel() {
         }
         break;
       case 'act_expend': {
-        history.push(bot.options);
+        // Temporary — only visual, no persist
         const cur = bot.options.tip_circle_scale ?? 1;
         const next = Math.min(1.5, +(cur + 0.1).toFixed(1));
         setTipCircleScale(next);
-        bot.options.tip_circle_scale = next;
-        if (history.autoSave) set_bot_options(bot.options);
         bot.adjust_tip_spread(next);
         break;
       }
       case 'act_compact': {
-        history.push(bot.options);
+        // Temporary — only visual, no persist
         const cur = bot.options.tip_circle_scale ?? 1;
         const next = Math.max(0.1, +(cur - 0.1).toFixed(1));
         setTipCircleScale(next);
-        bot.options.tip_circle_scale = next;
-        if (history.autoSave) set_bot_options(bot.options);
         bot.adjust_tip_spread(next);
         break;
       }
@@ -363,61 +359,6 @@ export default function ControlPanel() {
           >
             {item.label}
           </a>
-        ))}
-      </fieldset>
-
-      <fieldset className="btns">
-        <legend>Body</legend>
-        <a href="#" className={`control_btn${bodyShape === 'rectangle' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_body_shape_switch', 'rectangle'); }}>Rect</a>
-        <a href="#" className={`control_btn${bodyShape === 'polygon' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_body_shape_switch', 'polygon'); }}>Poly</a>
-        {bodyShape === 'polygon' && (
-          <>
-            {' | '}
-            <a href="#" className={`control_btn${polyPlacement === 'vertex' ? ' active' : ''}`}
-              onClick={(e) => { e.preventDefault(); handleAction('act_poly_placement_switch', 'vertex'); }}>Vertex</a>
-            <a href="#" className={`control_btn${polyPlacement === 'edge' ? ' active' : ''}`}
-              onClick={(e) => { e.preventDefault(); handleAction('act_poly_placement_switch', 'edge'); }}>Edge</a>
-            {legCount % 2 !== 0 && (
-              <>
-                {' | '}
-                <a href="#" className={`control_btn${oddOrientation === 'back' ? ' active' : ''}`}
-                  onClick={(e) => { e.preventDefault(); handleAction('act_odd_orientation_switch', 'back'); }}>1-Back</a>
-                <a href="#" className={`control_btn${oddOrientation === 'front' ? ' active' : ''}`}
-                  onClick={(e) => { e.preventDefault(); handleAction('act_odd_orientation_switch', 'front'); }}>1-Front</a>
-              </>
-            )}
-          </>
-        )}
-      </fieldset>
-
-      <fieldset className="btns">
-        <legend>DOF</legend>
-        {[3,4,5,6].map(d => (
-          <a key={d} href="#" className={`control_btn${dof === d ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', String(d)); }}>{d}-DOF</a>
-        ))}
-        <div style={{ marginTop: 4 }}>
-          {Array.from({ length: legCount }, (_, i) => (
-            <label key={i} style={{ marginRight: 6, cursor: 'pointer', fontSize: 12 }}>
-              <input
-                type="checkbox"
-                checked={dofLegs.has(i)}
-                onChange={() => handleAction('act_toggle_dof_leg', String(i))}
-                style={{ verticalAlign: 'middle' }}
-              />
-              {i}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <fieldset className="btns">
-        <legend>Legs</legend>
-        {[3,4,5,6,7,8,9].map(n => (
-          <a key={n} href="#" className={`control_btn${legCount === n ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); handleAction('act_leg_count_switch', String(n)); }}>{n}</a>
         ))}
       </fieldset>
 

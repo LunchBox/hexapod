@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
-import { history, performUndo, performRedo, performSave } from '../hexapod/history';
+import { history } from '../hexapod/history';
 import LegEditor from './LegEditor';
 
 function HexapodAttributesController(container: HTMLElement, bot: any) {
@@ -219,86 +219,34 @@ export default function AttributesPanel() {
   const { botRef, botVersion, bumpBotVersion } = useHexapod();
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const saved = useMemo(() => get_bot_options(), []);
+  const [dof, setDof] = useState(saved.dof || 3);
+  const [dofLegs, setDofLegs] = useState<Set<number>>(() => {
+    const count = saved.leg_count || 6;
+    return new Set(Array.from({ length: count }, (_, i) => i));
+  });
+  const [legCount, setLegCount] = useState(saved.leg_count || 6);
+  const [bodyShape, setBodyShape] = useState(saved.body_shape || 'rectangle');
+  const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'vertex');
+  const [oddOrientation, setOddOrientation] = useState(saved.polygon_odd_orientation || 'back');
+  const [tipCircleScale, setTipCircleScale] = useState(saved.tip_circle_scale ?? 1);
+
+  const applyConfig = (updates: Partial<any>) => {
+    const bot = botRef.current;
+    if (!bot) return;
+    history.push(bot.options);
+    Object.assign(bot.options, updates);
+    bot.apply_attributes(bot.options);
+    bumpBotVersion();
+  };
+
   useEffect(() => {
     if (!containerRef.current || !botRef.current) return;
 
     let container = containerRef.current;
-    // Clear and rebuild when bot structure changes (leg_count etc.)
     container.innerHTML = '';
 
     let attrs_control = new HexapodAttributesController(container, botRef.current);
-
-    // ── Toolbar: undo / redo / auto-save / save ──
-    const toolbar = document.createElement('div');
-    toolbar.style.cssText = 'margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
-    container.appendChild(toolbar);
-
-    const makeBtn = (text: string, title: string, onClick: () => void, disabled: boolean) => {
-      const btn = document.createElement('button');
-      btn.textContent = text;
-      btn.title = title;
-      btn.disabled = disabled;
-      btn.style.cssText = 'padding:2px 8px;font-size:12px;cursor:pointer;';
-      if (disabled) btn.style.opacity = '0.4';
-      btn.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
-      return btn;
-    };
-
-    const bot = botRef.current;
-
-    const undoBtn = makeBtn('↩', 'Undo (Ctrl+Z)', () => {
-      if (performUndo(bot, bumpBotVersion)) updateToolbar();
-    }, !history.canUndo());
-
-    const redoBtn = makeBtn('↪', 'Redo (Ctrl+Y)', () => {
-      if (performRedo(bot, bumpBotVersion)) updateToolbar();
-    }, !history.canRedo());
-
-    const autoSaveLabel = document.createElement('label');
-    autoSaveLabel.style.cssText = 'font-size:12px;margin-left:8px;cursor:pointer;display:flex;align-items:center;gap:3px;';
-    const autoSaveCb = document.createElement('input');
-    autoSaveCb.type = 'checkbox';
-    autoSaveCb.checked = history.autoSave;
-    autoSaveCb.addEventListener('change', () => {
-      history.autoSave = autoSaveCb.checked;
-      if (history.autoSave && history.isDirty(bot.options)) {
-        history.save(bot.options);
-      }
-      updateToolbar();
-    });
-    autoSaveLabel.appendChild(autoSaveCb);
-    autoSaveLabel.appendChild(document.createTextNode('Auto Save'));
-
-    const saveBtn = makeBtn('💾 Save', 'Save to localStorage (Ctrl+S)', () => {
-      performSave(bot, bumpBotVersion);
-      updateToolbar();
-    }, false);
-
-    const dirtyDot = document.createElement('span');
-    dirtyDot.style.cssText = 'color:#e67e22;font-weight:bold;font-size:14px;margin-left:2px;';
-
-    function updateToolbar() {
-      undoBtn.disabled = !history.canUndo();
-      undoBtn.style.opacity = undoBtn.disabled ? '0.4' : '1';
-      redoBtn.disabled = !history.canRedo();
-      redoBtn.style.opacity = redoBtn.disabled ? '0.4' : '1';
-      const dirty = history.isDirty(bot.options);
-      saveBtn.style.display = history.autoSave ? 'none' : 'inline-block';
-      saveBtn.style.background = dirty ? '#e67e22' : '';
-      saveBtn.style.color = dirty ? '#fff' : '';
-      dirtyDot.textContent = dirty ? ' ⬤ unsaved' : '';
-      autoSaveCb.checked = history.autoSave;
-    }
-
-    toolbar.appendChild(undoBtn);
-    toolbar.appendChild(redoBtn);
-    toolbar.appendChild(autoSaveLabel);
-    toolbar.appendChild(saveBtn);
-    toolbar.appendChild(dirtyDot);
-    updateToolbar();
-
-    // Store updateToolbar on the controller so handlers can refresh it
-    (attrs_control as any)._updateToolbar = updateToolbar;
 
     // Motions
     let motion_attrs = attrs_control.make_fieldset(container, 'Motions');
@@ -356,34 +304,96 @@ export default function AttributesPanel() {
         }
       });
     });
-
-    // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save
-    const handleKey = (e: KeyboardEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      if (e.key === 'z' || e.key === 'Z') {
-        e.preventDefault();
-        if (performUndo(bot, bumpBotVersion)) updateToolbar();
-      } else if (e.key === 'y' || e.key === 'Y') {
-        e.preventDefault();
-        if (performRedo(bot, bumpBotVersion)) updateToolbar();
-      } else if (e.key === 's' || e.key === 'S') {
-        if (!history.autoSave) {
-          e.preventDefault();
-          performSave(bot, bumpBotVersion);
-          updateToolbar();
-        }
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-
-    return () => {
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [botVersion, bumpBotVersion]);
+  }, [botVersion]);
 
   return (
     <div id="attrs_control">
       <LegEditor />
+
+      <fieldset className="btns">
+        <legend>DOF</legend>
+        {[3,4,5,6].map(d => (
+          <a key={d} href="#" className={`control_btn${dof === d ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault();
+              const bot = botRef.current; if (!bot) return;
+              history.push(bot.options);
+              setDof(d); bot.options.dof = d;
+              for (let i = 0; i < bot.options.leg_options.length; i++) {
+                if (dofLegs.has(i)) bot.options.leg_options[i].dof = d;
+              }
+              bot.apply_attributes(bot.options); bumpBotVersion();
+            }}>{d}-DOF</a>
+        ))}
+        <div style={{ marginTop: 4 }}>
+          {Array.from({ length: legCount }, (_, i) => (
+            <label key={i} style={{ marginRight: 6, cursor: 'pointer', fontSize: 12 }}>
+              <input type="checkbox" checked={dofLegs.has(i)}
+                onChange={() => setDofLegs(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                style={{ verticalAlign: 'middle' }} />{i}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="btns">
+        <legend>Legs</legend>
+        {[3,4,5,6,7,8,9].map(n => (
+          <a key={n} href="#" className={`control_btn${legCount === n ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault();
+              const bot = botRef.current; if (!bot) return;
+              history.push(bot.options);
+              setLegCount(n); setDofLegs(new Set(Array.from({ length: n }, (_, i) => i)));
+              bot.options.leg_count = n;
+              bot.apply_attributes(bot.options); bumpBotVersion();
+              if (!bot.gait_controller.gaits[bot.options.gait || 'tripod']) { bot.options.gait = 'tripod'; }
+            }}>{n}</a>
+        ))}
+      </fieldset>
+
+      <fieldset className="btns">
+        <legend>Body</legend>
+        <a href="#" className={`control_btn${bodyShape === 'rectangle' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); setBodyShape('rectangle'); applyConfig({ body_shape: 'rectangle' }); }}>Rect</a>
+        <a href="#" className={`control_btn${bodyShape === 'polygon' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); setBodyShape('polygon'); applyConfig({ body_shape: 'polygon' }); }}>Poly</a>
+        {bodyShape === 'polygon' && (<>
+          {' | '}
+          <a href="#" className={`control_btn${polyPlacement === 'vertex' ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); setPolyPlacement('vertex'); applyConfig({ polygon_leg_placement: 'vertex' }); }}>Vertex</a>
+          <a href="#" className={`control_btn${polyPlacement === 'edge' ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); setPolyPlacement('edge'); applyConfig({ polygon_leg_placement: 'edge' }); }}>Edge</a>
+          {legCount % 2 !== 0 && (<>
+            {' | '}
+            <a href="#" className={`control_btn${oddOrientation === 'back' ? ' active' : ''}`}
+              onClick={(e) => { e.preventDefault(); setOddOrientation('back'); applyConfig({ polygon_odd_orientation: 'back' }); }}>1-Back</a>
+            <a href="#" className={`control_btn${oddOrientation === 'front' ? ' active' : ''}`}
+              onClick={(e) => { e.preventDefault(); setOddOrientation('front'); applyConfig({ polygon_odd_orientation: 'front' }); }}>1-Front</a>
+          </>)}
+        </>)}
+      </fieldset>
+
+      <fieldset className="btns">
+        <legend>Tip Spread</legend>
+        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault();
+          const bot = botRef.current; if (!bot) return;
+          history.push(bot.options);
+          const cur = bot.options.tip_circle_scale ?? 1;
+          const next = Math.min(1.5, +(cur + 0.1).toFixed(1));
+          setTipCircleScale(next); bot.options.tip_circle_scale = next;
+          if (history.autoSave) set_bot_options(bot.options);
+          bot.adjust_tip_spread(next); bumpBotVersion();
+        }}>Expand</a>
+        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault();
+          const bot = botRef.current; if (!bot) return;
+          history.push(bot.options);
+          const cur = bot.options.tip_circle_scale ?? 1;
+          const next = Math.max(0.1, +(cur - 0.1).toFixed(1));
+          setTipCircleScale(next); bot.options.tip_circle_scale = next;
+          if (history.autoSave) set_bot_options(bot.options);
+          bot.adjust_tip_spread(next); bumpBotVersion();
+        }}>Compact</a>
+      </fieldset>
+
       <div ref={containerRef}></div>
     </div>
   );

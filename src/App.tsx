@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { HexapodProvider } from './context/HexapodContext';
 import SceneCanvas from './components/SceneCanvas';
 import SceneControls from './components/SceneControls';
+import Toolbar from './components/Toolbar';
 import ControlPanel from './components/ControlPanel';
 import ServoPanel from './components/ServoPanel';
 import AttributesPanel from './components/AttributesPanel';
@@ -32,6 +33,7 @@ function App() {
         </div>
 
         <div className="grid-controls">
+          <Toolbar />
           <div className="tab" style={{ marginBottom: 10 }}>
             {TABS.map((tab) => (
               <a
