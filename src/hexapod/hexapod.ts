@@ -170,7 +170,7 @@ export class Hexapod {
       const headGeom = new (THREE as any).SphereGeometry(5, 8, 8);
       const headMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
       const head = new THREE.Mesh(headGeom, headMat);
-      head.position.set(0, 100, -50);
+      head.position.set(0, 100, -120);
       this.mesh.add(head);
     }
 
