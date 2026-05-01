@@ -115,29 +115,30 @@ export default function SceneControls() {
   const valStyle: React.CSSProperties = { fontSize: 9, color: '#666', height: 14, lineHeight: '14px' };
   const btnH: React.CSSProperties = { ...btnStyle, height: 16, lineHeight: '14px' };
 
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap',
+  };
+
   return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-end', gap: 10,
-      padding: '6px 10px', margin: '8px 0', flexWrap: 'wrap',
-    }}>
-      {/* Move joystick */}
-      <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
-        <div ref={moveJsRef}></div>
-        <span style={labelStyle}>Move</span>
+    <div style={{ padding: '6px 10px', margin: '8px 0' }}>
+      {/* Row 1: Joysticks */}
+      <div style={rowStyle}>
+        <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+          <div ref={moveJsRef}></div>
+          <span style={labelStyle}>Move</span>
+        </div>
+        <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+          <div ref={bodyJsRef}></div>
+          <span style={labelStyle}>Body</span>
+        </div>
+        <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+          <div ref={rotJsRef}></div>
+          <span style={labelStyle}>Rot</span>
+        </div>
       </div>
 
-      {/* Move body joystick */}
-      <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
-        <div ref={bodyJsRef}></div>
-        <span style={labelStyle}>Body</span>
-      </div>
-
-      {/* Rotate body joystick */}
-      <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
-        <div ref={rotJsRef}></div>
-        <span style={labelStyle}>Rot</span>
-      </div>
-
+      {/* Row 2: Sliders */}
+      <div style={rowStyle}>
       {/* Body height */}
       <div style={colStyle}>
         <button style={btnH} onClick={() => handleHeightChange(Math.min(150, bodyY + 1))}>▲</button>
@@ -217,6 +218,7 @@ export default function SceneControls() {
         }}>▼</button>
         <span style={labelStyle}>⇔</span>
         <span style={valStyle}>{lrStep}</span>
+      </div>
       </div>
     </div>
   );
