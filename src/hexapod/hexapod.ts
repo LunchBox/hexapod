@@ -728,14 +728,6 @@ export class Hexapod {
       this.legs[i].set_tip_pos(tip);
     }
 
-    // Keep guide vertices in sync so gait targets match actual tip positions
-    if (this.guide_pos?.geometry?.vertices) {
-      for (let i = 0; i < this.legs.length; i++) {
-        this.guide_pos.geometry.vertices[i].copy(current_tips[i]);
-      }
-      this.guide_pos.geometry.verticesNeedUpdate = true;
-    }
-
     this.after_status_change();
   }
 
