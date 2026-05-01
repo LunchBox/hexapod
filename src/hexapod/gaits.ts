@@ -211,120 +211,85 @@ export class GaitController {
       }
     }
 
-    // Constraint: at least 2 grounded, distributed across sides or centerline
-    function phaseValid(liftedSet: Set<number>): boolean {
-      let rightGrounded = 0, leftGrounded = 0, centerGrounded = 0;
-      for (const l of rightLegs) { if (!liftedSet.has(l)) rightGrounded++; }
-      for (const l of leftLegs) { if (!liftedSet.has(l)) leftGrounded++; }
-      if (centerLeg !== null && !liftedSet.has(centerLeg)) centerGrounded = 1;
-      const totalGrounded = rightGrounded + leftGrounded + centerGrounded;
-      if (totalGrounded < 2) return false;
-      if ((rightGrounded > 0 && leftGrounded > 0) || centerGrounded > 0) return true;
-      return false;
+    // ── 2^N model: enumerate all valid lifted-sets (phases), then find exact covers ──
+
+    // Check if a lifted-set (phase) is valid
+    function phaseValid(lifted: number[]): boolean {
+      const set = new Set(lifted);
+      let rG = 0, lG = 0, cG = 0;
+      for (const l of rightLegs) { if (!set.has(l)) rG++; }
+      for (const l of leftLegs) { if (!set.has(l)) lG++; }
+      if (centerLeg !== null && !set.has(centerLeg)) cG = 1;
+      if (rG + lG + cG < 2) return false;
+      return (rG > 0 && lG > 0) || cG > 0;
     }
 
-    function isValid(groups: number[][]): boolean {
-      for (const g of groups) {
-        if (!phaseValid(new Set(g))) return false;
+    // Generate all valid phases (non-empty proper subsets satisfying constraint)
+    const allLegs = Array.from({ length: n }, (_, i) => i);
+    const validPhases: number[][] = [];
+    for (let mask = 1; mask < (1 << n) - 1; mask++) {
+      const lifted: number[] = [];
+      for (let i = 0; i < n; i++) {
+        if (mask & (1 << i)) lifted.push(i);
       }
-      return true;
+      if (phaseValid(lifted)) validPhases.push(lifted);
     }
 
-    // Canonical key for dedup (sort within each group, sort groups)
-    function canonKey(groups: number[][]): string {
-      return JSON.stringify(
-        groups.map(g => [...g].sort((a, b) => a - b))
-              .map(g => g.join(','))
-              .sort()
-      );
-    }
+    // Total possible phases = 2^n; valid phases count
+    const totalPhases = (1 << n) - 2; // exclude empty and full
+    console.warn('n=' + n + ': total phases=' + totalPhases + ' valid=' + validPhases.length
+      + ' (expected ' + ((1 << rightLegs.length) - 1) * ((1 << leftLegs.length) - 1) + ')');
 
-    // Enumerate all ordered partitions of N legs
-    const allPartitions: number[][][] = [];
-    function enumerate(remaining: number[], current: number[][]): void {
-      if (remaining.length === 0) {
-        if (current.length >= 2) allPartitions.push(current.map(g => [...g]));
+    // Exact cover: find all ways to partition legs using valid phases
+    const covers: number[][][] = [];
+    function findCovers(remaining: Set<number>, current: number[][]): void {
+      if (remaining.size === 0) {
+        if (current.length >= 2) covers.push(current.map(g => [...g]));
         return;
       }
-      // Option 1: add first remaining leg to the last group (extend current group)
-      if (current.length > 0) {
-        const last = current[current.length - 1];
-        last.push(remaining[0]);
-        enumerate(remaining.slice(1), current);
-        last.pop();
-      }
-      // Option 2: start a new group with the first remaining leg
-      current.push([remaining[0]]);
-      enumerate(remaining.slice(1), current);
-      current.pop();
-    }
-
-    // Generate all permutations of [0..n-1] and enumerate each
-    // For efficiency with n>=7, limit to first 50000 permutations
-    const allLegs = Array.from({ length: n }, (_, i) => i);
-    function* permute(arr: number[]): Generator<number[]> {
-      if (arr.length <= 1) { yield arr; return; }
-      for (let i = 0; i < arr.length; i++) {
-        const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
-        for (const p of permute(rest)) {
-          yield [arr[i], ...p];
-        }
+      const first = Math.min(...remaining);
+      // Try each valid phase that contains `first` and is subset of remaining
+      for (const ph of validPhases) {
+        if (!ph.includes(first)) continue;
+        if (!ph.every(l => remaining.has(l))) continue;
+        const newRemaining = new Set(remaining);
+        for (const l of ph) newRemaining.delete(l);
+        current.push(ph);
+        findCovers(newRemaining, current);
+        current.pop();
       }
     }
-    let permCount = 0;
-    const maxPerms = n <= 6 ? 100000 : 50000;
-    for (const perm of permute(allLegs)) {
-      enumerate(perm, []);
-      permCount++;
-      if (permCount >= maxPerms) break;
-    }
+    findCovers(new Set(allLegs), []);
+    console.warn('n=' + n + ': exact covers (unordered)=' + covers.length);
 
-    console.warn('n=' + n + ': total ordered partitions=' + allPartitions.length
-      + ' (perms checked=' + permCount + ')');
-
-    // Filter by constraint
-    const valid = allPartitions.filter(g => isValid(g));
-    console.warn('n=' + n + ': after constraint filter=' + valid.length);
-
-    // Deduplicate
+    // Deduplicate: canonical key sorts within each group, then sorts groups
     const seen = new Set<string>();
-    const unique: number[][][] = [];
-    for (const g of valid) {
-      const key = canonKey(g);
+    const uniqueCovers: number[][][] = [];
+    for (const grps of covers) {
+      const key = grps.map(g => [...g].sort((a, b) => a - b).join(','))
+                      .sort()
+                      .join('|');
       if (!seen.has(key)) {
         seen.add(key);
-        unique.push(g);
+        uniqueCovers.push(grps);
       }
     }
-    console.warn('n=' + n + ': after dedup=' + unique.length);
+    console.warn('n=' + n + ': after dedup=' + uniqueCovers.length);
 
-    // Build gaits object with auto-naming
+    // Build gaits — canonical ordering: sort groups by first element
     const gaits: Record<string, number[][]> = {};
-    let unnamedIdx = 1;
-    for (const grps of unique) {
-      // Name based on group sizes
-      const sizes = grps.map(g => g.length).sort((a, b) => a - b).join('x');
-      const maxSize = Math.max(...grps.map(g => g.length));
+    for (let idx = 0; idx < uniqueCovers.length; idx++) {
+      const grps = uniqueCovers[idx].sort((a, b) => a[0] - b[0]);
+      // Name by group sizes
+      const sizes = grps.map(g => g.length);
+      const maxSz = Math.max(...sizes);
       let name: string;
-      if (maxSize === 1) {
-        name = 'wave' + (unnamedIdx > 1 ? unnamedIdx : '');
-      } else if (maxSize === 2) {
-        name = 'pairs' + (unnamedIdx > 1 ? unnamedIdx : '');
-      } else if (grps.length === 2) {
-        name = 'tripod' + (unnamedIdx > 1 ? unnamedIdx : '');
-      } else if (grps.length === 3 && n >= 6) {
-        name = 'tripod' + grps.length + (unnamedIdx > 1 ? '_' + unnamedIdx : '');
-      } else {
-        name = 'gait' + unnamedIdx;
-      }
-      // Avoid overwriting: append number if name exists
-      let finalName = name;
-      let suffix = 1;
-      while (gaits[finalName]) {
-        finalName = name + '_' + (++suffix);
-      }
-      gaits[finalName] = grps;
-      unnamedIdx++;
+      if (maxSz === 1) name = 'wave';
+      else if (maxSz === 2) name = 'pairs';
+      else if (grps.length <= 3) name = 'tripod';
+      else name = 'gait';
+      if (idx > 0) name += (idx + 1);
+      gaits[name] = grps;
     }
 
     this.gaits = gaits;
