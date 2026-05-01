@@ -90,6 +90,7 @@ export class Hexapod {
   gait_controller: any;
   on_servo_values: number[];
   _guideCircles: any[];
+  _guideLabels: any[];
   guide_pos: any;
   _guide_local_positions: any[];
   guideline: any;
@@ -140,6 +141,12 @@ export class Hexapod {
         this.scene.remove(sq);
       }
       this._guideCircles = [];
+    }
+    if (this._guideLabels) {
+      for (const sp of this._guideLabels) {
+        this.scene.remove(sp);
+      }
+      this._guideLabels = [];
     }
     this.guide_pos = null;
     this._guide_local_positions = [];
@@ -332,6 +339,7 @@ export class Hexapod {
   draw_gait_guide() {
     // Visual circles at tip positions (world-space markers)
     this._guideCircles = [];
+    this._guideLabels = [];
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let tip = this.legs[i].get_tip_pos();
@@ -342,6 +350,24 @@ export class Hexapod {
       sq.rotation.x = -Math.PI / 2;
       this.scene.add(sq);
       this._guideCircles.push(sq);
+
+      // Number label sprite on the ground
+      const canvas = document.createElement('canvas');
+      canvas.width = 32; canvas.height = 32;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 22px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(i), 16, 16);
+      const tex = new (THREE as any).Texture(canvas);
+      tex.needsUpdate = true;
+      const spriteMat = new (THREE as any).SpriteMaterial({ map: tex, depthTest: false, depthWrite: false });
+      const sprite = new (THREE as any).Sprite(spriteMat);
+      sprite.position.set(tip.x, 0.5, tip.z);
+      sprite.scale.set(10, 10, 1);
+      this.scene.add(sprite);
+      this._guideLabels.push(sprite);
     }
 
     // Computational guide_pos — child of mesh, drives move_tips / move_body
@@ -357,12 +383,22 @@ export class Hexapod {
   }
 
   sync_guide_circles() {
-    if (!this._guideCircles) return;
-    for (let i = 0; i < this.legs.length; i++) {
-      const sq = this._guideCircles[i];
-      if (sq) {
-        const tip = this.legs[i].get_tip_pos();
-        sq.position.set(tip.x, 0, tip.z);
+    if (this._guideCircles) {
+      for (let i = 0; i < this.legs.length; i++) {
+        const sq = this._guideCircles[i];
+        if (sq) {
+          const tip = this.legs[i].get_tip_pos();
+          sq.position.set(tip.x, 0, tip.z);
+        }
+      }
+    }
+    if (this._guideLabels) {
+      for (let i = 0; i < this.legs.length; i++) {
+        const sp = this._guideLabels[i];
+        if (sp) {
+          const tip = this.legs[i].get_tip_pos();
+          sp.position.set(tip.x, 0.5, tip.z);
+        }
       }
     }
   }
