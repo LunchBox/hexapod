@@ -351,7 +351,7 @@ export class Hexapod {
       this.scene.add(sq);
       this._guideCircles.push(sq);
 
-      // Number label sprite on the ground
+      // Number label sprite on the ground, offset outward from tip
       const canvas = document.createElement('canvas');
       canvas.width = 32; canvas.height = 32;
       const ctx = canvas.getContext('2d')!;
@@ -364,7 +364,12 @@ export class Hexapod {
       tex.needsUpdate = true;
       const spriteMat = new (THREE as any).SpriteMaterial({ map: tex, depthTest: false, depthWrite: false });
       const sprite = new (THREE as any).Sprite(spriteMat);
-      sprite.position.set(tip.x, 0.5, tip.z);
+      const cx = this.mesh.position.x;
+      const cz = this.mesh.position.z;
+      const dx = tip.x - cx; const dz = tip.z - cz;
+      const dist = Math.sqrt(dx * dx + dz * dz) || 1;
+      const offset = 12;
+      sprite.position.set(tip.x + (dx / dist) * offset, 0.5, tip.z + (dz / dist) * offset);
       sprite.scale.set(10, 10, 1);
       this.scene.add(sprite);
       this._guideLabels.push(sprite);
@@ -393,11 +398,16 @@ export class Hexapod {
       }
     }
     if (this._guideLabels) {
+      const cx = this.mesh.position.x;
+      const cz = this.mesh.position.z;
+      const offset = 12;
       for (let i = 0; i < this.legs.length; i++) {
         const sp = this._guideLabels[i];
         if (sp) {
           const tip = this.legs[i].get_tip_pos();
-          sp.position.set(tip.x, 0.5, tip.z);
+          const dx = tip.x - cx; const dz = tip.z - cz;
+          const dist = Math.sqrt(dx * dx + dz * dz) || 1;
+          sp.position.set(tip.x + (dx / dist) * offset, 0.5, tip.z + (dz / dist) * offset);
         }
       }
     }
