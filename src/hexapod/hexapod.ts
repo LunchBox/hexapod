@@ -30,15 +30,31 @@ function computeLegLayout(
 ): LegLayout[] {
   const layouts: LegLayout[] = [];
 
-  if (bodyShape === 'rectangle' && legCount % 2 === 0) {
-    const pairs = legCount / 2;
-    const frontInit = 30, rearInit = -30;
-    for (let i = 0; i < pairs; i++) {
-      const z = pairs === 1 ? 0 : -bodyRadiusZ + (i * bodyRadiusZ * 2) / (pairs - 1);
-      const initDeg = pairs === 1 ? 0 : frontInit + ((rearInit - frontInit) * i) / (pairs - 1);
-      const initRad = initDeg * Math.PI / 180;
-      layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
-      layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
+  if (bodyShape === 'rectangle') {
+    if (legCount % 2 === 0) {
+      // Even: N/2 left-right pairs spread along Z
+      const pairs = legCount / 2;
+      const frontInit = 30, rearInit = -30;
+      for (let i = 0; i < pairs; i++) {
+        const z = pairs === 1 ? 0 : -bodyRadiusZ + (i * bodyRadiusZ * 2) / (pairs - 1);
+        const initDeg = pairs === 1 ? 0 : frontInit + ((rearInit - frontInit) * i) / (pairs - 1);
+        const initRad = initDeg * Math.PI / 180;
+        layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
+        layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
+      }
+    } else {
+      // Odd: (N-1)/2 full pairs at front, 1 extra leg at rear center
+      const pairs = (legCount - 1) / 2;
+      const frontInit = 30, rearInit = -30;
+      for (let i = 0; i < pairs; i++) {
+        const z = -bodyRadiusZ + (i * bodyRadiusZ * 2) / (pairs > 0 ? pairs : 1);
+        const initDeg = frontInit + ((rearInit - frontInit) * i) / (pairs > 0 ? pairs : 1);
+        const initRad = initDeg * Math.PI / 180;
+        layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
+        layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
+      }
+      // Single rear leg at center
+      layouts.push({ x: 0, z: bodyRadiusZ, angle: Math.PI, yaw: 0, init_angle: 0 });
     }
   } else {
     // Polygon — legs radiate outward, stretched by width (X) and length (Z)
