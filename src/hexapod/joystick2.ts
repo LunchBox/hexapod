@@ -154,16 +154,22 @@ export class JoyStick {
   on_handler_deactivated() { }
 
   bind_events() {
-    this.canvas.addEventListener("mousemove", (e: MouseEvent) => {
-      this.mouse_move(e);
-    }, false);
-
     this.canvas.addEventListener("mousedown", (e: MouseEvent) => {
       this.mouse_down(e);
     }, false);
 
-    this.canvas.addEventListener("mouseup", (e: MouseEvent) => {
-      this.mouse_up(e);
+    // Global listeners so dragging works even outside canvas
+    document.addEventListener("mousemove", (e: MouseEvent) => {
+      if (this.handler_activated) this.mouse_move(e);
+    }, false);
+
+    document.addEventListener("mouseup", (e: MouseEvent) => {
+      if (this.handler_activated) this.mouse_up(e);
+    }, false);
+
+    // Auto-return to center when mouse leaves canvas during drag
+    this.canvas.addEventListener("mouseleave", () => {
+      if (this.handler_activated) this.reset_handler();
     }, false);
   }
 }
