@@ -70,7 +70,7 @@ function computeLegLayout(
     const edgeScale = isVertex ? 1 : Math.cos(Math.PI / legCount);
     const rx = bodyRadiusX * edgeScale;
     const rz = bodyRadiusZ * edgeScale;
-    const orientOffset = orientation === 'back' ? Math.PI : 0;
+    const orientOffset = orientation === 'back' ? 0 : Math.PI;
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset + orientOffset;
       const legX = rx * Math.cos(angle);
@@ -317,7 +317,7 @@ export class Hexapod {
           geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
 
           // Outer ring vertices — elliptical from body_width/body_length
-          const orientOffset = this.options.polygon_odd_orientation === 'front' ? 0 : Math.PI;
+          const orientOffset = this.options.polygon_odd_orientation === 'front' ? Math.PI : 0;
           const btmRing: number[] = [], topRing: number[] = [];
           const bw = this.options.body_width || 50;
           const bl = this.options.body_length || 100;
