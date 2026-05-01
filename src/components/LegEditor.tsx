@@ -77,6 +77,7 @@ export default function LegEditor() {
     return bot.options;
   }, [botRef]);
 
+  // Only rebuild 3D on mouseup — 2D canvas preview is sufficient during drag
   const applyOpts = useCallback((opts: any, immediate: boolean) => {
     const bot = botRef.current;
     if (!bot) return;
@@ -84,13 +85,8 @@ export default function LegEditor() {
       if (throttleRef.current) { clearTimeout(throttleRef.current); throttleRef.current = null; }
       bot.apply_attributes(opts);
       bumpBotVersion();
-    } else {
-      if (throttleRef.current) clearTimeout(throttleRef.current);
-      throttleRef.current = setTimeout(() => {
-        bot.apply_attributes(opts);
-        throttleRef.current = null;
-      }, 80);
     }
+    // During drag: only update options in-place, no 3D rebuild (avoids flicker)
   }, [botRef, bumpBotVersion]);
 
   const draw = useCallback(() => {
