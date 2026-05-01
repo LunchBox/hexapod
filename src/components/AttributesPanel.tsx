@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
@@ -210,24 +210,28 @@ export default function AttributesPanel() {
   const { botRef, botVersion, bumpBotVersion } = useHexapod();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const saved = useMemo(() => get_bot_options(), []);
-  const [dof, setDof] = useState(saved.dof || 3);
   const [dofLegs, setDofLegs] = useState<Set<number>>(() => {
-    const count = saved.leg_count || 6;
-    return new Set(Array.from({ length: count }, (_, i) => i));
+    const o = get_bot_options();
+    const c = o.leg_count || 6;
+    return new Set(Array.from({ length: c }, (_, i) => i));
   });
-  const [legCount, setLegCount] = useState(saved.leg_count || 6);
-  const [bodyShape, setBodyShape] = useState(saved.body_shape || 'rectangle');
-  const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'edge');
-  const [oddOrientation, setOddOrientation] = useState(saved.polygon_odd_orientation || 'back');
-  const [tipCircleScale, setTipCircleScale] = useState(saved.tip_circle_scale ?? 1);
+
+  // Read config from bot.options directly (single source of truth)
+  const bot = botRef.current;
+  const opts = bot?.options || get_bot_options();
+  const dof = opts.dof || 3;
+  const legCount = opts.leg_count || 6;
+  const bodyShape = opts.body_shape || 'rectangle';
+  const polyPlacement = opts.polygon_leg_placement || 'edge';
+  const oddOrientation = opts.polygon_odd_orientation || 'back';
+  const tipCircleScale = opts.tip_circle_scale ?? 1;
 
   const applyConfig = (updates: Partial<any>) => {
-    const bot = botRef.current;
-    if (!bot) return;
-    history.push(bot.options);
-    Object.assign(bot.options, updates);
-    bot.apply_attributes(bot.options);
+    const b = botRef.current;
+    if (!b) return;
+    history.push(b.options);
+    Object.assign(b.options, updates);
+    b.apply_attributes(b.options);
     bumpBotVersion();
   };
 
@@ -310,7 +314,7 @@ export default function AttributesPanel() {
             onClick={(e) => { e.preventDefault();
               const bot = botRef.current; if (!bot) return;
               history.push(bot.options);
-              setDof(d); bot.options.dof = d;
+              bot.options.dof = d;
               for (let i = 0; i < bot.options.leg_options.length; i++) {
                 if (dofLegs.has(i)) bot.options.leg_options[i].dof = d;
               }
@@ -335,7 +339,7 @@ export default function AttributesPanel() {
             onClick={(e) => { e.preventDefault();
               const bot = botRef.current; if (!bot) return;
               history.push(bot.options);
-              setLegCount(n); setDofLegs(new Set(Array.from({ length: n }, (_, i) => i)));
+              setDofLegs(new Set(Array.from({ length: n }, (_, i) => i)));
               bot.options.leg_count = n;
               bot.apply_attributes(bot.options); bumpBotVersion();
               if (!bot.gait_controller.gaits[bot.options.gait || 'tripod']) { bot.options.gait = 'tripod'; }
@@ -346,21 +350,21 @@ export default function AttributesPanel() {
       <fieldset className="btns">
         <legend>Body</legend>
         <a href="#" className={`control_btn${bodyShape === 'rectangle' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); setBodyShape('rectangle'); applyConfig({ body_shape: 'rectangle' }); }}>Rect</a>
+          onClick={(e) => { e.preventDefault(); applyConfig({ body_shape: 'rectangle' }); }}>Rect</a>
         <a href="#" className={`control_btn${bodyShape === 'polygon' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); setBodyShape('polygon'); applyConfig({ body_shape: 'polygon' }); }}>Poly</a>
+          onClick={(e) => { e.preventDefault(); applyConfig({ body_shape: 'polygon' }); }}>Poly</a>
         {bodyShape === 'polygon' && (<>
           {' | '}
           <a href="#" className={`control_btn${polyPlacement === 'vertex' ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setPolyPlacement('vertex'); applyConfig({ polygon_leg_placement: 'vertex' }); }}>Vertex</a>
+            onClick={(e) => { e.preventDefault(); applyConfig({ polygon_leg_placement: 'vertex' }); }}>Vertex</a>
           <a href="#" className={`control_btn${polyPlacement === 'edge' ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setPolyPlacement('edge'); applyConfig({ polygon_leg_placement: 'edge' }); }}>Edge</a>
+            onClick={(e) => { e.preventDefault(); applyConfig({ polygon_leg_placement: 'edge' }); }}>Edge</a>
         </>)}
         {legCount % 2 !== 0 && (<>
           <a href="#" className={`control_btn${oddOrientation === 'back' ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setOddOrientation('back'); applyConfig({ polygon_odd_orientation: 'back' }); }}>1-Back</a>
+            onClick={(e) => { e.preventDefault(); applyConfig({ polygon_odd_orientation: 'back' }); }}>1-Back</a>
           <a href="#" className={`control_btn${oddOrientation === 'front' ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setOddOrientation('front'); applyConfig({ polygon_odd_orientation: 'front' }); }}>1-Front</a>
+            onClick={(e) => { e.preventDefault(); applyConfig({ polygon_odd_orientation: 'front' }); }}>1-Front</a>
         </>)}
       </fieldset>
 
@@ -371,7 +375,7 @@ export default function AttributesPanel() {
           history.push(bot.options);
           const cur = bot.options.tip_circle_scale ?? 1;
           const next = Math.min(1.5, +(cur + 0.1).toFixed(1));
-          setTipCircleScale(next); bot.options.tip_circle_scale = next;
+          bot.options.tip_circle_scale = next;
           if (history.autoSave) set_bot_options(bot.options);
           bot.adjust_tip_spread(next); bumpBotVersion();
         }}>Expand</a>
@@ -380,7 +384,7 @@ export default function AttributesPanel() {
           history.push(bot.options);
           const cur = bot.options.tip_circle_scale ?? 1;
           const next = Math.max(0.1, +(cur - 0.1).toFixed(1));
-          setTipCircleScale(next); bot.options.tip_circle_scale = next;
+          bot.options.tip_circle_scale = next;
           if (history.autoSave) set_bot_options(bot.options);
           bot.adjust_tip_spread(next); bumpBotVersion();
         }}>Compact</a>
