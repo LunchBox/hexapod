@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { initScene } from '../hexapod/scene';
 import { get_bot_options, build_bot } from '../hexapod/hexapod';
+import { history } from '../hexapod/history';
 import appState from '../hexapod/appState';
 
 export default function SceneCanvas() {
@@ -42,6 +43,19 @@ export default function SceneCanvas() {
       appState.current_bot = null;
     };
   }, [botRef, updateServoDisplay]);
+
+  // Warn before closing page if there are unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      const bot = botRef.current;
+      if (!history.autoSave && bot && history.isDirty(bot.options)) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [botRef]);
 
   return (
     <div

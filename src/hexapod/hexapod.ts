@@ -8,6 +8,7 @@ import {
 import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage, degree_to_redius, remove_class, add_class, clearSelection } from './utils.js';
 import { GaitController } from './gaits.js';
 import { PosCalculator } from './pos_calculator.js';
+import { history } from './history.js';
 
 // ── Leg layout computation ─────────────────────────────────────
 
@@ -159,7 +160,9 @@ export class Hexapod {
     this.on_servo_values = this.get_servo_values();
 
     // Persist so AttributesPanel and page reload see latest state
-    set_bot_options(this.options);
+    if (history.autoSave) {
+      set_bot_options(this.options);
+    }
   }
 
   draw() {

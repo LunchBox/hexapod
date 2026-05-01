@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
+import { history } from '../hexapod/history';
 
 const drawTypes = [
   { value: 'mesh', label: 'Mesh' },
@@ -109,20 +110,22 @@ export default function ControlPanel() {
         }
         break;
       case 'act_expend': {
+        history.push(bot.options);
         const cur = bot.options.tip_circle_scale ?? 1;
         const next = Math.min(1.5, +(cur + 0.1).toFixed(1));
         setTipCircleScale(next);
         bot.options.tip_circle_scale = next;
-        set_bot_options(bot.options);
+        if (history.autoSave) set_bot_options(bot.options);
         bot.adjust_tip_spread(next);
         break;
       }
       case 'act_compact': {
+        history.push(bot.options);
         const cur = bot.options.tip_circle_scale ?? 1;
         const next = Math.max(0.1, +(cur - 0.1).toFixed(1));
         setTipCircleScale(next);
         bot.options.tip_circle_scale = next;
-        set_bot_options(bot.options);
+        if (history.autoSave) set_bot_options(bot.options);
         bot.adjust_tip_spread(next);
         break;
       }
@@ -170,10 +173,10 @@ export default function ControlPanel() {
         window['console']['log'] = function () { };
         break;
       case 'act_dof_switch':
+        history.push(bot.options);
         const newDof = parseInt(value!);
         setDof(newDof);
         bot.options.dof = newDof;
-        // Apply DOF only to checked legs
         for (let i = 0; i < bot.options.leg_options.length; i++) {
           if (dofLegs.has(i)) {
             bot.options.leg_options[i].dof = newDof;
@@ -183,9 +186,9 @@ export default function ControlPanel() {
         bumpBotVersion();
         break;
       case 'act_leg_count_switch':
+        history.push(bot.options);
         const newLegCount = parseInt(value!);
         setLegCount(newLegCount);
-        // Sync DOF leg checkboxes to new leg count
         setDofLegs(new Set(Array.from({ length: newLegCount }, (_, i) => i)));
         bot.options.leg_count = newLegCount;
         bot.apply_attributes(bot.options);
@@ -197,6 +200,7 @@ export default function ControlPanel() {
         bumpBotVersion();
         break;
       case 'act_body_shape_switch':
+        history.push(bot.options);
         setBodyShape(value!);
         bot.options.body_shape = value;
         bot.apply_attributes(bot.options);

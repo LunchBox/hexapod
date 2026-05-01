@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
+import { history } from '../hexapod/history';
 import { LIMB_NAMES } from '../hexapod/defaults';
 import './LegEditor.css';
 
@@ -284,6 +285,9 @@ export default function LegEditor() {
     const valid = checkedLegsSameDof();
     if (!valid.ok) return;
 
+    // Push pre-drag state to undo history
+    history.push(botRef.current.options);
+
     const pts = computeJointsForLeg(opts, valid.refLeg);
     const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const legPt = toLeg(cx, cy, view);
@@ -375,7 +379,10 @@ export default function LegEditor() {
     if (d) {
       const bot = botRef.current;
       if (bot) {
-        set_bot_options(bot.options);
+        if (history.autoSave) {
+          set_bot_options(bot.options);
+          history.markSaved(bot.options);
+        }
         applyOpts(bot.options, true);
       }
       dragRef.current = null;
@@ -390,7 +397,10 @@ export default function LegEditor() {
     if (dragRef.current) {
       const bot = botRef.current;
       if (bot) {
-        set_bot_options(bot.options);
+        if (history.autoSave) {
+          set_bot_options(bot.options);
+          history.markSaved(bot.options);
+        }
         applyOpts(bot.options, true);
       }
       dragRef.current = null;

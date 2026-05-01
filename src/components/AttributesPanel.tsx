@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
+import { history, performUndo, performRedo, performSave } from '../hexapod/history';
 import LegEditor from './LegEditor';
 
 function HexapodAttributesController(container: HTMLElement, bot: any) {
@@ -56,20 +57,28 @@ HexapodAttributesController.prototype.set_attr = function (attr_name, value) {
 };
 
 HexapodAttributesController.prototype.redraw_bot = function () {
+  // Push current state to undo history before applying change
+  history.push(this.bot.options);
+
   // Sync all keys from live bot options (may have been changed via other panels)
   let botOpts = this.bot.options;
   for (let key of Object.keys(botOpts)) {
-    if (key === 'leg_options') continue; // skip nested — synced below
+    if (key === 'leg_options') continue;
     this.attributes[key] = botOpts[key];
   }
-  // Also sync leg_options (shared lengths/angles)
   if (botOpts.leg_options && this.attributes.leg_options) {
     for (let i = 0; i < Math.min(botOpts.leg_options.length, this.attributes.leg_options.length); i++) {
       this.attributes.leg_options[i] = botOpts.leg_options[i];
     }
   }
-  set_bot_options(this.attributes);
+
+  if (history.autoSave) {
+    set_bot_options(this.attributes);
+  }
   this.bot.apply_attributes(this.attributes);
+  if (history.autoSave) {
+    history.markSaved(this.attributes);
+  }
 };
 
 HexapodAttributesController.prototype.make_input = function (container, attr_name, input_type, label_name) {
@@ -207,7 +216,7 @@ HexapodAttributesController.prototype.handle_edge_length = function (attr_name, 
 };
 
 export default function AttributesPanel() {
-  const { botRef, botVersion } = useHexapod();
+  const { botRef, botVersion, bumpBotVersion } = useHexapod();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -218,6 +227,78 @@ export default function AttributesPanel() {
     container.innerHTML = '';
 
     let attrs_control = new HexapodAttributesController(container, botRef.current);
+
+    // ── Toolbar: undo / redo / auto-save / save ──
+    const toolbar = document.createElement('div');
+    toolbar.style.cssText = 'margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
+    container.appendChild(toolbar);
+
+    const makeBtn = (text: string, title: string, onClick: () => void, disabled: boolean) => {
+      const btn = document.createElement('button');
+      btn.textContent = text;
+      btn.title = title;
+      btn.disabled = disabled;
+      btn.style.cssText = 'padding:2px 8px;font-size:12px;cursor:pointer;';
+      if (disabled) btn.style.opacity = '0.4';
+      btn.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
+      return btn;
+    };
+
+    const bot = botRef.current;
+
+    const undoBtn = makeBtn('↩', 'Undo (Ctrl+Z)', () => {
+      if (performUndo(bot, bumpBotVersion)) updateToolbar();
+    }, !history.canUndo());
+
+    const redoBtn = makeBtn('↪', 'Redo (Ctrl+Y)', () => {
+      if (performRedo(bot, bumpBotVersion)) updateToolbar();
+    }, !history.canRedo());
+
+    const autoSaveLabel = document.createElement('label');
+    autoSaveLabel.style.cssText = 'font-size:12px;margin-left:8px;cursor:pointer;display:flex;align-items:center;gap:3px;';
+    const autoSaveCb = document.createElement('input');
+    autoSaveCb.type = 'checkbox';
+    autoSaveCb.checked = history.autoSave;
+    autoSaveCb.addEventListener('change', () => {
+      history.autoSave = autoSaveCb.checked;
+      if (history.autoSave && history.isDirty(bot.options)) {
+        history.save(bot.options);
+      }
+      updateToolbar();
+    });
+    autoSaveLabel.appendChild(autoSaveCb);
+    autoSaveLabel.appendChild(document.createTextNode('Auto Save'));
+
+    const saveBtn = makeBtn('💾 Save', 'Save to localStorage (Ctrl+S)', () => {
+      performSave(bot, bumpBotVersion);
+      updateToolbar();
+    }, false);
+
+    const dirtyDot = document.createElement('span');
+    dirtyDot.style.cssText = 'color:#e67e22;font-weight:bold;font-size:14px;margin-left:2px;';
+
+    function updateToolbar() {
+      undoBtn.disabled = !history.canUndo();
+      undoBtn.style.opacity = undoBtn.disabled ? '0.4' : '1';
+      redoBtn.disabled = !history.canRedo();
+      redoBtn.style.opacity = redoBtn.disabled ? '0.4' : '1';
+      const dirty = history.isDirty(bot.options);
+      saveBtn.style.display = history.autoSave ? 'none' : 'inline-block';
+      saveBtn.style.background = dirty ? '#e67e22' : '';
+      saveBtn.style.color = dirty ? '#fff' : '';
+      dirtyDot.textContent = dirty ? ' ⬤ unsaved' : '';
+      autoSaveCb.checked = history.autoSave;
+    }
+
+    toolbar.appendChild(undoBtn);
+    toolbar.appendChild(redoBtn);
+    toolbar.appendChild(autoSaveLabel);
+    toolbar.appendChild(saveBtn);
+    toolbar.appendChild(dirtyDot);
+    updateToolbar();
+
+    // Store updateToolbar on the controller so handlers can refresh it
+    (attrs_control as any)._updateToolbar = updateToolbar;
 
     // Motions
     let motion_attrs = attrs_control.make_fieldset(container, 'Motions');
@@ -275,7 +356,30 @@ export default function AttributesPanel() {
         }
       });
     });
-  }, [botVersion]);
+
+    // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save
+    const handleKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        if (performUndo(bot, bumpBotVersion)) updateToolbar();
+      } else if (e.key === 'y' || e.key === 'Y') {
+        e.preventDefault();
+        if (performRedo(bot, bumpBotVersion)) updateToolbar();
+      } else if (e.key === 's' || e.key === 'S') {
+        if (!history.autoSave) {
+          e.preventDefault();
+          performSave(bot, bumpBotVersion);
+          updateToolbar();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [botVersion, bumpBotVersion]);
 
   return (
     <div id="attrs_control">
