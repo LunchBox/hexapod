@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
@@ -44,24 +44,14 @@ function computeJoints(opts: any): Point[] {
   return pts;
 }
 
-function computeView(pts: Point[]) {
-  const pad = 40;
-  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-  const minX = Math.min(0, ...xs), maxX = Math.max(...xs);
-  const minY = Math.min(0, ...ys), maxY = Math.max(...ys);
-  const legW = maxX - minX || 1, legH = maxY - minY || 1;
-  const scale = Math.min((W - pad * 2) / legW, (H - pad * 2) / legH);
-  const ox = pad - minX * scale + (W - pad * 2 - legW * scale) / 2;
-  const oy = pad - minY * scale + (H - pad * 2 - legH * scale) / 2;
-  return { scale, ox, oy };
+const OX = 50, OY = H / 2; // body attachment at left-center
+
+function toScreen(p: Point, scale: number): Point {
+  return { x: p.x * scale + OX, y: p.y * scale + OY };
 }
 
-function toScreen(p: Point, scale: number, ox: number, oy: number): Point {
-  return { x: p.x * scale + ox, y: p.y * scale + oy };
-}
-
-function toLeg(sx: number, sy: number, scale: number, ox: number, oy: number): Point {
-  return { x: (sx - ox) / scale, y: (sy - oy) / scale };
+function toLeg(sx: number, sy: number, scale: number): Point {
+  return { x: (sx - OX) / scale, y: (sy - OY) / scale };
 }
 
 export default function LegEditor() {
@@ -70,6 +60,7 @@ export default function LegEditor() {
   const dragRef = useRef<{ joint: number; startLeg: Point; startScreen: Point; opts: any } | null>(null);
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverRef = useRef<number>(-1);
+  const [viewScale, setViewScale] = useState(2);
 
   const getOpts = useCallback(() => {
     const bot = botRef.current;
@@ -98,18 +89,18 @@ export default function LegEditor() {
     if (!opts) return;
 
     const pts = computeJoints(opts);
-    const { scale, ox, oy } = computeView(pts);
-    const sp = pts.map(p => toScreen(p, scale, ox, oy));
+    const sp = pts.map(p => toScreen(p, viewScale));
 
     ctx.clearRect(0, 0, W, H);
 
     // Grid
     ctx.strokeStyle = '#ddd';
     ctx.lineWidth = 1;
-    for (let x = ox % (20 * scale); x < W; x += 20 * scale) {
+    const gridStep = 20 * viewScale;
+    for (let x = OX % gridStep; x < W; x += gridStep) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     }
-    for (let y = oy % (20 * scale); y < H; y += 20 * scale) {
+    for (let y = OY % gridStep; y < H; y += gridStep) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
     }
 
@@ -188,9 +179,8 @@ export default function LegEditor() {
     const opts = getOpts();
     if (!opts) return -1;
     const pts = computeJoints(opts);
-    const { scale, ox, oy } = computeView(pts);
     for (let i = 1; i < pts.length; i++) {
-      const s = toScreen(pts[i], scale, ox, oy);
+      const s = toScreen(pts[i], viewScale);
       if ((cx - s.x) ** 2 + (cy - s.y) ** 2 <= HIT_R * HIT_R) return i;
     }
     return -1;
@@ -226,8 +216,7 @@ export default function LegEditor() {
     const opts = getOpts();
     if (!opts) return;
     const pts = computeJoints(opts);
-    const { scale, ox, oy } = computeView(pts);
-    const legPt = toLeg(cx, cy, scale, ox, oy);
+    const legPt = toLeg(cx, cy, viewScale);
 
     dragRef.current = {
       joint: j,
@@ -251,12 +240,10 @@ export default function LegEditor() {
       const bot = botRef.current;
       if (!bot) return;
       const opts = bot.options;
-      const { scale, ox, oy } = computeView(computeJoints(d.opts));
-      const legPt = toLeg(cx, cy, scale, ox, oy);
+      const legPt = toLeg(cx, cy, viewScale);
 
       // Previous joint position (from start state)
       const prevPts = computeJoints(d.opts);
-      const { scale: s2, ox: o2, oy: y2 } = computeView(prevPts);
       const prevPt = prevPts[d.joint - 1];
 
       const dx = legPt.x - prevPt.x;
@@ -344,14 +331,25 @@ export default function LegEditor() {
   return (
     <div className="leg-editor">
       <p className="leg-editor__title">Leg Editor — drag joints to adjust</p>
-      <canvas
-        ref={canvasRef}
-        className="leg-editor__canvas"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-      />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <canvas
+          ref={canvasRef}
+          className="leg-editor__canvas"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <span style={{ fontSize: 10, color: '#888' }}>Zoom</span>
+          <input type="range" min="0.5" max="6" step="0.1" value={viewScale}
+            title="Zoom"
+            style={{ writingMode: 'vertical-lr', direction: 'rtl', height: H - 20, cursor: 'pointer' }}
+            onChange={(e) => setViewScale(parseFloat((e.target as HTMLInputElement).value))}
+          />
+          <span style={{ fontSize: 9, color: '#666' }}>{viewScale.toFixed(1)}x</span>
+        </div>
+      </div>
       <p className="leg-editor__info">
         Drag joints to adjust lengths &amp; angles. Changes apply to all legs.
       </p>
