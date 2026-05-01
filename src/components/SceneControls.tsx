@@ -82,12 +82,15 @@ export default function SceneControls() {
   };
   const colStyle: React.CSSProperties = {
     display: 'flex', flexDirection: 'column', alignItems: 'center',
-    justifyContent: 'flex-end', height: SLIDER_H + 40,
+    height: SLIDER_H + 50,
   };
   const sliderStyle: React.CSSProperties = {
     writingMode: 'vertical-lr', direction: 'rtl',
     height: SLIDER_H, cursor: 'pointer',
   };
+  const labelStyle: React.CSSProperties = { fontSize: 10, color: '#888', height: 16, lineHeight: '16px' };
+  const valStyle: React.CSSProperties = { fontSize: 9, color: '#666', height: 14, lineHeight: '14px' };
+  const btnH: React.CSSProperties = { ...btnStyle, height: 16, lineHeight: '14px' };
 
   return (
     <div style={{
@@ -96,35 +99,35 @@ export default function SceneControls() {
     }}>
       {/* Joystick */}
       <div className="joystick-container" ref={joystickContainerRef}
-        style={{ height: SLIDER_H + 40, display: 'flex', alignItems: 'flex-end' }}></div>
+        style={{ height: SLIDER_H + 50, display: 'flex', alignItems: 'center' }}></div>
 
       {/* Body height */}
       <div style={colStyle}>
-        <button style={btnStyle} onClick={() => handleHeightChange(Math.min(150, bodyY + 1))}>▲</button>
+        <button style={btnH} onClick={() => handleHeightChange(Math.min(150, bodyY + 1))}>▲</button>
         <input type="range" min="10" max="150" value={bodyY} title="Body height"
           style={sliderStyle}
           onChange={(e) => handleHeightChange(parseFloat((e.target as HTMLInputElement).value))}
         />
-        <button style={btnStyle} onClick={() => handleHeightChange(Math.max(10, bodyY - 1))}>▼</button>
-        <span style={{ fontSize: 10, color: '#888', marginTop: 2 }}>H</span>
-        <span style={{ fontSize: 9, color: '#666' }}>{bodyY}</span>
+        <button style={btnH} onClick={() => handleHeightChange(Math.max(10, bodyY - 1))}>▼</button>
+        <span style={labelStyle}>H</span>
+        <span style={valStyle}>{bodyY}</span>
       </div>
 
       {/* Expand/Compact */}
       <div style={colStyle}>
-        <button style={btnStyle} onClick={() => handleSpreadChange(Math.min(1.5, +(tipScale + 0.1).toFixed(1)))}>▲</button>
+        <button style={btnH} onClick={() => handleSpreadChange(Math.min(1.5, +(tipScale + 0.1).toFixed(1)))}>▲</button>
         <input type="range" max="1.5" min="0.5" step="0.1" value={tipScale} title="Tip spread"
           style={sliderStyle}
           onChange={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
         />
-        <button style={btnStyle} onClick={() => handleSpreadChange(Math.max(0.5, +(tipScale - 0.1).toFixed(1)))}>▼</button>
-        <span style={{ fontSize: 10, color: '#888', marginTop: 2 }}>↔</span>
-        <span style={{ fontSize: 9, color: '#666' }}>{tipScale.toFixed(1)}</span>
+        <button style={btnH} onClick={() => handleSpreadChange(Math.max(0.5, +(tipScale - 0.1).toFixed(1)))}>▼</button>
+        <span style={labelStyle}>↔</span>
+        <span style={valStyle}>{tipScale.toFixed(1)}</span>
       </div>
 
       {/* Rotate step */}
       <div style={colStyle}>
-        <button style={btnStyle} onClick={() => {
+        <button style={btnH} onClick={() => {
           const v = Math.min(45, rotDeg + 1); setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
         }}>▲</button>
         <input type="range" min="1" max="45" value={rotDeg} title="Rotate step (°)"
@@ -134,16 +137,16 @@ export default function SceneControls() {
             setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
           }}
         />
-        <button style={btnStyle} onClick={() => {
+        <button style={btnH} onClick={() => {
           const v = Math.max(1, rotDeg - 1); setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
         }}>▼</button>
-        <span style={{ fontSize: 10, color: '#888', marginTop: 2 }}>↻°</span>
-        <span style={{ fontSize: 9, color: '#666' }}>{rotDeg}°</span>
+        <span style={labelStyle}>↻°</span>
+        <span style={valStyle}>{rotDeg}°</span>
       </div>
 
       {/* FB step */}
       <div style={colStyle}>
-        <button style={btnStyle} onClick={() => {
+        <button style={btnH} onClick={() => {
           const v = Math.min(50, fbStep + 1); setFbStep(v); handleMotionChange('fb_step', v);
         }}>▲</button>
         <input type="range" min="1" max="50" value={fbStep} title="F&B step (mm)"
@@ -153,16 +156,16 @@ export default function SceneControls() {
             setFbStep(v); handleMotionChange('fb_step', v);
           }}
         />
-        <button style={btnStyle} onClick={() => {
+        <button style={btnH} onClick={() => {
           const v = Math.max(1, fbStep - 1); setFbStep(v); handleMotionChange('fb_step', v);
         }}>▼</button>
-        <span style={{ fontSize: 10, color: '#888', marginTop: 2 }}>↕</span>
-        <span style={{ fontSize: 9, color: '#666' }}>{fbStep}</span>
+        <span style={labelStyle}>↕</span>
+        <span style={valStyle}>{fbStep}</span>
       </div>
 
       {/* LR step */}
       <div style={colStyle}>
-        <button style={btnStyle} onClick={() => {
+        <button style={btnH} onClick={() => {
           const v = Math.min(50, lrStep + 1); setLrStep(v); handleMotionChange('lr_step', v);
         }}>▲</button>
         <input type="range" min="1" max="50" value={lrStep} title="L&R step (mm)"
@@ -172,11 +175,11 @@ export default function SceneControls() {
             setLrStep(v); handleMotionChange('lr_step', v);
           }}
         />
-        <button style={btnStyle} onClick={() => {
+        <button style={btnH} onClick={() => {
           const v = Math.max(1, lrStep - 1); setLrStep(v); handleMotionChange('lr_step', v);
         }}>▼</button>
-        <span style={{ fontSize: 10, color: '#888', marginTop: 2 }}>⇔</span>
-        <span style={{ fontSize: 9, color: '#666' }}>{lrStep}</span>
+        <span style={labelStyle}>⇔</span>
+        <span style={valStyle}>{lrStep}</span>
       </div>
     </div>
   );
