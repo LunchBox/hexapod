@@ -321,7 +321,7 @@ export class Hexapod {
   }
 
   draw_gait_guide() {
-    let material = new THREE.PointsMaterial({ color: 0x000000, size: 20 });
+    let material = new THREE.PointsMaterial({ color: 0xffffff, size: 30 });
     let geometry = new THREE.Geometry();
 
     let total_legs = this.legs.length;
