@@ -168,11 +168,11 @@ export class Hexapod {
     // Head indicator — small sphere at front-top of body
     {
       const headGeom = new (THREE as any).SphereGeometry(5, 8, 8);
-      const headMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+      const headMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
       const head = new THREE.Mesh(headGeom, headMat);
-      const frontZ = bodyShape === 'polygon' ? -bodyRadius : -bodyLength / 2;
+      const frontZ = bodyShape === 'polygon' ? -bodyRadius - 6 : -bodyLength / 2 - 6;
       const bodyH = this.options.body_height || 20;
-      head.position.set(0, bodyH + 8, frontZ);
+      head.position.set(0, bodyH + 14, frontZ);
       this.mesh.add(head);
     }
 
