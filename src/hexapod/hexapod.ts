@@ -63,14 +63,17 @@ function computeLegLayout(
     }
   } else {
     // Polygon — legs radiate outward, stretched by width (X) and length (Z)
-    // Vertex: legs at polygon corners (full radius, no angle offset)
+    // Vertex: legs at polygon corners (full radius)
     // Edge:   legs at edge midpoints (reduced radius, offset by π/N)
     const isVertex = polyPlacement === 'vertex';
     const edgeOffset = isVertex ? 0 : Math.PI / legCount;
     const edgeScale = isVertex ? 1 : Math.cos(Math.PI / legCount);
     const rx = bodyRadiusX * edgeScale;
     const rz = bodyRadiusZ * edgeScale;
-    const orientOffset = orientation === 'back' ? 0 : Math.PI;
+    // orientOffset = desired first-leg angle - base angle
+    // base = -PI/2 + edgeOffset; desired = PI/2 (back) or -PI/2 (front)
+    // → orientOffset = desired + PI/2 - edgeOffset = (desired == PI/2 ? PI : 0) - edgeOffset
+    const orientOffset = (orientation === 'back' ? Math.PI : 0) - edgeOffset;
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset + orientOffset;
       const legX = rx * Math.cos(angle);
@@ -317,7 +320,7 @@ export class Hexapod {
           geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
 
           // Outer ring vertices — elliptical from body_width/body_length
-          const orientOffset = this.options.polygon_odd_orientation === 'front' ? Math.PI : 0;
+          const orientOffset = this.options.polygon_odd_orientation === 'front' ? 0 : Math.PI;
           const btmRing: number[] = [], topRing: number[] = [];
           const bw = this.options.body_width || 50;
           const bl = this.options.body_length || 100;
