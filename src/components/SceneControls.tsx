@@ -3,24 +3,47 @@ import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import { JoyStick } from '../hexapod/joystick2';
 
+function makeJoystick(
+  container: HTMLElement, radius: number,
+  onActivate: (j: any) => void, onDeactivate: () => void,
+) {
+  const j = new JoyStick(container, radius);
+  j.on_handler_activated = function () { onActivate(this); };
+  j.on_handler_deactivated = function () { onDeactivate(); };
+  return j;
+}
+
 export default function SceneControls() {
   const { botRef, botVersion } = useHexapod();
-  const joystickContainerRef = useRef<HTMLDivElement>(null);
-  const joystickRef = useRef<any>(null);
+  const moveJsRef = useRef<HTMLDivElement>(null);
+  const bodyJsRef = useRef<HTMLDivElement>(null);
+  const rotJsRef = useRef<HTMLDivElement>(null);
+  const inited = useRef(false);
 
-  // Joystick init
+  // Init all 3 joysticks once
   useEffect(() => {
-    if (!joystickContainerRef.current || joystickRef.current) return;
-    const joystick = new JoyStick(joystickContainerRef.current, 60);
-    joystick.on_handler_activated = function () {
+    if (inited.current || !moveJsRef.current || !bodyJsRef.current || !rotJsRef.current) return;
+    inited.current = true;
+
+    const stop = () => { botRef.current?.gait_controller?.stop(); };
+
+    // Move mode joystick
+    makeJoystick(moveJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
-      if (gc) gc.follow(this);
-    };
-    joystick.on_handler_deactivated = function () {
+      if (gc) { gc.move_mode = 'move'; gc.follow(j); }
+    }, stop);
+
+    // Move body joystick
+    makeJoystick(bodyJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
-      if (gc) gc.stop();
-    };
-    joystickRef.current = joystick;
+      if (gc) { gc.move_mode = 'move_body'; gc.follow(j); }
+    }, stop);
+
+    // Rotate body joystick
+    makeJoystick(rotJsRef.current, 45, (j) => {
+      const gc = botRef.current?.gait_controller;
+      if (gc) { gc.move_mode = 'rotate_body'; gc.follow(j); }
+    }, stop);
   }, [botRef]);
 
   // Read current values from bot options on mount and when botVersion changes
@@ -97,9 +120,23 @@ export default function SceneControls() {
       display: 'flex', alignItems: 'flex-end', gap: 10,
       padding: '6px 10px', margin: '8px 0', flexWrap: 'wrap',
     }}>
-      {/* Joystick */}
-      <div className="joystick-container" ref={joystickContainerRef}
-        style={{ height: SLIDER_H + 50, display: 'flex', alignItems: 'center' }}></div>
+      {/* Move joystick */}
+      <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+        <div ref={moveJsRef}></div>
+        <span style={labelStyle}>Move</span>
+      </div>
+
+      {/* Move body joystick */}
+      <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+        <div ref={bodyJsRef}></div>
+        <span style={labelStyle}>Body</span>
+      </div>
+
+      {/* Rotate body joystick */}
+      <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+        <div ref={rotJsRef}></div>
+        <span style={labelStyle}>Rot</span>
+      </div>
 
       {/* Body height */}
       <div style={colStyle}>
