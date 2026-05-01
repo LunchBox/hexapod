@@ -327,7 +327,7 @@ export class Hexapod {
           const isVtx = (this.options.polygon_leg_placement || 'edge') === 'vertex';
           const bodyEdgeOff = isVtx ? 0 : Math.PI / legCount;
           const bodyEdgeScl = isVtx ? 1 : Math.cos(Math.PI / legCount);
-          const bodyOrientOff = this.options.polygon_odd_orientation === 'front' ? 0 : Math.PI;
+          const bodyOrientOff = (this.options.polygon_odd_orientation === 'back' ? Math.PI : 0) - bodyEdgeOff;
           const prx = (bw / 2) * bodyEdgeScl;
           const prz = (bl / 2) * bodyEdgeScl;
           const btmRing: number[] = [], topRing: number[] = [];
