@@ -100,6 +100,11 @@ export default function LegEditor() {
     if (!opts) return;
 
     const pts = computeJoints(opts);
+    if (dragRef.current) {
+      const j = dragRef.current.joint;
+      console.log('drag joint', j, 'pos', pts[j].x.toFixed(1), pts[j].y.toFixed(1),
+        'len', pts.map(p => p.x.toFixed(1)+','+p.y.toFixed(1)).join(' | '));
+    }
     // Use snapshotted view during drag, compute fresh otherwise
     const view = dragRef.current?.view || computeView(pts);
     const sp = pts.map(p => toScreen(p, view));
