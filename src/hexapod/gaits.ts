@@ -491,12 +491,19 @@ export class GaitController {
   move_tips(leg_idxs: number[], fb_direction: number, lr_direction: number, rotate_direction: number) {
     let fb_offset = fb_direction * this.fb_step;
     let lr_offset = lr_direction * this.lr_step;
+    let rotate_offset = rotate_direction * this.rotate_step;
 
     for (let i = 0; i < leg_idxs.length; i++) {
       let idx = leg_idxs[i];
       let ori_pos = this.bot.legs[idx].get_tip_pos();
-      ori_pos.z -= fb_offset;
-      ori_pos.x -= lr_offset;
+      // Translate + rotate target around body center
+      let cx = this.bot.body_mesh.position.x;
+      let cz = this.bot.body_mesh.position.z;
+      let dx = ori_pos.x - cx - lr_offset;
+      let dz = ori_pos.z - cz - fb_offset;
+      let cosR = Math.cos(rotate_offset), sinR = Math.sin(rotate_offset);
+      ori_pos.x = cx + dx * cosR - dz * sinR;
+      ori_pos.z = cz + dx * sinR + dz * cosR;
       this.bot.legs[idx].set_tip_pos(ori_pos);
       // Sync circle to new tip position
       let sq = this.bot._guideCircles?.[idx];
