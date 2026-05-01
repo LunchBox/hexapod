@@ -6,7 +6,7 @@ import appState from '../hexapod/appState';
 
 export default function SceneCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { botRef, updateServoDisplay } = useHexapod();
+  const { botRef, updateServoDisplay, bumpBotVersion } = useHexapod();
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -26,6 +26,7 @@ export default function SceneCanvas() {
     bot.onServoUpdate = updateServoDisplay;
     botRef.current = bot;
     appState.current_bot = bot;
+    bumpBotVersion(); // trigger SceneControls & AttributesPanel to sync
 
     // Debug: log joint positions, also expose globally
     setTimeout(() => bot.debug_joint_positions(), 500);
