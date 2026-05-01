@@ -641,6 +641,19 @@ export class Hexapod {
     this.after_status_change();
   }
 
+  reset_body_position() {
+    let current_tips = this.get_tip_pos();
+    this.body_mesh.position.set(0, (this.options.body_height || 20) / 2, 0);
+    this.body_mesh.rotation.set(0, 0, 0);
+    this.body_mesh.updateMatrixWorld();
+    for (let i = 0; i < this.legs.length; i++) {
+      this.legs[i].set_tip_pos(current_tips[i]);
+    }
+    this.after_status_change();
+    // Update guide if exists
+    if (this.adjust_gait_guidelines) this.adjust_gait_guidelines();
+  }
+
   after_status_change(send_cmd?: boolean) {
     this.display_values();
 
