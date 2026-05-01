@@ -63,8 +63,8 @@ function computeLegLayout(
     }
   } else {
     // Polygon — legs radiate outward, stretched by width (X) and length (Z)
-    const edgeOffset = polyPlacement === 'edge' ? Math.PI / legCount : 0;
-    const edgeScale = polyPlacement === 'edge' ? Math.cos(Math.PI / legCount) : 1;
+    const edgeOffset = polyPlacement === 'vertex' ? Math.PI / legCount : 0;
+    const edgeScale = polyPlacement === 'vertex' ? Math.cos(Math.PI / legCount) : 1;
     const rx = bodyRadiusX * edgeScale;
     const rz = bodyRadiusZ * edgeScale;
     const orientOffset = orientation === 'back' ? 0 : Math.PI;
