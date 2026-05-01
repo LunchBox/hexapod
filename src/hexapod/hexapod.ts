@@ -555,33 +555,105 @@ export class Hexapod {
 
   // ── Motions ────────────────────────────────────────────────
 
-  move_body(direction: string, distance: number) {
-    let current_tips_pos = this.get_tip_pos();
-    let prev_pos = this.body_mesh.position[direction];
-    this.body_mesh.position[direction] += distance;
-
-    let total_legs = this.legs.length;
-    for (let i = 0; i < total_legs; i++) {
-      this.legs[i].set_tip_pos(current_tips_pos[i]);
+  // Centralized body transform with optional tip lock
+  transform_body(opts: {
+    dx?: number; dy?: number; dz?: number;
+    rx?: number; ry?: number; rz?: number;
+    lockTips?: boolean;
+  }): boolean {
+    const lock = opts.lockTips ?? (this.options._tip_lock !== false);
+    if (!lock) {
+      if (opts.dx != null) this.body_mesh.position.x += opts.dx;
+      if (opts.dy != null) this.body_mesh.position.y += opts.dy;
+      if (opts.dz != null) this.body_mesh.position.z += opts.dz;
+      if (opts.rx != null) this.body_mesh.rotation.x += opts.rx;
+      if (opts.ry != null) this.body_mesh.rotation.y += opts.ry;
+      if (opts.rz != null) this.body_mesh.rotation.z += opts.rz;
+      this.body_mesh.updateMatrixWorld();
+      this.after_status_change();
+      return true;
     }
 
-    // Constraint: at least 2 tips must be on or below ground (Y >= 0 means tip can reach floor)
+    let current_tips = this.get_tip_pos();
+    let prevPos = this.body_mesh.position.clone();
+    let prevRot = this.body_mesh.rotation.clone();
+
+    // Compute max delta to determine sub-steps (~0.5° or 5mm per step)
+    let maxD = 0;
+    if (opts.dx != null) maxD = Math.max(maxD, Math.abs(opts.dx) / 5);
+    if (opts.dy != null) maxD = Math.max(maxD, Math.abs(opts.dy) / 5);
+    if (opts.dz != null) maxD = Math.max(maxD, Math.abs(opts.dz) / 5);
+    if (opts.rx != null) maxD = Math.max(maxD, Math.abs(opts.rx) / 0.008);
+    if (opts.ry != null) maxD = Math.max(maxD, Math.abs(opts.ry) / 0.008);
+    if (opts.rz != null) maxD = Math.max(maxD, Math.abs(opts.rz) / 0.008);
+    let steps = Math.ceil(maxD);
+    if (steps < 1) steps = 1;
+
+    let total_legs = this.legs.length;
+    for (let s = 0; s < steps; s++) {
+      let prevRZ = this.body_mesh.rotation.z;
+      let prevRX = this.body_mesh.rotation.x;
+      let prevRY = this.body_mesh.rotation.y;
+      let prevPX = this.body_mesh.position.x;
+      let prevPY = this.body_mesh.position.y;
+      let prevPZ = this.body_mesh.position.z;
+
+      if (opts.dx != null) this.body_mesh.position.x += opts.dx / steps;
+      if (opts.dy != null) this.body_mesh.position.y += opts.dy / steps;
+      if (opts.dz != null) this.body_mesh.position.z += opts.dz / steps;
+      if (opts.rx != null) this.body_mesh.rotation.x += opts.rx / steps;
+      if (opts.ry != null) this.body_mesh.rotation.y += opts.ry / steps;
+      if (opts.rz != null) this.body_mesh.rotation.z += opts.rz / steps;
+      this.body_mesh.updateMatrixWorld();
+
+      for (let i = 0; i < total_legs; i++) {
+        this.legs[i].set_tip_pos(current_tips[i]);
+      }
+
+      // Check drift
+      let newTips = this.get_tip_pos();
+      let maxDrift = 0;
+      for (let i = 0; i < total_legs; i++) {
+        let d = current_tips[i].distanceTo(newTips[i]);
+        if (d > maxDrift) maxDrift = d;
+      }
+      if (maxDrift > 2) {
+        this.body_mesh.rotation.z = prevRZ;
+        this.body_mesh.rotation.x = prevRX;
+        this.body_mesh.rotation.y = prevRY;
+        this.body_mesh.position.x = prevPX;
+        this.body_mesh.position.y = prevPY;
+        this.body_mesh.position.z = prevPZ;
+        this.body_mesh.updateMatrixWorld();
+        for (let i = 0; i < total_legs; i++) {
+          this.legs[i].set_tip_pos(current_tips[i]);
+        }
+        this.after_status_change();
+        return false;
+      }
+    }
+    this.after_status_change();
+    return true;
+  }
+
+  move_body(direction: string, distance: number) {
+    let opts: any = {};
+    opts['d' + direction] = distance;
+    // For Y-up: check at least 2 tips can reach ground
     if (direction === 'y' && distance > 0) {
+      opts.lockTips = false; // let transform_body handle, then check
+      this.transform_body(opts);
       let grounded = 0;
       let tips = this.get_tip_pos();
-      for (let i = 0; i < total_legs; i++) {
+      for (let i = 0; i < this.legs.length; i++) {
         if (tips[i].y <= 0) grounded++;
       }
       if (grounded < 2) {
-        // Revert: not enough legs can reach the ground
-        this.body_mesh.position[direction] = prev_pos;
-        for (let i = 0; i < total_legs; i++) {
-          this.legs[i].set_tip_pos(current_tips_pos[i]);
-        }
+        this.transform_body({ dy: -distance, lockTips: false });
       }
+    } else {
+      this.transform_body(opts);
     }
-
-    this.after_status_change();
   }
 
   float(direction: string, distance: number) {
@@ -638,16 +710,9 @@ export class Hexapod {
   }
 
   rotate_body(direction: string, radius: number) {
-    let current_tips_pos = this.get_tip_pos();
-    this.body_mesh.rotation[direction] += radius;
-    this.body_mesh.updateMatrixWorld();
-
-    let total_legs = this.legs.length;
-    for (let i = 0; i < total_legs; i++) {
-      this.legs[i].set_tip_pos(current_tips_pos[i]);
-    }
-
-    this.after_status_change();
+    let opts: any = {};
+    opts['r' + direction] = radius;
+    this.transform_body(opts);
   }
 
   adjust_tip_spread(new_scale: number) {
@@ -692,6 +757,7 @@ export class Hexapod {
   reset_body_to_home() {
     const home = this.options._body_home;
     if (!home) return;
+    // Set body pose directly (no tip lock needed — tips are set explicitly below)
     this.body_mesh.position.set(home.px, home.py, home.pz);
     this.body_mesh.rotation.set(home.rx, home.ry, home.rz);
     this.body_mesh.updateMatrixWorld();

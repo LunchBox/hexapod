@@ -160,55 +160,12 @@ export class GaitInternal extends GaitAction {
 
   move() {
     let bot = this.controller.bot;
-    let current_tips_pos = bot.get_tip_pos();
-
-    // Compute total delta from current to target (home + joystick offset)
+    // Compute delta from current to target (home + joystick offset)
     let dRotZ = (this.homeRot.z + this.rotation.z) - bot.body_mesh.rotation.z;
     let dRotX = (this.homeRot.x + this.rotation.x) - bot.body_mesh.rotation.x;
     let dPosX = (this.homePos.x + this.position.x) - bot.body_mesh.position.x;
     let dPosZ = (this.homePos.z + this.position.z) - bot.body_mesh.position.z;
-
-    // Subdivide so IK handles small increments (~0.5° or 5mm per step)
-    let maxStep = Math.max(Math.abs(dRotZ) / 0.008, Math.abs(dRotX) / 0.008, Math.abs(dPosX) / 5, Math.abs(dPosZ) / 5, 1);
-    let steps = Math.ceil(maxStep);
-    if (steps < 1) steps = 1;
-
-    let total_legs = bot.legs.length;
-    for (let s = 0; s < steps; s++) {
-      let prevRZ = bot.body_mesh.rotation.z;
-      let prevRX = bot.body_mesh.rotation.x;
-      let prevPX = bot.body_mesh.position.x;
-      let prevPZ = bot.body_mesh.position.z;
-
-      bot.body_mesh.rotation.z += dRotZ / steps;
-      bot.body_mesh.rotation.x += dRotX / steps;
-      bot.body_mesh.position.x += dPosX / steps;
-      bot.body_mesh.position.z += dPosZ / steps;
-      bot.body_mesh.updateMatrixWorld();
-
-      for (let i = 0; i < total_legs; i++) {
-        bot.legs[i].set_tip_pos(current_tips_pos[i]);
-      }
-
-      // Drift guard
-      let newTips = bot.get_tip_pos();
-      let maxDrift = 0;
-      for (let i = 0; i < total_legs; i++) {
-        let d = current_tips_pos[i].distanceTo(newTips[i]);
-        if (d > maxDrift) maxDrift = d;
-      }
-      if (maxDrift > 1) {
-        bot.body_mesh.rotation.z = prevRZ;
-        bot.body_mesh.rotation.x = prevRX;
-        bot.body_mesh.position.x = prevPX;
-        bot.body_mesh.position.z = prevPZ;
-        bot.body_mesh.updateMatrixWorld();
-        for (let i = 0; i < total_legs; i++) {
-          bot.legs[i].set_tip_pos(current_tips_pos[i]);
-        }
-        break;
-      }
-    }
+    bot.transform_body({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
   }
 }
 

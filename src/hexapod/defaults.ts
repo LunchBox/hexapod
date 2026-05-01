@@ -106,6 +106,7 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   move_mode: 'move',
   sync_cmd: false,
   tip_circle_scale: 1,
+  _tip_lock: true,
 
   leg_options: [
     // Left front / Right front (leg_count=3 uses these + left mid)

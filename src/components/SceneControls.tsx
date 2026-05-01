@@ -235,12 +235,21 @@ export default function SceneControls() {
       </div>
       </div>
 
-      {/* Row 3: Body position buttons */}
+      {/* Row 3: Body position buttons + tip lock toggle */}
       <div style={{ ...rowStyle, marginTop: 4 }}>
         <button className="control_btn" title="Save current pose"
           onClick={() => botRef.current?.save_body_home?.()}>Save Pose</button>
         <button className="control_btn" title="Reset to last saved pose"
           onClick={() => { botRef.current?.reset_body_to_home?.(); syncSliders(); }}>↺ Reset Pose</button>
+        <button className="control_btn" title="Toggle tip lock (anchor tips when moving body)"
+          onClick={() => {
+            const bot = botRef.current;
+            if (!bot) return;
+            bot.options._tip_lock = !(bot.options._tip_lock !== false);
+            set_bot_options(bot.options);
+          }}
+          style={{ background: botRef.current?.options?._tip_lock !== false ? '#2a4a2a' : '#4a2a2a' }}
+        >📌 Lock</button>
       </div>
     </div>
   );
