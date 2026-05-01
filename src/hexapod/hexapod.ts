@@ -67,7 +67,7 @@ function computeLegLayout(
     const edgeScale = polyPlacement === 'edge' ? Math.cos(Math.PI / legCount) : 1;
     const rx = bodyRadiusX * edgeScale;
     const rz = bodyRadiusZ * edgeScale;
-    const orientOffset = orientation === 'back' ? Math.PI : 0;
+    const orientOffset = orientation === 'back' ? 0 : Math.PI;
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset + orientOffset;
       const legX = rx * Math.cos(angle);
