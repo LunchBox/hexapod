@@ -273,6 +273,7 @@ export default function LegEditor() {
         const newCoxaLen = Math.max(5, legPt.x);
         (opts as any)[firstName + '_length'] = newCoxaLen;
         for (let i = 0; i < opts.leg_options.length; i++) {
+          if (!opts.leg_options[i][firstName]) continue;
           opts.leg_options[i][firstName].length = newCoxaLen;
         }
       } else {
@@ -293,6 +294,7 @@ export default function LegEditor() {
         const lengthKey = part + '_length';
         (opts as any)[lengthKey] = newLen;
         for (let i = 0; i < opts.leg_options.length; i++) {
+          if (!opts.leg_options[i][part]) continue; // skip legs missing this segment
           opts.leg_options[i][part].length = newLen;
           opts.leg_options[i][part].init_angle = newInitAngle;
         }
