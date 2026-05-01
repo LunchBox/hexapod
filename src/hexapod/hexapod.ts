@@ -227,9 +227,8 @@ export class Hexapod {
     this.putdown_tips();
     this.auto_level_body();
 
-    this.draw_gait_guidelines();
-
-    // Restore saved body home pose
+    // Restore saved body home pose BEFORE drawing guidelines/guide
+    // so the reference lines and guide_pos reflect the saved state.
     if (this.options._body_home) {
       const h = this.options._body_home;
       this.body_mesh.position.set(h.px, h.py, h.pz);
@@ -246,6 +245,7 @@ export class Hexapod {
       }
     }
 
+    this.draw_gait_guidelines();
     this.draw_gait_guide();
   }
 
