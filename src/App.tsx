@@ -7,6 +7,7 @@ import ControlPanel from './components/ControlPanel';
 import ServoPanel from './components/ServoPanel';
 import AttributesPanel from './components/AttributesPanel';
 import StatusPanel from './components/StatusPanel';
+import RandomBotPage from './components/RandomBotPage';
 import CommandDisplay from './components/CommandDisplay';
 import TimeChart from './components/TimeChart';
 import './App.css';
@@ -17,10 +18,12 @@ const TABS = [
   { id: 'servo_control', label: 'Servos' },
   { id: 'attrs_control', label: 'Attributes' },
   { id: 'status_control', label: 'Status' },
+  { id: 'random', label: 'Random' },
 ];
 
 function App() {
   const [activeTab, setActiveTab] = useState('move_control');
+  const [sceneKey, setSceneKey] = useState(0);
 
   return (
     <HexapodProvider>
@@ -28,7 +31,7 @@ function App() {
         <h2 className="app-title">JS Hexapod ver.0.8.0 - developing</h2>
 
         <div className="grid-scene">
-          <SceneCanvas />
+          <SceneCanvas key={sceneKey} />
           <SceneControls />
         </div>
 
@@ -65,6 +68,16 @@ function App() {
           {activeTab === 'status_control' && (
             <div className="tab_content active">
               <StatusPanel />
+            </div>
+          )}
+          {activeTab === 'random' && (
+            <div className="tab_content active">
+              <RandomBotPage
+                onAccept={() => {
+                  setActiveTab('move_control');
+                  setSceneKey(k => k + 1);
+                }}
+              />
             </div>
           )}
         </div>
