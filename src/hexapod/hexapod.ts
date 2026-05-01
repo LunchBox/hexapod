@@ -91,6 +91,8 @@ export class Hexapod {
   gait_controller: any;
   on_servo_values: number[];
   _guideCircles: any[];
+  guide_pos: any;
+  _guide_local_positions: any[];
   guideline: any;
   left_gl: any;
   right_gl: any;
@@ -145,6 +147,8 @@ export class Hexapod {
       }
       this._guideCircles = [];
     }
+    this.guide_pos = null;
+    this._guide_local_positions = [];
 
     this.on_servo_values = null;
     this.draw();
@@ -329,6 +333,7 @@ export class Hexapod {
   }
 
   draw_gait_guide() {
+    // Visual circles at tip positions (world-space markers)
     this._guideCircles = [];
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
@@ -341,6 +346,17 @@ export class Hexapod {
       this.scene.add(sq);
       this._guideCircles.push(sq);
     }
+
+    // Computational guide_pos — child of mesh, drives move_tips / move_body
+    this.guide_pos = new THREE.Object3D();
+    this.mesh.add(this.guide_pos);
+    this._guide_local_positions = [];
+    this.mesh.updateMatrixWorld();
+    for (let i = 0; i < total_legs; i++) {
+      const worldPos = this.legs[i].get_tip_pos();
+      this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
+    }
+    this._guide_local_positions.push(new THREE.Vector3(0, 0, 0)); // body center at index N
   }
 
   sync_guide_circles() {
@@ -351,17 +367,20 @@ export class Hexapod {
     }
   }
 
+  reset_guide_pos() {
+    if (!this.guide_pos) return;
+    this.guide_pos.position.set(0, 0, 0);
+    this.guide_pos.rotation.set(0, 0, 0);
+    this.guide_pos.scale.set(1, 1, 1);
+  }
+
   get_guide_pos(leg_idx: number) {
-    let sq = this._guideCircles?.[leg_idx];
-    if (sq) {
-      // Circle is in world space — position is the world tip position
-      let cx = this.body_mesh.position.x;
-      let cz = this.body_mesh.position.z;
-      let wx = cx + (sq.position.x - cx) * (this.tip_circle_scale || 1);
-      let wz = cz + (sq.position.z - cz) * (this.tip_circle_scale || 1);
-      return new THREE.Vector3(wx, sq.position.y, wz);
-    }
-    return new THREE.Vector3();
+    if (!this.guide_pos) return new THREE.Vector3();
+    this.guide_pos.scale.set(this.tip_circle_scale, this.tip_circle_scale, this.tip_circle_scale);
+    this.mesh.updateMatrixWorld();
+    const localPos = this._guide_local_positions[leg_idx];
+    if (!localPos) return new THREE.Vector3();
+    return localPos.clone().applyMatrix4(this.guide_pos.matrixWorld);
   }
 
   draw_gait_guidelines() {

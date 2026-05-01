@@ -91,9 +91,9 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
 
   color: 0x333333,
 
-  rotate_step: Math.PI / 18,
-  fb_step: 15,
-  lr_step: 10,
+  rotate_step: Math.PI / 14,
+  fb_step: 22,
+  lr_step: 15,
   up_step: 10,
 
   first_servo_idx: 0,

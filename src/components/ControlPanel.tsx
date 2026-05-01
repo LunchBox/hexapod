@@ -201,8 +201,40 @@ export default function ControlPanel() {
     updateServoDisplay();
   }, [botRef, gc, updateServoDisplay]);
 
+  // Track pressed movement keys so combinations (e.g. W+A) work without
+  // resetting the gait cycle on every key change.
+  const pressedKeys = useRef<Set<number>>(new Set());
+
   // Keyboard handler
   useEffect(() => {
+    const MOVE_KEYS = [87, 83, 65, 68, 90, 67]; // W S A D Z C
+
+    const updateGaitDirections = () => {
+      const ctrl = gc();
+      if (!ctrl) return;
+      const keys = pressedKeys.current;
+      let fb = 0, lr = 0, rot = 0;
+      if (keys.has(87)) fb += 1;   // W forward
+      if (keys.has(83)) fb -= 1;   // S backward
+      if (keys.has(90)) lr += 1;   // Z move left
+      if (keys.has(67)) lr -= 1;   // C move right
+      if (keys.has(65)) rot += 1;  // A rotate left
+      if (keys.has(68)) rot -= 1;  // D rotate right
+
+      const action = ctrl.actions['follow_joystick'];
+      if (action) {
+        action.fb_direction = fb;
+        action.lr_direction = lr;
+        action.rotate_direction = rot;
+      }
+
+      if (fb !== 0 || lr !== 0 || rot !== 0) {
+        ctrl.expected_action = 'follow_joystick';
+      } else {
+        ctrl.stop();
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const bot = botRef.current;
       if (!bot) return;
@@ -234,9 +266,16 @@ export default function ControlPanel() {
       };
 
       if (mode === 'move') {
-        if (e.keyCode === 82) handleRaise();
-        if (e.keyCode === 70) handleFall();
-        if (gc()) gc().expected_action = e.keyCode;
+        if (e.keyCode === 82) { handleRaise(); return; }
+        if (e.keyCode === 70) { handleFall(); return; }
+
+        if (MOVE_KEYS.includes(e.keyCode)) {
+          e.preventDefault();
+          if (!pressedKeys.current.has(e.keyCode)) {
+            pressedKeys.current.add(e.keyCode);
+            updateGaitDirections();
+          }
+        }
       } else if (mode === 'move_body') {
         e.preventDefault();
         const fb = bot.options.fb_step || 15;
@@ -260,8 +299,15 @@ export default function ControlPanel() {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      e.preventDefault();
-      if (gc()) gc().stop();
+      const mode = gc()?.move_mode;
+      if (mode === 'move' && MOVE_KEYS.includes(e.keyCode)) {
+        e.preventDefault();
+        pressedKeys.current.delete(e.keyCode);
+        updateGaitDirections();
+      } else if (mode !== 'move') {
+        e.preventDefault();
+        if (gc()) gc().stop();
+      }
     };
 
     document.body.addEventListener('keydown', handleKeyDown);
