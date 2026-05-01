@@ -1,4 +1,4 @@
-import { DEFAULT_HEXAPOD_OPTIONS, LIMB_NAMES, LIMB_DEFAULTS, SERVO_CURRENT_VALUE } from './defaults';
+import { SERVO_CURRENT_VALUE } from './defaults';
 
 function rand(min: number, max: number): number {
   return Math.round(Math.random() * (max - min) + min);
@@ -45,7 +45,6 @@ export function generateRandomOptions() {
   const gait = pick(['tripod', 'ripple', 'quad', 'wave', 'dual_tripod']);
   const actionType = pick(['efficient', 'power', 'body_first', 'fast']);
 
-  // Mirror pairs: left legs have mirror=-1, right legs have mirror=1
   const leg_options: any[] = [];
   for (let i = 0; i < legCount; i++) {
     const mirror = i % 2 === 0 ? -1 : 1;
@@ -60,9 +59,6 @@ export function generateRandomOptions() {
     segs.dof = dof;
     leg_options.push({ x: 0, y: 0, z: 0, mirror, ...segs });
   }
-
-  // Keep only the first 6 leg_options (matching DEFAULT_HEXAPOD_OPTIONS pattern for get_bot_options)
-  const baseLegOptions = leg_options.slice(0, 6);
 
   return {
     body_width: bodyWidth,
@@ -92,6 +88,6 @@ export function generateRandomOptions() {
     move_mode: 'move',
     sync_cmd: false,
     _tip_lock: true,
-    leg_options: baseLegOptions,
+    leg_options,
   };
 }

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
+import { generateRandomOptions } from '../hexapod/random';
 import { history } from '../hexapod/history';
 import LegEditor from './LegEditor';
 import AttrSlider from './AttrSlider';
@@ -95,12 +96,23 @@ export default function AttributesPanel() {
     e.target.value = '';
   };
 
+  const handleRandom = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const b = botRef.current;
+    if (!b) return;
+    const opts = generateRandomOptions();
+    history.push(b.options);
+    b.apply_attributes(opts);
+    bumpBotVersion();
+  };
+
   return (
     <div id="attrs_control">
       <fieldset className="btns">
         <legend>Profile</legend>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleExport(); }}>Export</a>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); fileInputRef.current?.click(); }}>Import</a>
+        <a href="#" className="control_btn" onClick={handleRandom}>Random</a>
         <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
           onChange={handleImport} />
       </fieldset>
