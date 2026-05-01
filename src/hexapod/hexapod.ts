@@ -23,8 +23,8 @@ interface LegLayout {
 function computeLegLayout(
   legCount: number,
   bodyShape: string,
-  bodyRadius: number,
-  bodyLength: number,
+  bodyRadiusX: number,
+  bodyRadiusZ: number,
   polyPlacement: string = 'vertex',
   orientation: string = 'back',
 ): LegLayout[] {
@@ -34,36 +34,33 @@ function computeLegLayout(
     const pairs = legCount / 2;
     const frontInit = 30, rearInit = -30;
     for (let i = 0; i < pairs; i++) {
-      const z = pairs === 1 ? 0 : -bodyLength / 2 + (i * bodyLength) / (pairs - 1);
+      const z = pairs === 1 ? 0 : -bodyRadiusZ + (i * bodyRadiusZ * 2) / (pairs - 1);
       const initDeg = pairs === 1 ? 0 : frontInit + ((rearInit - frontInit) * i) / (pairs - 1);
       const initRad = initDeg * Math.PI / 180;
-      // Same init_angle for both sides; mirror in draw_coxa handles L/R flip
-      // Right: mirror=1 → rotation.y = +initRad → coxa from +X tilted by +initDeg°
-      // Left:  mirror=-1 → rotation.y = -initRad → coxa from -X tilted by -initDeg°
-      layouts.push({ x: bodyRadius, z, angle: 0, yaw: initRad, init_angle: initDeg });
-      layouts.push({ x: -bodyRadius, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
+      layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
+      layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
     }
   } else {
-    // Polygon — legs radiate outward from body center
-    // Vertex mode: legs at polygon corners at radius R
-    // Edge mode: legs at edge midpoints at radius R * cos(PI/N)
+    // Polygon — legs radiate outward, stretched by width (X) and length (Z)
     const edgeOffset = polyPlacement === 'edge' ? Math.PI / legCount : 0;
-    const edgeRadius = polyPlacement === 'edge' ? bodyRadius * Math.cos(Math.PI / legCount) : bodyRadius;
-    // orientOffset: 'back' = single leg at rear (π), 'front' = single leg at front (0)
+    const edgeScale = polyPlacement === 'edge' ? Math.cos(Math.PI / legCount) : 1;
+    const rx = bodyRadiusX * edgeScale;
+    const rz = bodyRadiusZ * edgeScale;
     const orientOffset = orientation === 'back' ? Math.PI : 0;
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset + orientOffset;
-      // mirror=1: rz=-PI/2→+X, ry=init_rad, world dir = -init_rad → need init_rad = -angle
-      // mirror=-1: rz=+PI/2→-X, ry=-init_rad, world dir = PI+init_rad → need init_rad = angle-PI
+      const legX = rx * Math.cos(angle);
+      const legZ = rz * Math.sin(angle);
+      const worldAngle = Math.atan2(legZ, legX);
       const onRight = Math.cos(angle) >= 0;
       const initDeg = onRight
-        ? -angle * 180 / Math.PI
-        : (angle - Math.PI) * 180 / Math.PI;
+        ? -worldAngle * 180 / Math.PI
+        : (worldAngle - Math.PI) * 180 / Math.PI;
       layouts.push({
-        x: edgeRadius * Math.cos(angle),
-        z: edgeRadius * Math.sin(angle),
-        angle,
-        yaw: angle,
+        x: legX,
+        z: legZ,
+        angle: worldAngle,
+        yaw: worldAngle,
         init_angle: initDeg,
       });
     }
@@ -173,15 +170,15 @@ export class Hexapod {
     const bodyShape = this.options.body_shape || 'rectangle';
     const bodyLength = this.options.body_length || 100;
     const bodyWidth = this.options.body_width || 50;
-    const bodyRadius = this.options.body_radius || 50;
-    // Rectangle uses body_width/2 for leg spacing; polygon uses body_radius
-    const legRadius = bodyShape === 'polygon' ? bodyRadius : bodyWidth / 2;
+    // Rect: legs at ±width/2 along X, spaced along Z by length
+    // Polygon: width/length stretch the ellipse radii
+    const rx = bodyWidth / 2;
+    const rz = bodyLength / 2;
 
     let polyPlacement = this.options.polygon_leg_placement || 'vertex';
     let orientation = this.options.polygon_odd_orientation || 'back';
 
-    // Compute leg positions dynamically
-    this.leg_layout = computeLegLayout(legCount, bodyShape, legRadius, bodyLength, polyPlacement, orientation);
+    this.leg_layout = computeLegLayout(legCount, bodyShape, rx, rz, polyPlacement, orientation);
 
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
@@ -263,7 +260,6 @@ export class Hexapod {
     let bodyHeight = this.options.body_height || 20;
     let bodyShape = this.options.body_shape || 'rectangle';
     let legCount = this.options.leg_count || 6;
-    let bodyRadius = this.options.body_radius || 50;
 
     // Collect leg positions for wireframe views (all signed directly)
     let legPositions = this.leg_layout.map((l: LegLayout) =>
@@ -296,13 +292,17 @@ export class Hexapod {
           const topCenter = geometry.vertices.length;
           geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
 
-          // Outer ring vertices at same angles as legs
+          // Outer ring vertices — elliptical from body_width/body_length
           const orientOffset = this.options.polygon_odd_orientation === 'front' ? 0 : Math.PI;
           const btmRing: number[] = [], topRing: number[] = [];
+          const bw = this.options.body_width || 50;
+          const bl = this.options.body_length || 100;
+          const prx = bw / 2;
+          const prz = bl / 2;
           for (let i = 0; i < legCount; i++) {
             const a = (2 * Math.PI * i) / legCount - Math.PI / 2 + orientOffset;
-            const x = bodyRadius * Math.cos(a);
-            const z = bodyRadius * Math.sin(a);
+            const x = prx * Math.cos(a);
+            const z = prz * Math.sin(a);
             btmRing.push(geometry.vertices.length);
             geometry.vertices.push(new THREE.Vector3(x, -halfH, z));
             topRing.push(geometry.vertices.length);
