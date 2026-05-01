@@ -45,8 +45,7 @@ export default function SceneControls() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      padding: '6px 10px', background: '#1a1a1a', borderRadius: 6,
-      marginTop: 6, flexWrap: 'wrap',
+      padding: '6px 10px', marginTop: 6, flexWrap: 'wrap',
     }}>
       {/* Joystick */}
       <div className="joystick-container" ref={joystickContainerRef}></div>
@@ -56,7 +55,7 @@ export default function SceneControls() {
         <span style={{ fontSize: 10, color: '#888' }}>H</span>
         <input type="range" min="10" max="150" value={Math.round(bodyY)}
           title="Body height"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 150, cursor: 'pointer' }}
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
           onInput={(e) => handleHeightChange(parseFloat((e.target as HTMLInputElement).value))}
         />
         <span style={{ fontSize: 9, color: '#666' }}>{Math.round(bodyY)}</span>
@@ -67,7 +66,7 @@ export default function SceneControls() {
         <span style={{ fontSize: 10, color: '#888' }}>↔</span>
         <input type="range" max="1.5" min="0.5" step="0.1" value={tipScale}
           title="Tip spread"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 150, cursor: 'pointer' }}
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
           onInput={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
         />
         <span style={{ fontSize: 9, color: '#666' }}>{tipScale.toFixed(1)}</span>
