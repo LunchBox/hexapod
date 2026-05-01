@@ -522,7 +522,7 @@ export class GaitController {
     this.bot.mesh.position.z -= bodyDZ;
     this.bot.mesh.position.x -= bodyDX;
 
-    this.bot.mesh.rotation.y += rotate_offset / this.leg_groups.length * 3;
+    this.bot.mesh.rotation.y += rotate_offset / this.leg_groups.length;
 
     for (let idx = 0; idx < this.bot.legs.length; idx++) {
       if (this.bot.legs[idx].on_floor === true) {
