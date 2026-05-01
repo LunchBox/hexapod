@@ -321,16 +321,19 @@ export class Hexapod {
   }
 
   draw_gait_guide() {
-    let material = new THREE.PointsMaterial({ color: 0xffffff, size: 30 });
-    let geometry = new THREE.Geometry();
-
+    this.guide_pos = new THREE.Object3D();
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
-      geometry.vertices.push(this.legs[i].get_tip_pos());
+      let tip = this.legs[i].get_tip_pos();
+      let geom = new THREE.PlaneGeometry(12, 12);
+      let mat = new (THREE as any).MeshBasicMaterial({ color: 0x111111, side: (THREE as any).DoubleSide });
+      let sq = new THREE.Mesh(geom, mat);
+      sq.position.copy(tip);
+      sq.rotation.x = -Math.PI / 2; // flat on ground
+      this.guide_pos.add(sq);
+      // Store reference for position updates
+      (this.guide_pos as any)['_sq' + i] = sq;
     }
-    geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-
-    this.guide_pos = new THREE.Points(geometry, material);
     this.mesh.add(this.guide_pos);
   }
 
@@ -345,9 +348,13 @@ export class Hexapod {
     this.guide_pos.scale.set(this.tip_circle_scale, this.tip_circle_scale, this.tip_circle_scale);
     this.mesh.updateMatrixWorld();
 
-    let vector = this.guide_pos.geometry.vertices[leg_idx].clone();
-    vector.applyMatrix4(this.guide_pos.matrixWorld);
-    return vector;
+    let child = this.guide_pos.children[leg_idx] as any;
+    if (child) {
+      let vector = new THREE.Vector3();
+      vector.setFromMatrixPosition(child.matrixWorld);
+      return vector;
+    }
+    return new THREE.Vector3();
   }
 
   draw_gait_guidelines() {
