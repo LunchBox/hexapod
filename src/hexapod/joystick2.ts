@@ -88,11 +88,21 @@ export class JoyStick {
   }
 
   handle_down(e_page_x: number, e_page_y: number) {
-    let related_x = e_page_x - this.canvas.offsetLeft - this.center_x;
-    let related_y = e_page_y - this.canvas.offsetTop - this.center_y;
-    if (Math.sqrt(Math.pow(related_x, 2) + Math.pow(related_y, 2)) < this.handler_radius) {
-      this.handler_activated = true;
+    // Snap handler to click position (clamped to joystick radius)
+    let dx = e_page_x - this.canvas.offsetLeft - this.center_x;
+    let dy = e_page_y - this.canvas.offsetTop - this.center_y;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > this.radius) {
+      dx = dx / dist * this.radius;
+      dy = dy / dist * this.radius;
     }
+    this.handler_x = this.center_x + dx;
+    this.handler_y = this.center_y + dy;
+    this.handler_activated = true;
+    this.last_page_x = e_page_x;
+    this.last_page_y = e_page_y;
+    this.draw();
+    this.on_handler_activated();
   }
 
   handle_move(e_page_x: number, e_page_y: number) {
@@ -156,21 +166,23 @@ export class JoyStick {
   on_handler_deactivated() { }
 
   bind_events() {
-    this.canvas.addEventListener("mousedown", (e: MouseEvent) => {
+    // Activate on mousedown anywhere on screen
+    document.addEventListener("mousedown", (e: MouseEvent) => {
       this.mouse_down(e);
     }, false);
 
-    // Global listeners so dragging works even outside canvas
+    // Track movement globally while dragging
     document.addEventListener("mousemove", (e: MouseEvent) => {
       if (this.handler_activated) this.mouse_move(e);
     }, false);
 
+    // Release on mouseup anywhere
     document.addEventListener("mouseup", (e: MouseEvent) => {
       if (this.handler_activated) this.mouse_up(e);
     }, false);
 
-    // Auto-return to center when mouse leaves canvas during drag
-    this.canvas.addEventListener("mouseleave", () => {
+    // Auto-return only when mouse leaves the entire screen
+    document.addEventListener("mouseleave", () => {
       if (this.handler_activated) this.reset_handler();
     }, false);
   }
