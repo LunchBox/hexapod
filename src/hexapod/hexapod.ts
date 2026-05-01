@@ -378,13 +378,21 @@ export class Hexapod {
     if (!this.guideline) return;
     this.mesh.updateMatrixWorld();
     const bodyPos = this.body_mesh.position.clone();
-    // Update tip-position lines: start from body position, end at tip world pos
+    // Update tip-position lines and guide dots
     for (let idx = 0; idx < this.legs.length; idx++) {
+      const tip = this.legs[idx].get_tip_pos();
+      // guideline lines
       const line = this.guideline.children[idx] as any;
-      if (!line) continue;
-      line.geometry.vertices[0].copy(bodyPos);
-      line.geometry.vertices[1].copy(this.legs[idx].get_tip_pos());
-      line.geometry.verticesNeedUpdate = true;
+      if (line) {
+        line.geometry.vertices[0].copy(bodyPos);
+        line.geometry.vertices[1].copy(tip);
+        line.geometry.verticesNeedUpdate = true;
+      }
+      // guide dots (black reference points)
+      if (this.guide_pos?.geometry?.vertices?.[idx]) {
+        this.guide_pos.geometry.vertices[idx].copy(tip);
+        this.guide_pos.geometry.verticesNeedUpdate = true;
+      }
     }
     // Update rotation clones
     const updateClone = (clone: any) => {
