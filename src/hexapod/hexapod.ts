@@ -76,7 +76,6 @@ function computeLegLayout(
 export class Hexapod {
   scene: any;
   options: any;
-  _limbNames: string[];
   draw_types: string[];
   draw_type: string;
   tip_circle_scale: number;
@@ -131,11 +130,6 @@ export class Hexapod {
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
-
-    // Set limb names based on DOF
-    const dof = this.options.dof || 3;
-    const maxJoints = Math.min(6, Math.max(2, dof));
-    this._limbNames = LIMB_NAMES.slice(0, maxJoints);
 
     if (this.mesh) {
       this.scene.remove(this.mesh);
@@ -209,8 +203,11 @@ export class Hexapod {
       };
       (opt as any)._yaw = layout.yaw;
 
-      // Pad missing segment data when DOF increased
-      for (const name of this._limbNames) {
+      // Pad missing segment data based on this leg's DOF
+      const legDof = opt.dof ?? this.options.dof ?? 3;
+      const legJointCount = Math.min(6, Math.max(2, legDof));
+      const segNames = LIMB_NAMES.slice(0, legJointCount);
+      for (const name of segNames) {
         if (!opt[name]) {
           const def = LIMB_DEFAULTS[name] || { length: 20, radius: 5, init_angle: 0 };
           opt[name] = { length: def.length, radius: def.radius, init_angle: def.init_angle, servo_value: 1500, revert: false };
@@ -444,10 +441,10 @@ export class Hexapod {
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let leg = this.legs[i];
-      values.push(leg.coxa.servo_value);
-      values.push(leg.femur.servo_value);
-      values.push(leg.tibia.servo_value);
-      if (leg.tarsus) values.push(leg.tarsus.servo_value);
+      // limbs includes tip as last element — exclude it
+      for (let j = 0; j < leg.limbs.length - 1; j++) {
+        values.push(leg.limbs[j].servo_value);
+      }
     }
     return values;
   }
@@ -467,15 +464,15 @@ export class Hexapod {
     };
 
     status["legs"] = {};
-    let joint_names = this._limbNames;
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let leg = this.legs[i];
       status["legs"][i] = { "on_floor": leg.on_floor };
 
-      for (let j = 0; j < joint_names.length; j++) {
-        let limb_idx = joint_names[j];
-        let limb = this.legs[i][limb_idx];
+      const names = leg._limbNames || LIMB_NAMES.slice(0, leg.joint_count);
+      for (let j = 0; j < names.length; j++) {
+        let limb_idx = names[j];
+        let limb = leg[limb_idx];
         status["legs"][i][limb_idx] = {
           "position": limb.position.clone(),
           "rotation": limb.rotation.clone(),
@@ -506,18 +503,18 @@ export class Hexapod {
 
     this.center_offset = status.center_offset;
 
-    let limb_names = this._limbNames;
-    let total_limb_names = limb_names.length;
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let leg = this.legs[i];
       let leg_status = status["legs"][i];
       leg.on_floor = leg_status.on_floor;
 
-      for (let j = 0; j < total_limb_names; j++) {
-        let limb_name = limb_names[j];
+      const names = leg._limbNames || LIMB_NAMES.slice(0, leg.joint_count);
+      for (let j = 0; j < names.length; j++) {
+        let limb_name = names[j];
         let limb = leg[limb_name];
         let limb_status = leg_status[limb_name];
+        if (!limb || !limb_status) continue;
         apply_xyz(limb.position, limb_status.position);
         apply_xyz(limb.rotation, limb_status.rotation);
         limb.servo_value = limb_status.servo_value;
@@ -529,12 +526,14 @@ export class Hexapod {
 
   format_servo_values(servo_values: number[]) {
     let formatted_value: string[] = [];
-    let joints_per_leg = this.legs[0]?.joint_count || 3;
-    let total_values = servo_values.length;
-    for (let idx = 0; idx < total_values; idx++) {
-      let i = Math.floor(idx / joints_per_leg);
-      let j = idx % joints_per_leg;
-      formatted_value.push("#" + this.legs[i].limbs[j].servo_idx + " P" + servo_values[idx]);
+    let offset = 0;
+    for (let legIdx = 0; legIdx < this.legs.length; legIdx++) {
+      const leg = this.legs[legIdx];
+      const n = leg.joint_count;
+      for (let j = 0; j < n; j++) {
+        formatted_value.push("#" + leg.limbs[j].servo_idx + " P" + servo_values[offset + j]);
+      }
+      offset += n;
     }
     return formatted_value.join(" ");
   }
@@ -569,7 +568,7 @@ export class Hexapod {
 
   debug_joint_positions() {
     this.mesh.updateMatrixWorld();
-    const names = [...this._limbNames, 'tip'];
+    const names = [...(this.legs[0]?._limbNames || LIMB_NAMES.slice(0, 3)), 'tip'];
     console.group('=== Joint World Positions ===');
     for (let i = 0; i < this.legs.length; i++) {
       const leg = this.legs[i];
@@ -969,6 +968,7 @@ export class HexapodLeg {
   tip: any;
   limbs: any[];
   joint_count: number;
+  _limbNames: string[];
   radial_angle: number;
 
   constructor(bot: any, options: any) {
@@ -981,9 +981,10 @@ export class HexapodLeg {
     this.center_offset = 0;
     this.color = 0xbb1100;
 
-    const dof = this.bot.options.dof || 3;
+    const dof = this.options.dof ?? this.bot.options.dof ?? 3;
     this.joint_count = Math.min(6, Math.max(2, dof));
-    const names = this.bot._limbNames; // set by Hexapod based on DOF
+    this._limbNames = LIMB_NAMES.slice(0, this.joint_count);
+    const names = this._limbNames;
 
     // Build segments dynamically
     let prevMesh: any = null;
@@ -1146,9 +1147,7 @@ export function get_bot_options() {
   let options = get_obj_from_local_storage(HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS);
 
   const legCount = options.leg_count || 6;
-  const dof = options.dof || 3;
-  const jointsPerLeg = Math.min(6, Math.max(2, dof));
-  const segNames = LIMB_NAMES.slice(0, jointsPerLeg);
+  const globalDof = options.dof || 3;
 
   // Pad leg_options if fewer entries than leg count (e.g. 7-9 legs)
   while (options.leg_options.length < legCount) {
@@ -1156,10 +1155,18 @@ export function get_bot_options() {
     options.leg_options.push(JSON.parse(JSON.stringify(template)));
   }
 
-  // Ensure each leg_option has all segment data
+  // Ensure each leg_option has all segment data for its own DOF
   const defaultLeg = DEFAULT_HEXAPOD_OPTIONS.leg_options[0];
+  let servoBase = options.first_servo_idx;
   for (let i = 0; i < legCount; i++) {
     let leg_option = options.leg_options[i];
+    const legDof = leg_option.dof ?? globalDof;
+    const jointsPerLeg = Math.min(6, Math.max(2, legDof));
+    const segNames = LIMB_NAMES.slice(0, jointsPerLeg);
+
+    // Initialize per-leg DOF if not set
+    if (leg_option.dof == null) leg_option.dof = globalDof;
+
     for (const name of segNames) {
       if (!leg_option[name]) {
         leg_option[name] = JSON.parse(JSON.stringify(defaultLeg[name] || {
@@ -1170,13 +1177,13 @@ export function get_bot_options() {
         }));
       }
     }
-    // Assign servo indices
-    const base = options.first_servo_idx + i * jointsPerLeg;
+    // Assign servo indices — cumulative offset for variable joints per leg
     for (let j = 0; j < segNames.length; j++) {
       if (typeof leg_option[segNames[j]].servo_idx === "undefined") {
-        leg_option[segNames[j]].servo_idx = base + j;
+        leg_option[segNames[j]].servo_idx = servoBase + j;
       }
     }
+    servoBase += jointsPerLeg;
   }
 
   return options;

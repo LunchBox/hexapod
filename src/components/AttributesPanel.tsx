@@ -112,6 +112,7 @@ LIMB_NAMES.forEach(function (part) {
     input.addEventListener('change', function () {
       self.set_attr(attr_name, parseFloat(this.value));
       for (let idx = 0; idx < self.attributes.leg_options.length; idx++) {
+        if (!self.attributes.leg_options[idx][part]) continue;
         self.attributes.leg_options[idx][part].length = parseFloat(this.value);
       }
       self.redraw_bot();
@@ -240,8 +241,12 @@ export default function AttributesPanel() {
       attrs_control.make_input(leg_attrs, name + '_length', 'number', name.charAt(0).toUpperCase() + name.slice(1) + ' Length');
     }
 
-    // Per-leg attributes
+    // Per-leg attributes — each leg shows only its own DOF's segments
     for (let idx = 0; idx < attrs_control.attributes.leg_options.length; idx++) {
+      const legOpt = attrs_control.attributes.leg_options[idx];
+      const legDof = legOpt.dof ?? attrs_control.attributes.dof ?? 3;
+      const legSegNames = LIMB_NAMES.slice(0, Math.min(6, Math.max(2, legDof)));
+
       let leg_fieldset = attrs_control.make_fieldset(container, 'Leg ' + idx + ' Attrs', 'leg_' + idx + '_attrs', 'tab leg_attrs');
       let leg_content = attrs_control.make_container(leg_fieldset, null, 'tab_content');
 
@@ -250,7 +255,7 @@ export default function AttributesPanel() {
       attrs_control.make_input(pos_attrs, 'leg_options.' + idx + '.y', 'number', 'pos y');
       attrs_control.make_input(pos_attrs, 'leg_options.' + idx + '.z', 'number', 'pos z');
 
-      for (const name of segNames) {
+      for (const name of legSegNames) {
         let seg_attrs = attrs_control.make_fieldset(leg_content, name.charAt(0).toUpperCase() + name.slice(1));
         attrs_control.make_input(seg_attrs, 'leg_options.' + idx + '.' + name + '.length', 'number', 'Length');
         attrs_control.make_input(seg_attrs, 'leg_options.' + idx + '.' + name + '.radius', 'number', 'Radius');

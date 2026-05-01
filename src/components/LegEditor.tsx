@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
@@ -12,28 +12,27 @@ const JOINT_FILL = '#fff';
 
 function deg(d: number) { return (d * 180) / Math.PI; }
 
-function getSegNames(opts: any): string[] {
-  const dof = opts.dof || 3;
+function getSegNamesForLeg(opts: any, legIdx: number): string[] {
+  const leg = opts.leg_options[legIdx];
+  const dof = leg?.dof ?? opts.dof ?? 3;
   return LIMB_NAMES.slice(0, Math.min(6, Math.max(2, dof)));
 }
 
-function computeJoints(opts: any): Point[] {
-  const segNames = getSegNames(opts);
-  const leg = opts.leg_options[0];
+function computeJointsForLeg(opts: any, legIdx: number): Point[] {
+  const segNames = getSegNamesForLeg(opts, legIdx);
+  const leg = opts.leg_options[legIdx];
   const pts: Point[] = [{ x: 0, y: 0 }];
 
-  // Coxa is always horizontal
   const coxaOpt = leg[segNames[0]] || {};
   const coxaLen = coxaOpt.length || (opts as any)[segNames[0] + '_length'] || 32;
   pts.push({ x: coxaLen, y: 0 });
 
-  // Subsequent segments bend from horizontal (canvas: negate 3D init_angle)
   let cumAngle = 0;
   for (let i = 1; i < segNames.length; i++) {
     const segOpt = leg[segNames[i]] || {};
     const len = segOpt.length || (opts as any)[segNames[i] + '_length'] || 20;
     const initAngle = segOpt.init_angle ?? 0;
-    cumAngle -= initAngle; // negate: 3D positive = upward, canvas positive = downward
+    cumAngle -= initAngle;
     const rad = (cumAngle * Math.PI) / 180;
     pts.push({
       x: pts[i].x + len * Math.cos(rad),
@@ -66,10 +65,56 @@ function toLeg(sx: number, sy: number, v: { scale: number; ox: number; oy: numbe
 export default function LegEditor() {
   const { botRef, bumpBotVersion, botVersion } = useHexapod();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dragRef = useRef<{ joint: number; startLeg: Point; startScreen: Point; opts: any; view: { scale: number; ox: number; oy: number } } | null>(null);
+  const dragRef = useRef<{ joint: number; startLeg: Point; startScreen: Point; opts: any; view: { scale: number; ox: number; oy: number }; refLeg: number } | null>(null);
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverRef = useRef<number>(-1);
   const sizeRef = useRef({ w: 400, h: 220 });
+
+  // Independent leg checkboxes for LegEditor (default all checked)
+  const [editorLegs, setEditorLegs] = useState<Set<number>>(() => {
+    const bot = botRef.current;
+    const count = bot?.legs?.length || 6;
+    return new Set(Array.from({ length: count }, (_, i) => i));
+  });
+
+  // Sync editorLegs when leg count changes
+  useEffect(() => {
+    const bot = botRef.current;
+    if (!bot) return;
+    const count = bot.legs.length;
+    setEditorLegs(prev => {
+      const next = new Set<number>();
+      for (let i = 0; i < count; i++) next.add(i);
+      // Preserve previously unchecked legs that still exist
+      for (const i of prev) { if (i < count) next.add(i); }
+      return next;
+    });
+  }, [botVersion, botRef]);
+
+  const getCheckedLegs = useCallback((): number[] => {
+    const bot = botRef.current;
+    if (!bot) return [];
+    const count = bot.legs.length;
+    const result: number[] = [];
+    for (let i = 0; i < count; i++) {
+      if (editorLegs.has(i)) result.push(i);
+    }
+    return result;
+  }, [botRef, editorLegs]);
+
+  const checkedLegsSameDof = useCallback((): { ok: boolean; dof: number; refLeg: number } => {
+    const bot = botRef.current;
+    if (!bot) return { ok: false, dof: 0, refLeg: -1 };
+    const checked = getCheckedLegs();
+    if (checked.length === 0) return { ok: false, dof: 0, refLeg: -1 };
+    const refLeg = checked[0];
+    const refDof = bot.options.leg_options[refLeg]?.dof ?? bot.options.dof ?? 3;
+    for (const i of checked) {
+      const legDof = bot.options.leg_options[i]?.dof ?? bot.options.dof ?? 3;
+      if (legDof !== refDof) return { ok: false, dof: 0, refLeg: -1 };
+    }
+    return { ok: true, dof: refDof, refLeg };
+  }, [botRef, getCheckedLegs]);
 
   const getOpts = useCallback(() => {
     const bot = botRef.current;
@@ -77,7 +122,6 @@ export default function LegEditor() {
     return bot.options;
   }, [botRef]);
 
-  // Only rebuild 3D on mouseup — 2D canvas preview is sufficient during drag
   const applyOpts = useCallback((opts: any, immediate: boolean) => {
     const bot = botRef.current;
     if (!bot) return;
@@ -86,7 +130,6 @@ export default function LegEditor() {
       bot.apply_attributes(opts);
       bumpBotVersion();
     }
-    // During drag: only update options in-place, no 3D rebuild (avoids flicker)
   }, [botRef, bumpBotVersion]);
 
   const draw = useCallback(() => {
@@ -97,13 +140,26 @@ export default function LegEditor() {
     const opts = getOpts();
     if (!opts) return;
 
-    const pts = computeJoints(opts);
-    // (debug logs removed)
-    // Use snapshotted view during drag, compute fresh otherwise
+    const valid = checkedLegsSameDof();
+    const cw = sizeRef.current.w, ch = sizeRef.current.h;
+
+    // If no valid reference leg, show disabled state
+    if (!valid.ok) {
+      ctx.clearRect(0, 0, cw, ch);
+      ctx.fillStyle = '#999';
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Selected legs have different DOFs', cw / 2, ch / 2 - 8);
+      ctx.fillText('— editor disabled —', cw / 2, ch / 2 + 12);
+      ctx.textAlign = 'start';
+      return;
+    }
+
+    const refLeg = valid.refLeg;
+    const pts = computeJointsForLeg(opts, refLeg);
     const view = dragRef.current?.view || computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const sp = pts.map(p => toScreen(p, view));
 
-    const cw = sizeRef.current.w, ch = sizeRef.current.h;
     ctx.clearRect(0, 0, cw, ch);
 
     // Grid
@@ -149,15 +205,10 @@ export default function LegEditor() {
       ctx.stroke();
     }
 
-    // Angle arcs for femur, tibia, tarsus
-    const leg = opts.leg_options[0];
-    const fAng = leg.femur.init_angle || 30;
-    const tAng = leg.tibia.init_angle || -105;
-    const aAng = leg.tarsus.init_angle || -60;
-    const dof = opts.dof || 3;
+    // Angle arcs for non-first segments
+    const leg = opts.leg_options[refLeg];
     const arcR = 25;
 
-    // Helper: draw angle arc at joint index j, from angle a1 to a2
     function drawArc(j: number, a1Deg: number, a2Deg: number, color: string) {
       if (j < 2) return;
       const center = sp[j];
@@ -176,31 +227,32 @@ export default function LegEditor() {
       ctx.setLineDash([]);
     }
 
-    // Angle arcs: for each non-first segment, show angle from parent direction
-    const segNames = getSegNames(opts);
-    let cumCanvasDeg = 0; // cumulative canvas angle from horizontal
+    const segNames = getSegNamesForLeg(opts, refLeg);
+    let cumCanvasDeg = 0;
     for (let s = 1; s < segNames.length; s++) {
       const segOpt = leg[segNames[s]] || {};
       const init3D = segOpt.init_angle ?? 0;
-      const relCanvasDeg = -init3D; // negate: 3D positive = upward
+      const relCanvasDeg = -init3D;
       drawArc(s, cumCanvasDeg, cumCanvasDeg + relCanvasDeg, BASE_COLORS[s % BASE_COLORS.length]);
       cumCanvasDeg += relCanvasDeg;
     }
-  }, [getOpts]);
+  }, [getOpts, checkedLegsSameDof]);
 
   const getJointAt = useCallback((cx: number, cy: number): number => {
     const opts = getOpts();
     if (!opts) return -1;
-    const pts = computeJoints(opts);
+    const valid = checkedLegsSameDof();
+    if (!valid.ok) return -1;
+    const pts = computeJointsForLeg(opts, valid.refLeg);
     const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     for (let i = 1; i < pts.length; i++) {
       const s = toScreen(pts[i], view);
       if ((cx - s.x) ** 2 + (cy - s.y) ** 2 <= HIT_R * HIT_R) return i;
     }
     return -1;
-  }, [getOpts]);
+  }, [getOpts, checkedLegsSameDof]);
 
-  // Size canvas then draw — reads actual CSS width from clientWidth for sharp rendering
+  // Size canvas then draw
   useEffect(() => {
     const canvas = canvasRef.current;
     const bot = botRef.current;
@@ -229,8 +281,11 @@ export default function LegEditor() {
 
     const opts = getOpts();
     if (!opts) return;
-    const pts = computeJoints(opts);
-    const view = computeView(pts, sizeRef.current.w, sizeRef.current.h); // snapshot view at drag start
+    const valid = checkedLegsSameDof();
+    if (!valid.ok) return;
+
+    const pts = computeJointsForLeg(opts, valid.refLeg);
+    const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const legPt = toLeg(cx, cy, view);
 
     dragRef.current = {
@@ -239,11 +294,12 @@ export default function LegEditor() {
       startScreen: { x: cx, y: cy },
       opts: JSON.parse(JSON.stringify(opts)),
       view,
+      refLeg: valid.refLeg,
     };
 
     canvas.classList.add('grabbing');
     e.preventDefault();
-  }, [getOpts, getJointAt]);
+  }, [getOpts, getJointAt, checkedLegsSameDof]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -256,45 +312,42 @@ export default function LegEditor() {
       const bot = botRef.current;
       if (!bot) return;
       const opts = bot.options;
-      const legPt = toLeg(cx, cy, d.view); // use snapshotted view
+      const legPt = toLeg(cx, cy, d.view);
 
-      // Previous joint position (from start state)
-      const prevPts = computeJoints(d.opts);
+      const prevPts = computeJointsForLeg(d.opts, d.refLeg);
       const prevPt = prevPts[d.joint - 1];
 
       const dx = legPt.x - prevPt.x;
       const dy = legPt.y - prevPt.y;
       const newLen = Math.max(5, Math.sqrt(dx * dx + dy * dy));
 
-      const segNames = getSegNames(opts);
+      const checked = getCheckedLegs();
+      const segNames = getSegNamesForLeg(opts, d.refLeg);
+
       if (d.joint === 1) {
         // First segment (coxa) — horizontal only
         const firstName = segNames[0];
         const newCoxaLen = Math.max(5, legPt.x);
         (opts as any)[firstName + '_length'] = newCoxaLen;
-        for (let i = 0; i < opts.leg_options.length; i++) {
+        for (const i of checked) {
           if (!opts.leg_options[i][firstName]) continue;
           opts.leg_options[i][firstName].length = newCoxaLen;
         }
       } else {
-        // Non-first segment tip
+        // Non-first segment
         const absAngleDeg = deg(Math.atan2(dy, dx));
-        const part = segNames[d.joint - 1]; // segment being dragged
+        const part = segNames[d.joint - 1];
 
-        // New init_angle for the dragged segment: absolute canvas angle minus cumulative
-        // angle of all PREVIOUS (non-dragged) segments. d.joint is the joint index;
-        // the dragged segment is segNames[d.joint-1], previous segments are 1..d.joint-2.
         let sumPrev = 0;
         for (let k = 1; k < d.joint - 1; k++) {
-          sumPrev += opts.leg_options[0][segNames[k]].init_angle || 0;
+          sumPrev += opts.leg_options[d.refLeg][segNames[k]].init_angle || 0;
         }
         const newInitAngle = -absAngleDeg - sumPrev;
 
-        // Update shared length and per-leg length + init_angle
         const lengthKey = part + '_length';
         (opts as any)[lengthKey] = newLen;
-        for (let i = 0; i < opts.leg_options.length; i++) {
-          if (!opts.leg_options[i][part]) continue; // skip legs missing this segment
+        for (const i of checked) {
+          if (!opts.leg_options[i][part]) continue;
           opts.leg_options[i][part].length = newLen;
           opts.leg_options[i][part].init_angle = newInitAngle;
         }
@@ -303,7 +356,6 @@ export default function LegEditor() {
       applyOpts(opts, false);
       draw();
     } else {
-      // Hover
       const j = getJointAt(cx, cy);
       if (hoverRef.current !== j) {
         hoverRef.current = j;
@@ -312,7 +364,7 @@ export default function LegEditor() {
         draw();
       }
     }
-  }, [botRef, getJointAt, applyOpts, draw]);
+  }, [botRef, getJointAt, applyOpts, draw, getCheckedLegs]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -346,19 +398,50 @@ export default function LegEditor() {
     draw();
   }, [botRef, applyOpts, draw]);
 
+  const toggleLeg = (i: number) => {
+    setEditorLegs(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  };
+
+  const legCount = botRef.current?.legs?.length || 6;
+  const valid = checkedLegsSameDof();
+
   return (
     <div className="leg-editor">
       <p className="leg-editor__title">Leg Editor — drag joints to adjust</p>
-      <canvas
-        ref={canvasRef}
-        className="leg-editor__canvas"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-      />
+      <div style={{ marginBottom: 4 }}>
+        {Array.from({ length: legCount }, (_, i) => (
+          <label key={i} style={{ marginRight: 6, cursor: 'pointer', fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={editorLegs.has(i)}
+              onChange={() => toggleLeg(i)}
+              style={{ verticalAlign: 'middle' }}
+            />
+            {i}
+          </label>
+        ))}
+      </div>
+      <div style={{ position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          className="leg-editor__canvas"
+          onMouseDown={valid.ok ? handleMouseDown : undefined}
+          onMouseMove={valid.ok ? handleMouseMove : undefined}
+          onMouseUp={valid.ok ? handleMouseUp : undefined}
+          onMouseLeave={valid.ok ? handleMouseLeave : undefined}
+          style={{ opacity: valid.ok ? 1 : 0.4, cursor: valid.ok ? undefined : 'not-allowed' }}
+        />
+      </div>
       <p className="leg-editor__info">
-        Drag joints to adjust lengths &amp; angles. Changes apply to all legs.
+        {valid.ok
+          ? `Editing legs: [${getCheckedLegs().join(', ')}]  — DOF=${valid.dof}`
+          : getCheckedLegs().length === 0
+            ? 'No legs selected — editor disabled'
+            : 'Selected legs have different DOFs — editor disabled'}
       </p>
     </div>
   );

@@ -57,6 +57,11 @@ export default function ControlPanel() {
   const [syncMode, setSyncMode] = useState(saved.sync_cmd ? 'sync' : 'manual');
   const [tipCircleScale, setTipCircleScale] = useState(saved.tip_circle_scale ?? 1);
   const [dof, setDof] = useState(saved.dof || 3);
+  // Which legs to apply DOF changes to (default all checked)
+  const [dofLegs, setDofLegs] = useState<Set<number>>(() => {
+    const count = saved.leg_count || 6;
+    return new Set(Array.from({ length: count }, (_, i) => i));
+  });
   const [legCount, setLegCount] = useState(saved.leg_count || 6);
   const [bodyShape, setBodyShape] = useState(saved.body_shape || 'rectangle');
   const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'vertex');
@@ -153,6 +158,14 @@ export default function ControlPanel() {
         localStorage.removeItem('hexapod_options');
         window.location.reload();
         break;
+      case 'act_toggle_dof_leg':
+        const legIdx = parseInt(value!);
+        setDofLegs(prev => {
+          const next = new Set(prev);
+          if (next.has(legIdx)) next.delete(legIdx); else next.add(legIdx);
+          return next;
+        });
+        break;
       case 'act_disable_console':
         window['console']['log'] = function () { };
         break;
@@ -160,12 +173,20 @@ export default function ControlPanel() {
         const newDof = parseInt(value!);
         setDof(newDof);
         bot.options.dof = newDof;
+        // Apply DOF only to checked legs
+        for (let i = 0; i < bot.options.leg_options.length; i++) {
+          if (dofLegs.has(i)) {
+            bot.options.leg_options[i].dof = newDof;
+          }
+        }
         bot.apply_attributes(bot.options);
         bumpBotVersion();
         break;
       case 'act_leg_count_switch':
         const newLegCount = parseInt(value!);
         setLegCount(newLegCount);
+        // Sync DOF leg checkboxes to new leg count
+        setDofLegs(new Set(Array.from({ length: newLegCount }, (_, i) => i)));
         bot.options.leg_count = newLegCount;
         bot.apply_attributes(bot.options);
         // Reset gait if current one no longer exists in new gait set
@@ -373,6 +394,19 @@ export default function ControlPanel() {
           <a key={d} href="#" className={`control_btn${dof === d ? ' active' : ''}`}
             onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', String(d)); }}>{d}-DOF</a>
         ))}
+        <div style={{ marginTop: 4 }}>
+          {Array.from({ length: legCount }, (_, i) => (
+            <label key={i} style={{ marginRight: 6, cursor: 'pointer', fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={dofLegs.has(i)}
+                onChange={() => handleAction('act_toggle_dof_leg', String(i))}
+                style={{ verticalAlign: 'middle' }}
+              />
+              {i}
+            </label>
+          ))}
+        </div>
       </fieldset>
 
       <fieldset className="btns">

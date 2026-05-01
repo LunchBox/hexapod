@@ -25,15 +25,18 @@ export default function ServoPanel() {
       bot.after_status_change();
     };
 
+    // Compute cumulative servo index base per leg (variable joints per leg)
+    let servoBase = 0;
     for (let idx = 0; idx < bot.legs.length; idx++) {
       const legIdx = idx;
       let limbs = bot.legs[idx].limbs;
+      const jointCount = limbs.length - 1;
 
-      for (let jdx = 0; jdx < limbs.length - 1; jdx++) {
+      for (let jdx = 0; jdx < jointCount; jdx++) {
         let limb = limbs[jdx];
 
         if (!bot_options.leg_options[idx][limb.type].servo_idx) {
-          bot_options.leg_options[idx][limb.type].servo_idx = legIdx * 3 + jdx;
+          bot_options.leg_options[idx][limb.type].servo_idx = servoBase + jdx;
         }
         limb.servo_idx = bot_options.leg_options[idx][limb.type].servo_idx;
 
@@ -134,6 +137,7 @@ export default function ServoPanel() {
 
         controller.appendChild(controlElem);
       }
+      servoBase += jointCount;
     }
   }, [botVersion]);
 
