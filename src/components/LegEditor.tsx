@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
@@ -6,7 +6,6 @@ import './LegEditor.css';
 
 interface Point { x: number; y: number }
 
-const W = 400, H = 300;
 const JOINT_R = 7, HIT_R = 16;
 const BASE_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f39c12', '#9b59b6', '#1abc9c'];
 const JOINT_FILL = '#fff';
@@ -44,17 +43,15 @@ function computeJoints(opts: any): Point[] {
   return pts;
 }
 
-const OX = 50, OY = H / 2; // body attachment at left-center
-
-function computeView(pts: Point[]) {
+function computeView(pts: Point[], w: number, h: number) {
   const pad = 40;
   const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
   const minX = Math.min(0, ...xs), maxX = Math.max(...xs);
   const minY = Math.min(0, ...ys), maxY = Math.max(...ys);
   const legW = maxX - minX || 1, legH = maxY - minY || 1;
-  const scale = Math.min((W - pad * 2) / legW, (H - pad * 2) / legH);
-  const ox = pad - minX * scale + (W - pad * 2 - legW * scale) / 2;
-  const oy = pad - minY * scale + (H - pad * 2 - legH * scale) / 2;
+  const scale = Math.min((w - pad * 2) / legW, (h - pad * 2) / legH);
+  const ox = pad - minX * scale + (w - pad * 2 - legW * scale) / 2;
+  const oy = pad - minY * scale + (h - pad * 2 - legH * scale) / 2;
   return { scale, ox, oy };
 }
 
@@ -69,9 +66,16 @@ function toLeg(sx: number, sy: number, v: { scale: number; ox: number; oy: numbe
 export default function LegEditor() {
   const { botRef, bumpBotVersion, botVersion } = useHexapod();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ joint: number; startLeg: Point; startScreen: Point; opts: any; view: { scale: number; ox: number; oy: number } } | null>(null);
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverRef = useRef<number>(-1);
+  const sizeRef = useRef({ w: 400, h: 220 });
+  const [canvasW, setCanvasW] = useState(400);
+  const canvasH = Math.round(canvasW * 0.55);
+
+  // Keep sizeRef in sync so callbacks can read without dep changes
+  sizeRef.current = { w: canvasW, h: canvasH }; // ~16:9 leg-friendly ratio
 
   const getOpts = useCallback(() => {
     const bot = botRef.current;
@@ -102,20 +106,21 @@ export default function LegEditor() {
     const pts = computeJoints(opts);
     // (debug logs removed)
     // Use snapshotted view during drag, compute fresh otherwise
-    const view = dragRef.current?.view || computeView(pts);
+    const view = dragRef.current?.view || computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const sp = pts.map(p => toScreen(p, view));
 
-    ctx.clearRect(0, 0, W, H);
+    const cw = sizeRef.current.w, ch = sizeRef.current.h;
+    ctx.clearRect(0, 0, cw, ch);
 
     // Grid
     ctx.strokeStyle = '#ddd';
     ctx.lineWidth = 1;
     const gridStep = 20 * view.scale;
-    for (let x = view.ox % gridStep; x < W; x += gridStep) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    for (let x = view.ox % gridStep; x < cw; x += gridStep) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ch); ctx.stroke();
     }
-    for (let y = view.oy % gridStep; y < H; y += gridStep) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    for (let y = view.oy % gridStep; y < ch; y += gridStep) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cw, y); ctx.stroke();
     }
 
     // Segments
@@ -193,13 +198,25 @@ export default function LegEditor() {
     const opts = getOpts();
     if (!opts) return -1;
     const pts = computeJoints(opts);
-    const view = computeView(pts);
+    const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     for (let i = 1; i < pts.length; i++) {
       const s = toScreen(pts[i], view);
       if ((cx - s.x) ** 2 + (cy - s.y) ** 2 <= HIT_R * HIT_R) return i;
     }
     return -1;
   }, [getOpts]);
+
+  // Track container width for responsive canvas
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setCanvasW(el.clientWidth);
+    });
+    ro.observe(el);
+    setCanvasW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
 
   // Size canvas then draw — must be ONE effect because sizing clears the buffer
   useEffect(() => {
@@ -208,15 +225,14 @@ export default function LegEditor() {
     if (!canvas || !bot) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
+    canvas.width = canvasW * dpr;
+    canvas.height = canvasH * dpr;
+    canvas.style.height = canvasH + 'px'; // CSS width:100% handles horizontal
     const ctx = canvas.getContext('2d');
     if (ctx) ctx.scale(dpr, dpr);
 
     draw();
-  }, [draw, botVersion]);
+  }, [draw, botVersion, canvasW, canvasH]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -229,7 +245,7 @@ export default function LegEditor() {
     const opts = getOpts();
     if (!opts) return;
     const pts = computeJoints(opts);
-    const view = computeView(pts); // snapshot view at drag start
+    const view = computeView(pts, sizeRef.current.w, sizeRef.current.h); // snapshot view at drag start
     const legPt = toLeg(cx, cy, view);
 
     dragRef.current = {
