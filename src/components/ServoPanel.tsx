@@ -79,7 +79,8 @@ export default function ServoPanel() {
 
           let inputField = make_input({ type: 'number', name: label, class: 'direction end_' + label, value: roundedValue });
 
-          if (jdx !== 2) {
+          const isLastSeg = jdx === limbs.length - 2; // last non-tip segment
+          if (!isLastSeg) {
             inputField.disabled = true;
           }
 
@@ -88,13 +89,13 @@ export default function ServoPanel() {
           inputField.leg = bot.legs[idx];
           inputField.limb_idx = jdx;
 
-          if (jdx === 2) {
+          if (isLastSeg) {
             inputField.addEventListener('change', function () {
-              let tibia = this.leg.tibia;
+              let lastSeg = this.leg.limbs[this.leg.limbs.length - 2];
               let newPos = new THREE.Vector3(
-                parseFloat(tibia.end_x_control.value),
-                parseFloat(tibia.end_y_control.value),
-                parseFloat(tibia.end_z_control.value)
+                parseFloat(lastSeg.end_x_control.value),
+                parseFloat(lastSeg.end_y_control.value),
+                parseFloat(lastSeg.end_z_control.value)
               );
               let calculator = new PosCalculator(this.leg, newPos);
               calculator.run();

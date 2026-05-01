@@ -23,23 +23,32 @@ export const DEFAULT_BODY_WIDTH = 50;
 export const DEFAULT_BODY_LENGTH = 100;
 export const DEFAULT_BODY_HEIGHT = 20;
 
-// Leg segments
-export const DEFAULT_COXA_LENGTH = 32;
-export const DEFAULT_COXA_RADIUS = 10;
-export const DEFAULT_FEMUR_LENGTH = 45;
-export const DEFAULT_FEMUR_RADIUS = 12;
-export const DEFAULT_TIBIA_LENGTH = 62;
-export const DEFAULT_TIBIA_RADIUS = 10;
-export const DEFAULT_TARSUS_LENGTH = 30;
-export const DEFAULT_TARSUS_RADIUS = 6;
+// Leg segments — dynamic config
+export const LIMB_NAMES = ['coxa', 'femur', 'tibia', 'tarsus', 'segment5', 'segment6'];
+export const LIMB_DEFAULTS: Record<string, { length: number; radius: number; init_angle: number }> = {
+  coxa:    { length: 32, radius: 10, init_angle: 30 },
+  femur:   { length: 45, radius: 12, init_angle: 30 },
+  tibia:   { length: 62, radius: 10, init_angle: -105 },
+  tarsus:  { length: 30, radius: 6,  init_angle: -60 },
+  segment5:{ length: 25, radius: 4,  init_angle: -30 },
+  segment6:{ length: 20, radius: 3,  init_angle: 0 },
+};
 
-// Init angles
-export const DEFAULT_COXA_INIT_ANGLE = 30;
-export const DEFAULT_FEMUR_INIT_ANGLE = 30;
-export const DEFAULT_TIBIA_INIT_ANGLE = -105;
-export const DEFAULT_TARSUS_INIT_ANGLE = -60;
+// Backward compat aliases
+export const DEFAULT_COXA_LENGTH = LIMB_DEFAULTS.coxa.length;
+export const DEFAULT_COXA_RADIUS = LIMB_DEFAULTS.coxa.radius;
+export const DEFAULT_FEMUR_LENGTH = LIMB_DEFAULTS.femur.length;
+export const DEFAULT_FEMUR_RADIUS = LIMB_DEFAULTS.femur.radius;
+export const DEFAULT_TIBIA_LENGTH = LIMB_DEFAULTS.tibia.length;
+export const DEFAULT_TIBIA_RADIUS = LIMB_DEFAULTS.tibia.radius;
+export const DEFAULT_TARSUS_LENGTH = LIMB_DEFAULTS.tarsus.length;
+export const DEFAULT_TARSUS_RADIUS = LIMB_DEFAULTS.tarsus.radius;
+export const DEFAULT_COXA_INIT_ANGLE = LIMB_DEFAULTS.coxa.init_angle;
+export const DEFAULT_FEMUR_INIT_ANGLE = LIMB_DEFAULTS.femur.init_angle;
+export const DEFAULT_TIBIA_INIT_ANGLE = LIMB_DEFAULTS.tibia.init_angle;
+export const DEFAULT_TARSUS_INIT_ANGLE = LIMB_DEFAULTS.tarsus.init_angle;
 
-// Limb indices
+// Limb indices (deprecated — use LIMB_NAMES array)
 export const COXA = 0;
 export const FEMUR = 1;
 export const TIBIA = 2;

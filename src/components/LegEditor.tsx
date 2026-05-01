@@ -1,36 +1,45 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
+import { LIMB_NAMES } from '../hexapod/defaults';
 import './LegEditor.css';
 
 interface Point { x: number; y: number }
 
 const W = 400, H = 300;
 const JOINT_R = 7, HIT_R = 16;
-const COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f39c12']; // coxa, femur, tibia, tarsus
+const BASE_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f39c12', '#9b59b6', '#1abc9c'];
 const JOINT_FILL = '#fff';
 
 function deg(d: number) { return (d * 180) / Math.PI; }
 
-function computeJoints(opts: any): Point[] {
-  const coxaLen = opts.coxa_length || 32;
-  const femurLen = opts.femur_length || 45;
-  const tibiaLen = opts.tibia_length || 62;
-  const tarsusLen = opts.tarsus_length || 30;
-  const leg = opts.leg_options[0];
-  // 3D rotation.z = mirror * init_angle. For right-leg view: positive = CCW = upward.
-  // Canvas Y is down, so negate to map 3D upward → canvas negative Y.
-  const fAng = -((leg.femur.init_angle || 30) * Math.PI) / 180;
-  const tAng = fAng - ((leg.tibia.init_angle || -105) * Math.PI) / 180;
-  const aAng = tAng - ((leg.tarsus.init_angle || -60) * Math.PI) / 180;
-
-  const pts: Point[] = [{ x: 0, y: 0 }];
-  pts.push({ x: coxaLen, y: 0 });
-  pts.push({ x: pts[1].x + femurLen * Math.cos(fAng), y: pts[1].y + femurLen * Math.sin(fAng) });
-  pts.push({ x: pts[2].x + tibiaLen * Math.cos(tAng), y: pts[2].y + tibiaLen * Math.sin(tAng) });
+function getSegNames(opts: any): string[] {
   const dof = opts.dof || 3;
-  if (dof >= 4) {
-    pts.push({ x: pts[3].x + tarsusLen * Math.cos(aAng), y: pts[3].y + tarsusLen * Math.sin(aAng) });
+  return LIMB_NAMES.slice(0, Math.min(6, Math.max(2, dof)));
+}
+
+function computeJoints(opts: any): Point[] {
+  const segNames = getSegNames(opts);
+  const leg = opts.leg_options[0];
+  const pts: Point[] = [{ x: 0, y: 0 }];
+
+  // Coxa is always horizontal
+  const coxaOpt = leg[segNames[0]] || {};
+  const coxaLen = coxaOpt.length || (opts as any)[segNames[0] + '_length'] || 32;
+  pts.push({ x: coxaLen, y: 0 });
+
+  // Subsequent segments bend from horizontal (canvas: negate 3D init_angle)
+  let cumAngle = 0;
+  for (let i = 1; i < segNames.length; i++) {
+    const segOpt = leg[segNames[i]] || {};
+    const len = segOpt.length || (opts as any)[segNames[i] + '_length'] || 20;
+    const initAngle = segOpt.init_angle ?? 0;
+    cumAngle -= initAngle; // negate: 3D positive = upward, canvas positive = downward
+    const rad = (cumAngle * Math.PI) / 180;
+    pts.push({
+      x: pts[i].x + len * Math.cos(rad),
+      y: pts[i].y + len * Math.sin(rad),
+    });
   }
   return pts;
 }
@@ -110,7 +119,7 @@ export default function LegEditor() {
 
     // Segments
     for (let i = 0; i < sp.length - 1; i++) {
-      ctx.strokeStyle = COLORS[i];
+      ctx.strokeStyle = BASE_COLORS[i % BASE_COLORS.length];
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(sp[i].x, sp[i].y);
@@ -167,18 +176,15 @@ export default function LegEditor() {
       ctx.setLineDash([]);
     }
 
-    // Femur arc at joint 1 (coxa tip): from horizontal (0) to femur angle
-    const fAngDeg = -(leg.femur.init_angle || 30); // canvas-space femur angle
-    drawArc(1, 0, fAngDeg, COLORS[1]);
-    // Tibia arc at joint 2 (femur tip): from femur direction
-    const tAngDeg = -(leg.tibia.init_angle || -105); // canvas-space relative tibia angle (negate 3D)
-    const tStartDeg = fAngDeg;
-    const tEndDeg = fAngDeg + tAngDeg;
-    drawArc(2, tStartDeg, tEndDeg, COLORS[2]);
-    // Tarsus arc at joint 3 (tibia tip)
-    if (dof >= 4) {
-      const aAngDeg = -(leg.tarsus.init_angle || -60);
-      drawArc(3, tEndDeg, tEndDeg + aAngDeg, COLORS[3]);
+    // Angle arcs: for each non-first segment, show angle from parent direction
+    const segNames = getSegNames(opts);
+    let cumCanvasDeg = 0; // cumulative canvas angle from horizontal
+    for (let s = 1; s < segNames.length; s++) {
+      const segOpt = leg[segNames[s]] || {};
+      const init3D = segOpt.init_angle ?? 0;
+      const relCanvasDeg = -init3D; // negate: 3D positive = upward
+      drawArc(s, cumCanvasDeg, cumCanvasDeg + relCanvasDeg, BASE_COLORS[s % BASE_COLORS.length]);
+      cumCanvasDeg += relCanvasDeg;
     }
   }, [getOpts]);
 
@@ -261,34 +267,28 @@ export default function LegEditor() {
       const dy = legPt.y - prevPt.y;
       const newLen = Math.max(5, Math.sqrt(dx * dx + dy * dy));
 
+      const segNames = getSegNames(opts);
       if (d.joint === 1) {
-        // Coxa tip — horizontal only
+        // First segment (coxa) — horizontal only
+        const firstName = segNames[0];
         const newCoxaLen = Math.max(5, legPt.x);
-        opts.coxa_length = newCoxaLen;
+        (opts as any)[firstName + '_length'] = newCoxaLen;
         for (let i = 0; i < opts.leg_options.length; i++) {
-          opts.leg_options[i].coxa.length = newCoxaLen;
+          opts.leg_options[i][firstName].length = newCoxaLen;
         }
       } else {
-        // Femur/tibia/tarsus tip
+        // Non-first segment tip
         const absAngleDeg = deg(Math.atan2(dy, dx));
-        const fAng = opts.leg_options[0].femur.init_angle || 30;
+        const part = segNames[d.joint - 1]; // segment being dragged
 
-        const partNames = ['coxa', 'femur', 'tibia', 'tarsus'];
-        const partIdx = d.joint - 1; // 1=femur, 2=tibia, 3=tarsus
-        const part = partNames[partIdx];
-
-        // Convert absolute canvas angle back to 3D init_angle (negated)
-        let newInitAngle: number;
-        if (d.joint === 2) {
-          newInitAngle = -absAngleDeg; // femur: canvas down = positive init_angle (3D up)
-        } else if (d.joint === 3) {
-          const fAng3D = opts.leg_options[0].femur.init_angle || 30;
-          newInitAngle = -absAngleDeg - fAng3D; // tibia relative to femur
-        } else {
-          const fAng3D = opts.leg_options[0].femur.init_angle || 30;
-          const tAng3D = opts.leg_options[0].tibia.init_angle || -105;
-          newInitAngle = -absAngleDeg - fAng3D - tAng3D; // tarsus relative to tibia
+        // Compute new init_angle: sum of 3D angles from segments 1..joint gives canvas angle
+        // canvas_angle = -(sum of 3D init_angles for segs 1..joint)
+        // So: new_init_angle[J] = -absAngleDeg - sum(init_angles[1..J-1])
+        let sumPrev = 0;
+        for (let k = 1; k < d.joint; k++) {
+          sumPrev += opts.leg_options[0][segNames[k]].init_angle || 0;
         }
+        const newInitAngle = -absAngleDeg - sumPrev;
 
         // Update shared length and per-leg length + init_angle
         const lengthKey = part + '_length';

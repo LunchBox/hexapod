@@ -1,7 +1,7 @@
 import io from 'socket.io-client';
 import appState from './appState.js';
 import {
-  HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS,
+  HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS, LIMB_NAMES, LIMB_DEFAULTS,
   DEFAULT_FRAMES_INTERVAL, SERVO_VALUE_TIME_UNIT,
   SERVO_MIN_VALUE, SERVO_MAX_VALUE,
 } from './defaults.js';
@@ -76,6 +76,7 @@ function computeLegLayout(
 export class Hexapod {
   scene: any;
   options: any;
+  _limbNames: string[];
   draw_types: string[];
   draw_type: string;
   tip_circle_scale: number;
@@ -128,6 +129,11 @@ export class Hexapod {
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
+
+    // Set limb names based on DOF
+    const dof = this.options.dof || 3;
+    const maxJoints = Math.min(6, Math.max(2, dof));
+    this._limbNames = LIMB_NAMES.slice(0, maxJoints);
 
     if (this.mesh) {
       this.scene.remove(this.mesh);
@@ -393,9 +399,7 @@ export class Hexapod {
     };
 
     status["legs"] = {};
-    let joint_names = this.legs[0]?.joint_count >= 4
-      ? ["coxa", "femur", "tibia", "tarsus"]
-      : ["coxa", "femur", "tibia"];
+    let joint_names = this._limbNames;
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let leg = this.legs[i];
@@ -434,9 +438,7 @@ export class Hexapod {
 
     this.center_offset = status.center_offset;
 
-    let limb_names = this.legs[0]?.joint_count >= 4
-      ? ["coxa", "femur", "tibia", "tarsus"]
-      : ["coxa", "femur", "tibia"];
+    let limb_names = this._limbNames;
     let total_limb_names = limb_names.length;
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
@@ -499,7 +501,7 @@ export class Hexapod {
 
   debug_joint_positions() {
     this.mesh.updateMatrixWorld();
-    const names = ['coxa', 'femur', 'tibia', 'tarsus', 'tip'];
+    const names = [...this._limbNames, 'tip'];
     console.group('=== Joint World Positions ===');
     for (let i = 0; i < this.legs.length; i++) {
       const leg = this.legs[i];
@@ -807,24 +809,30 @@ export class HexapodLeg {
     this.color = 0xbb1100;
 
     const dof = this.bot.options.dof || 3;
-    this.joint_count = Math.min(4, Math.max(3, dof));
+    this.joint_count = Math.min(6, Math.max(2, dof));
+    const names = this.bot._limbNames; // set by Hexapod based on DOF
 
-    // coxa
-    this.coxa = this.draw_coxa();
-    this.mesh.add(this.coxa);
+    // Build segments dynamically
+    let prevMesh: any = null;
+    let prevName: string | null = null;
+    const segments: any[] = [];
+    this.limbs = [];
 
-    // femur
-    this.femur = this.draw_femur();
-    this.coxa.add(this.femur);
+    for (let idx = 0; idx < this.joint_count; idx++) {
+      const name = names[idx];
+      const isFirst = idx === 0;
+      const mesh = this.draw_segment(name, isFirst ? null : prevName);
+      (this as any)[name] = mesh;
+      segments.push(mesh);
+      this.limbs.push(mesh);
 
-    // tibia
-    this.tibia = this.draw_tibia();
-    this.femur.add(this.tibia);
-
-    // tarsus (4th joint, only if DOF >= 4)
-    if (this.joint_count >= 4) {
-      this.tarsus = this.draw_tarsus();
-      this.tibia.add(this.tarsus);
+      if (isFirst) {
+        this.mesh.add(mesh);
+      } else {
+        prevMesh.add(mesh);
+      }
+      prevMesh = mesh;
+      prevName = name;
     }
 
     // tip
@@ -832,198 +840,62 @@ export class HexapodLeg {
     geometry.vertices.push(new THREE.Vector3(0, 0, 0));
     let tip = new THREE.Points(geometry, new THREE.PointsMaterial());
     tip.type = "tip";
-
-    if (this.joint_count >= 4) {
-      tip.position.y = options.tarsus.length;
-      this.tarsus.add(tip);
-    } else {
-      tip.position.y = options.tibia.length;
-      this.tibia.add(tip);
-    }
+    tip.position.y = options[names[this.joint_count - 1]].length;
     tip.visible = false;
-
+    prevMesh.add(tip);
     this.tip = tip;
+    this.limbs.push(tip);
+  }
 
-    if (this.joint_count >= 4) {
-      this.limbs = [this.coxa, this.femur, this.tibia, this.tarsus, this.tip];
+  draw_segment(name: string, prevName: string | null) {
+    const opt = this.options[name];
+    let geometry: any, mesh: any, material: any;
+    const isFirst = prevName === null;
+
+    switch (this.bot.draw_type) {
+      case "bone":
+        material = new THREE.LineBasicMaterial({ color: this.color });
+        geometry = new THREE.Geometry();
+        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, opt.length / 2, 0));
+        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
+        geometry.vertices.push(new THREE.Vector3(0, opt.length, 0));
+        mesh = new THREE.Line(geometry, material);
+        break;
+      case "points":
+        material = new THREE.PointsMaterial({ color: this.color });
+        geometry = new THREE.Geometry();
+        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, opt.length / 2, 0));
+        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
+        geometry.vertices.push(new THREE.Vector3(0, opt.length, 0));
+        mesh = new THREE.Points(geometry, material);
+        break;
+      default:
+        material = new THREE.MeshBasicMaterial({ color: this.color });
+        geometry = new THREE.BoxGeometry(opt.radius, opt.length, opt.radius);
+        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, opt.length / 2, 0));
+        mesh = new THREE.Mesh(geometry, material);
+        let axisHelper = new THREE.AxisHelper(isFirst ? 30 : 15);
+        mesh.add(axisHelper);
+    }
+
+    mesh.type = name;
+
+    if (isFirst) {
+      mesh.position.x = this.options.x;
+      mesh.position.y = this.options.y;
+      mesh.position.z = this.options.z;
+      mesh.rotation.z = this.mirror * (-Math.PI / 2);
+      mesh.rotation.y = this.mirror * degree_to_redius(opt.init_angle);
     } else {
-      this.limbs = [this.coxa, this.femur, this.tibia, this.tip];
-    }
-  }
-
-  draw_coxa() {
-    let geometry: any, mesh: any, material: any;
-
-    switch (this.bot.draw_type) {
-      case "bone":
-        material = new THREE.LineBasicMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.coxa.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.coxa.length, 0));
-        mesh = new THREE.Line(geometry, material);
-        break;
-      case "points":
-        material = new THREE.PointsMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.coxa.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.coxa.length, 0));
-        mesh = new THREE.Points(geometry, material);
-        break;
-      default:
-        material = new THREE.MeshBasicMaterial({ color: this.color });
-        geometry = new THREE.BoxGeometry(this.options.coxa.radius, this.options.coxa.length, this.options.coxa.radius);
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.coxa.length / 2, 0));
-        mesh = new THREE.Mesh(geometry, material);
-        let axisHelper = new THREE.AxisHelper(30);
-        mesh.add(axisHelper);
+      mesh.position.y = this.options[prevName!].length;
+      mesh.rotation.z = this.mirror * degree_to_redius(opt.init_angle);
     }
 
-    mesh.type = "coxa";
-
-    mesh.position.x = this.options.x;
-    mesh.position.y = this.options.y;
-    mesh.position.z = this.options.z;
-
-    // Mirror controls both rotation.z (initial direction) and rotation.y (yaw)
-    mesh.rotation.z = this.options.mirror * (-Math.PI / 2);
-    mesh.rotation.y = this.options.mirror * degree_to_redius(this.options.coxa.init_angle);
-    mesh.init_radius = degree_to_redius(this.options.coxa.init_angle);
-    mesh.init_angle = this.options.coxa.init_angle;
-
-    mesh.servo_value = this.options.coxa.servo_value;
-    mesh.servo_idx = this.options.coxa.servo_idx;
-    mesh.revert = this.options.coxa.revert;
-
-    return mesh;
-  }
-
-  draw_femur() {
-    let geometry: any, mesh: any, material: any;
-
-    switch (this.bot.draw_type) {
-      case "bone":
-        material = new THREE.LineBasicMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.femur.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.femur.length, 0));
-        mesh = new THREE.Line(geometry, material);
-        break;
-      case "points":
-        material = new THREE.PointsMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.femur.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.femur.length, 0));
-        mesh = new THREE.Points(geometry, material);
-        break;
-      default:
-        material = new THREE.MeshBasicMaterial({ color: this.color });
-        geometry = new THREE.BoxGeometry(this.options.femur.radius, this.options.femur.length, this.options.femur.radius);
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.femur.length / 2, 0));
-        mesh = new THREE.Mesh(geometry, material);
-        let axisHelper = new THREE.AxisHelper(30);
-        mesh.add(axisHelper);
-    }
-
-    mesh.type = "femur";
-
-    mesh.position.y = this.options.coxa.length;
-    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.femur.init_angle);
-    mesh.init_radius = degree_to_redius(this.options.femur.init_angle);
-    mesh.init_angle = this.options.femur.init_angle;
-
-    mesh.servo_value = this.options.femur.servo_value;
-    mesh.servo_idx = this.options.femur.servo_idx;
-    mesh.revert = this.options.femur.revert;
-
-    return mesh;
-  }
-
-  draw_tibia() {
-    let geometry: any, mesh: any, material: any;
-
-    switch (this.bot.draw_type) {
-      case "bone":
-        material = new THREE.LineBasicMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tibia.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.tibia.length, 0));
-        mesh = new THREE.Line(geometry, material);
-        break;
-      case "points":
-        material = new THREE.PointsMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tibia.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.tibia.length, 0));
-        mesh = new THREE.Points(geometry, material);
-        break;
-      default:
-        material = new THREE.MeshBasicMaterial({ color: this.color });
-        geometry = new THREE.BoxGeometry(this.options.tibia.radius, this.options.tibia.length, this.options.tibia.radius);
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tibia.length / 2, 0));
-        mesh = new THREE.Mesh(geometry, material);
-        let axisHelper = new THREE.AxisHelper(30);
-        mesh.add(axisHelper);
-    }
-
-    mesh.type = "tibia";
-
-    mesh.position.y = this.options.femur.length;
-    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.tibia.init_angle);
-    mesh.init_radius = degree_to_redius(this.options.tibia.init_angle);
-    mesh.init_angle = this.options.tibia.init_angle;
-
-    mesh.servo_value = this.options.tibia.servo_value;
-    mesh.servo_idx = this.options.tibia.servo_idx;
-    mesh.revert = this.options.tibia.revert;
-
-    return mesh;
-  }
-
-  draw_tarsus() {
-    let geometry: any, mesh: any, material: any;
-
-    switch (this.bot.draw_type) {
-      case "bone":
-        material = new THREE.LineBasicMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tarsus.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.tarsus.length, 0));
-        mesh = new THREE.Line(geometry, material);
-        break;
-      case "points":
-        material = new THREE.PointsMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tarsus.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, this.options.tarsus.length, 0));
-        mesh = new THREE.Points(geometry, material);
-        break;
-      default:
-        material = new THREE.MeshBasicMaterial({ color: this.color });
-        geometry = new THREE.BoxGeometry(this.options.tarsus.radius, this.options.tarsus.length, this.options.tarsus.radius);
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, this.options.tarsus.length / 2, 0));
-        mesh = new THREE.Mesh(geometry, material);
-        let axisHelper = new THREE.AxisHelper(15);
-        mesh.add(axisHelper);
-    }
-
-    mesh.type = "tarsus";
-
-    mesh.position.y = this.options.tibia.length;
-    mesh.rotation.z = this.options.mirror * degree_to_redius(this.options.tarsus.init_angle);
-    mesh.init_radius = degree_to_redius(this.options.tarsus.init_angle);
-    mesh.init_angle = this.options.tarsus.init_angle;
-
-    mesh.servo_value = this.options.tarsus.servo_value;
-    mesh.servo_idx = this.options.tarsus.servo_idx;
-    mesh.revert = this.options.tarsus.revert;
+    mesh.init_radius = degree_to_redius(opt.init_angle);
+    mesh.init_angle = opt.init_angle;
+    mesh.servo_value = opt.servo_value;
+    mesh.servo_idx = opt.servo_idx;
+    mesh.revert = opt.revert;
 
     return mesh;
   }
@@ -1102,7 +974,8 @@ export function get_bot_options() {
 
   const legCount = options.leg_count || 6;
   const dof = options.dof || 3;
-  const jointsPerLeg = Math.min(4, Math.max(3, dof));
+  const jointsPerLeg = Math.min(6, Math.max(2, dof));
+  const segNames = LIMB_NAMES.slice(0, jointsPerLeg);
 
   // Pad leg_options if fewer entries than leg count (e.g. 7-9 legs)
   while (options.leg_options.length < legCount) {
@@ -1110,20 +983,26 @@ export function get_bot_options() {
     options.leg_options.push(JSON.parse(JSON.stringify(template)));
   }
 
+  // Ensure each leg_option has all segment data
+  const defaultLeg = DEFAULT_HEXAPOD_OPTIONS.leg_options[0];
   for (let i = 0; i < legCount; i++) {
     let leg_option = options.leg_options[i];
+    for (const name of segNames) {
+      if (!leg_option[name]) {
+        leg_option[name] = JSON.parse(JSON.stringify(defaultLeg[name] || {
+          length: LIMB_DEFAULTS[name]?.length || 20,
+          radius: LIMB_DEFAULTS[name]?.radius || 5,
+          init_angle: LIMB_DEFAULTS[name]?.init_angle || 0,
+          servo_value: 1500, revert: false,
+        }));
+      }
+    }
+    // Assign servo indices
     const base = options.first_servo_idx + i * jointsPerLeg;
-    if (typeof leg_option.coxa.servo_idx === "undefined") {
-      leg_option.coxa.servo_idx = base;
-    }
-    if (typeof leg_option.femur.servo_idx === "undefined") {
-      leg_option.femur.servo_idx = base + 1;
-    }
-    if (typeof leg_option.tibia.servo_idx === "undefined") {
-      leg_option.tibia.servo_idx = base + 2;
-    }
-    if (jointsPerLeg >= 4 && leg_option.tarsus && typeof leg_option.tarsus.servo_idx === "undefined") {
-      leg_option.tarsus.servo_idx = base + 3;
+    for (let j = 0; j < segNames.length; j++) {
+      if (typeof leg_option[segNames[j]].servo_idx === "undefined") {
+        leg_option[segNames[j]].servo_idx = base + j;
+      }
     }
   }
 

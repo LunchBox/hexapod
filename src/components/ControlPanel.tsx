@@ -323,10 +323,10 @@ export default function ControlPanel() {
 
       <fieldset className="btns">
         <legend>DOF</legend>
-        <a href="#" className={`control_btn${dof === 3 ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', '3'); }}>3-DOF</a>
-        <a href="#" className={`control_btn${dof === 4 ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', '4'); }}>4-DOF</a>
+        {[3,4,5,6].map(d => (
+          <a key={d} href="#" className={`control_btn${dof === d ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); handleAction('act_dof_switch', String(d)); }}>{d}-DOF</a>
+        ))}
       </fieldset>
 
       <fieldset className="btns">
