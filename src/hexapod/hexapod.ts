@@ -388,11 +388,6 @@ export class Hexapod {
         line.geometry.vertices[1].copy(tip);
         line.geometry.verticesNeedUpdate = true;
       }
-      // guide dots (black reference points)
-      if (this.guide_pos?.geometry?.vertices?.[idx]) {
-        this.guide_pos.geometry.vertices[idx].copy(tip);
-        this.guide_pos.geometry.verticesNeedUpdate = true;
-      }
     }
     // Update rotation clones
     const updateClone = (clone: any) => {
