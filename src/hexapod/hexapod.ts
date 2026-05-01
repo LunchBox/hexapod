@@ -148,11 +148,6 @@ export class Hexapod {
 
     // Persist so AttributesPanel and page reload see latest state
     set_bot_options(this.options);
-
-    // Restore saved body home pose if exists
-    if (this.options._body_home) {
-      setTimeout(() => this.reset_body_to_home(), 100);
-    }
   }
 
   draw() {
@@ -222,6 +217,16 @@ export class Hexapod {
 
     this.draw_gait_guide();
     this.draw_gait_guidelines();
+
+    // Restore saved body home pose
+    if (this.options._body_home) {
+      const h = this.options._body_home;
+      this.body_mesh.position.set(h.px, h.py, h.pz);
+      this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
+      this.body_mesh.updateMatrixWorld();
+      let tips = this.get_tip_pos();
+      for (let i = 0; i < this.legs.length; i++) this.legs[i].set_tip_pos(tips[i]);
+    }
   }
 
   draw_body() {
