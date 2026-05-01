@@ -198,15 +198,8 @@ export default function SceneControls() {
             botRef.current?.reset_body_to_init?.();
             syncSliders();
           }}>↺ Init Pose</button>
-        <label title="Anchor tips when moving body" style={{ fontSize: 11, color: '#aaa', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-          <input type="checkbox" checked={botRef.current?.options?._tip_lock !== false}
-            onChange={(e) => {
-              const bot = botRef.current;
-              if (!bot) return;
-              bot.options._tip_lock = e.target.checked;
-              set_bot_options(bot.options);
-            }}
-          /> Lock Tips
+        <label title="Tip lock is always enabled" style={{ fontSize: 11, color: '#666', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <input type="checkbox" checked disabled /> Lock Tips
         </label>
       </div>
     </div>
