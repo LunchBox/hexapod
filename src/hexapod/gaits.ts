@@ -276,14 +276,31 @@ export class GaitController {
       add(label, grps);
     }
 
-    // Mirror pairs — each opposite pair is its own gait group (even N only)
-    if (n % 2 === 0) {
-      const half = n / 2;
-      const pairs: number[][] = [];
-      for (let i = 0; i < half; i++) {
-        pairs.push([i, i + half]);
+    // Mirror pairs — enumerate all valid pairings (even N only)
+    if (n % 2 === 0 && leftLegs.length === rightLegs.length) {
+      const R = rightLegs.length;
+      // Rotated pairings: right[i] with left[(i+s)%R]
+      for (let s = 0; s < R; s++) {
+        const grps: number[][] = [];
+        for (let i = 0; i < R; i++) {
+          grps.push([rightLegs[i], leftLegs[(i + s) % R]]);
+        }
+        const label = s === 0 ? 'pairs' : 'pairs' + (s + 1);
+        add(label, grps);
       }
-      add('pairs', pairs);
+      // Crossed pairing: leg i with leg n-1-i
+      {
+        const grps: number[][] = [];
+        const used = new Set<number>();
+        for (let i = 0; i < n; i++) {
+          const j = n - 1 - i;
+          if (!used.has(i) && !used.has(j) && i !== j) {
+            grps.push([i, j]);
+            used.add(i); used.add(j);
+          }
+        }
+        add('cross', grps);
+      }
     }
 
     // squirm: 3-round alternating (all N)
