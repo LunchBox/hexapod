@@ -78,18 +78,24 @@ export default function LegEditor() {
     return new Set(Array.from({ length: count }, (_, i) => i));
   });
 
-  // Sync editorLegs when leg count changes
+  const prevLegCount = useRef(0);
+
+  // Sync editorLegs only when leg count actually changes
   useEffect(() => {
     const bot = botRef.current;
     if (!bot) return;
     const count = bot.legs.length;
-    setEditorLegs(prev => {
-      const next = new Set<number>();
-      for (let i = 0; i < count; i++) next.add(i);
-      // Preserve previously unchecked legs that still exist
-      for (const i of prev) { if (i < count) next.add(i); }
-      return next;
-    });
+    if (prevLegCount.current !== count) {
+      setEditorLegs(prev => {
+        const next = new Set(prev);
+        // New legs (beyond previous count) default to checked
+        for (let i = prevLegCount.current; i < count; i++) next.add(i);
+        // Remove legs that no longer exist
+        for (const i of next) { if (i >= count) next.delete(i); }
+        return next;
+      });
+      prevLegCount.current = count;
+    }
   }, [botVersion, botRef]);
 
   const getCheckedLegs = useCallback((): number[] => {
