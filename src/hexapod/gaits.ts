@@ -240,26 +240,29 @@ export class GaitController {
     console.warn('n=' + n + ': total phases=' + totalPhases + ' valid=' + validPhases.length
       + ' (expected ' + ((1 << rightLegs.length) - 1) * ((1 << leftLegs.length) - 1) + ')');
 
-    // Exact cover: find all ways to partition legs using valid phases
+    // Exact cover with uniform group size: each phase lifts same number of legs
+    const possibleSizes = new Set<number>();
+    for (const ph of validPhases) possibleSizes.add(ph.length);
+
     const covers: number[][][] = [];
-    function findCovers(remaining: Set<number>, current: number[][]): void {
+    function findCovers(remaining: Set<number>, current: number[][], groupSize: number | null): void {
       if (remaining.size === 0) {
         if (current.length >= 2) covers.push(current.map(g => [...g]));
         return;
       }
       const first = Math.min(...remaining);
-      // Try each valid phase that contains `first` and is subset of remaining
       for (const ph of validPhases) {
         if (!ph.includes(first)) continue;
+        if (groupSize !== null && ph.length !== groupSize) continue;
         if (!ph.every(l => remaining.has(l))) continue;
         const newRemaining = new Set(remaining);
         for (const l of ph) newRemaining.delete(l);
         current.push(ph);
-        findCovers(newRemaining, current);
+        findCovers(newRemaining, current, ph.length);
         current.pop();
       }
     }
-    findCovers(new Set(allLegs), []);
+    findCovers(new Set(allLegs), [], null);
     console.warn('n=' + n + ': exact covers (unordered)=' + covers.length);
 
     // Deduplicate: canonical key sorts within each group, then sorts groups
