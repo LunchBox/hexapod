@@ -90,18 +90,35 @@ export default function SceneControls() {
   const handleHeightChange = (v: number) => {
     const bot = botRef.current;
     if (!bot?.body_mesh) return;
-    // Direct height set: move body, put tips on ground (no tip lock)
-    let current_tips = bot.get_tip_pos();
+    const prevY = bot.body_mesh.position.y;
+    const prevTips = bot.get_tip_pos();
+    setBodyY(v);
+
+    // Move body, try to put all tips at Y=0
     bot.body_mesh.position.y = v;
     bot.body_mesh.updateMatrixWorld();
     for (let i = 0; i < bot.legs.length; i++) {
-      let t = current_tips[i];
+      let t = prevTips[i].clone();
       t.y = 0;
       bot.legs[i].set_tip_pos(t);
     }
-    bot.after_status_change();
     bot.adjust_gait_guidelines();
-    setBodyY(v);
+
+    // Check if tips reached ground; revert if not
+    let maxTipY = 0;
+    let tips = bot.get_tip_pos();
+    for (const t of tips) { if (t.y > maxTipY) maxTipY = t.y; }
+    if (maxTipY > 2) {
+      // Can't reach ground — revert
+      bot.body_mesh.position.y = prevY;
+      bot.body_mesh.updateMatrixWorld();
+      for (let i = 0; i < bot.legs.length; i++) {
+        bot.legs[i].set_tip_pos(prevTips[i]);
+      }
+      bot.adjust_gait_guidelines();
+      setBodyY(Math.round(prevY));
+    }
+    bot.after_status_change();
   };
 
   const handleMotionChange = (key: string, value: number) => {
