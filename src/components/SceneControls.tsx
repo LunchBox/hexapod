@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import { JoyStick } from '../hexapod/joystick2';
 
 export default function SceneControls() {
-  const { botRef } = useHexapod();
+  const { botRef, botVersion } = useHexapod();
   const joystickContainerRef = useRef<HTMLDivElement>(null);
   const joystickRef = useRef<any>(null);
 
@@ -23,11 +23,29 @@ export default function SceneControls() {
     joystickRef.current = joystick;
   }, [botRef]);
 
+  // Read current values from bot options on mount and when botVersion changes
+  const [bodyY, setBodyY] = useState(10);
+  const [tipScale, setTipScale] = useState(1);
+  const [rotDeg, setRotDeg] = useState(10);
+  const [fbStep, setFbStep] = useState(15);
+  const [lrStep, setLrStep] = useState(10);
+
+  useEffect(() => {
+    const bot = botRef.current;
+    if (!bot) return;
+    setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
+    setTipScale(bot.options?.tip_circle_scale ?? 1);
+    setRotDeg(Math.round(((bot.options?.rotate_step ?? Math.PI / 18) * 180) / Math.PI));
+    setFbStep(bot.options?.fb_step ?? 15);
+    setLrStep(bot.options?.lr_step ?? 10);
+  }, [botVersion, botRef]);
+
   const handleHeightChange = (v: number) => {
     const bot = botRef.current;
     if (!bot?.body_mesh) return;
     const delta = v - bot.body_mesh.position.y;
     if (Math.abs(delta) > 0.01) bot.move_body('y', delta);
+    setBodyY(v);
   };
 
   const handleSpreadChange = (v: number) => {
@@ -36,6 +54,7 @@ export default function SceneControls() {
     bot.options.tip_circle_scale = v;
     set_bot_options(bot.options);
     bot.adjust_tip_spread(v);
+    setTipScale(v);
   };
 
   const handleMotionChange = (key: string, value: number) => {
@@ -44,18 +63,11 @@ export default function SceneControls() {
     (bot.options as any)[key] = value;
     set_bot_options(bot.options);
     if (key === 'rotate_step') bot.rotate_step = value;
-    else if (key === 'fb_step') bot.fb_step = value;
-    else if (key === 'lr_step') bot.lr_step = value;
+    else if (key === 'fb_step') { bot.fb_step = value; setFbStep(value); }
+    else if (key === 'lr_step') { bot.lr_step = value; setLrStep(value); }
     const gc = bot.gait_controller;
     if (gc) gc.reset_steps();
   };
-
-  const bot = botRef.current;
-  const bodyY = bot?.body_mesh?.position?.y ?? 10;
-  const tipScale = bot?.options?.tip_circle_scale ?? 1;
-  const rotDeg = Math.round(((bot?.options?.rotate_step ?? Math.PI / 18) * 180) / Math.PI);
-  const fbStep = bot?.options?.fb_step ?? 15;
-  const lrStep = bot?.options?.lr_step ?? 10;
 
   return (
     <div style={{
@@ -68,12 +80,12 @@ export default function SceneControls() {
       {/* Body height */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <span style={{ fontSize: 10, color: '#888' }}>H</span>
-        <input type="range" min="10" max="150" value={Math.round(bodyY)}
+        <input type="range" min="10" max="150" value={bodyY}
           title="Body height"
           style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
-          onInput={(e) => handleHeightChange(parseFloat((e.target as HTMLInputElement).value))}
+          onChange={(e) => handleHeightChange(parseFloat((e.target as HTMLInputElement).value))}
         />
-        <span style={{ fontSize: 9, color: '#666' }}>{Math.round(bodyY)}</span>
+        <span style={{ fontSize: 9, color: '#666' }}>{bodyY}</span>
       </div>
 
       {/* Expand/Compact */}
@@ -82,7 +94,7 @@ export default function SceneControls() {
         <input type="range" max="1.5" min="0.5" step="0.1" value={tipScale}
           title="Tip spread"
           style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
-          onInput={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
+          onChange={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
         />
         <span style={{ fontSize: 9, color: '#666' }}>{tipScale.toFixed(1)}</span>
       </div>
@@ -93,7 +105,11 @@ export default function SceneControls() {
         <input type="range" min="1" max="45" value={rotDeg}
           title="Rotate step (°)"
           style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
-          onInput={(e) => handleMotionChange('rotate_step', parseFloat((e.target as HTMLInputElement).value) * Math.PI / 180)}
+          onChange={(e) => {
+            const v = parseInt((e.target as HTMLInputElement).value);
+            setRotDeg(v);
+            handleMotionChange('rotate_step', v * Math.PI / 180);
+          }}
         />
         <span style={{ fontSize: 9, color: '#666' }}>{rotDeg}°</span>
       </div>
@@ -104,7 +120,11 @@ export default function SceneControls() {
         <input type="range" min="1" max="50" value={fbStep}
           title="F&B step (mm)"
           style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
-          onInput={(e) => handleMotionChange('fb_step', parseFloat((e.target as HTMLInputElement).value))}
+          onChange={(e) => {
+            const v = parseInt((e.target as HTMLInputElement).value);
+            setFbStep(v);
+            handleMotionChange('fb_step', v);
+          }}
         />
         <span style={{ fontSize: 9, color: '#666' }}>{fbStep}</span>
       </div>
@@ -115,7 +135,11 @@ export default function SceneControls() {
         <input type="range" min="1" max="50" value={lrStep}
           title="L&R step (mm)"
           style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
-          onInput={(e) => handleMotionChange('lr_step', parseFloat((e.target as HTMLInputElement).value))}
+          onChange={(e) => {
+            const v = parseInt((e.target as HTMLInputElement).value);
+            setLrStep(v);
+            handleMotionChange('lr_step', v);
+          }}
         />
         <span style={{ fontSize: 9, color: '#666' }}>{lrStep}</span>
       </div>
