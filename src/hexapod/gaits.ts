@@ -148,11 +148,13 @@ export class GaitInternal extends GaitAction {
     let bot = this.controller.bot;
     let current_tips_pos = bot.get_tip_pos();
 
-    bot.body_mesh.rotation.z = this.rotation.z;
-    bot.body_mesh.rotation.x = this.rotation.x;
-
-    bot.body_mesh.position.x = this.position.x;
-    bot.body_mesh.position.z = this.position.z;
+    // Apply incremental delta from last call, then reset for next
+    bot.body_mesh.rotation.z += this.rotation.z;
+    bot.body_mesh.rotation.x += this.rotation.x;
+    bot.body_mesh.position.x += this.position.x;
+    bot.body_mesh.position.z += this.position.z;
+    this.rotation.z = 0; this.rotation.x = 0;
+    this.position.x = 0; this.position.z = 0;
 
     let total_legs = bot.legs.length;
     for (let i = 0; i < total_legs; i++) {
