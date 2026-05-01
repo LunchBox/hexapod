@@ -225,8 +225,15 @@ export class Hexapod {
       this.body_mesh.position.set(h.px, h.py, h.pz);
       this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
       this.body_mesh.updateMatrixWorld();
-      let tips = this.get_tip_pos();
-      for (let i = 0; i < this.legs.length; i++) this.legs[i].set_tip_pos(tips[i]);
+      if (h.tips) {
+        for (let i = 0; i < Math.min(this.legs.length, h.tips.length); i++) {
+          const t = h.tips[i];
+          this.legs[i].set_tip_pos(new THREE.Vector3(t.x, t.y, t.z));
+        }
+      } else {
+        let tips = this.get_tip_pos();
+        for (let i = 0; i < this.legs.length; i++) this.legs[i].set_tip_pos(tips[i]);
+      }
     }
   }
 
@@ -672,9 +679,11 @@ export class Hexapod {
   }
 
   save_body_home() {
+    const tips = this.get_tip_pos();
     const home = {
       px: this.body_mesh.position.x, py: this.body_mesh.position.y, pz: this.body_mesh.position.z,
       rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
+      tips: tips.map((t: any) => ({ x: t.x, y: t.y, z: t.z })),
     };
     this.options._body_home = home;
     set_bot_options(this.options);
@@ -683,12 +692,14 @@ export class Hexapod {
   reset_body_to_home() {
     const home = this.options._body_home;
     if (!home) return;
-    let current_tips = this.get_tip_pos();
     this.body_mesh.position.set(home.px, home.py, home.pz);
     this.body_mesh.rotation.set(home.rx, home.ry, home.rz);
     this.body_mesh.updateMatrixWorld();
-    for (let i = 0; i < this.legs.length; i++) {
-      this.legs[i].set_tip_pos(current_tips[i]);
+    if (home.tips) {
+      for (let i = 0; i < Math.min(this.legs.length, home.tips.length); i++) {
+        const t = home.tips[i];
+        this.legs[i].set_tip_pos(new THREE.Vector3(t.x, t.y, t.z));
+      }
     }
     this.after_status_change();
     if (this.adjust_gait_guidelines) this.adjust_gait_guidelines();
