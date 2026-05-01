@@ -158,7 +158,11 @@ export class GaitInternal extends GaitAction {
     let bot = this.controller.bot;
     let current_tips_pos = bot.get_tip_pos();
 
-    // Set body to home + joystick offset (not incremental)
+    // Save current body pose for potential revert
+    let prevPos = bot.body_mesh.position.clone();
+    let prevRot = bot.body_mesh.rotation.clone();
+
+    // Set body to home + joystick offset
     bot.body_mesh.rotation.z = this.homeRot.z + this.rotation.z;
     bot.body_mesh.rotation.x = this.homeRot.x + this.rotation.x;
     bot.body_mesh.position.x = this.homePos.x + this.position.x;
@@ -168,6 +172,22 @@ export class GaitInternal extends GaitAction {
     let total_legs = bot.legs.length;
     for (let i = 0; i < total_legs; i++) {
       bot.legs[i].set_tip_pos(current_tips_pos[i]);
+    }
+
+    // Revert if any tip drifted too far (IK couldn't reach)
+    let maxDrift = 0;
+    let newTips = bot.get_tip_pos();
+    for (let i = 0; i < total_legs; i++) {
+      let d = current_tips_pos[i].distanceTo(newTips[i]);
+      if (d > maxDrift) maxDrift = d;
+    }
+    if (maxDrift > 2) {
+      bot.body_mesh.position.copy(prevPos);
+      bot.body_mesh.rotation.copy(prevRot);
+      bot.body_mesh.updateMatrixWorld();
+      for (let i = 0; i < total_legs; i++) {
+        bot.legs[i].set_tip_pos(current_tips_pos[i]);
+      }
     }
   }
 }
