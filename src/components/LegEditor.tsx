@@ -100,9 +100,7 @@ export default function LegEditor() {
     if (!opts) return;
 
     const pts = computeJoints(opts);
-    if (dragRef.current) {
-      console.log('DRAW during drag, joint=' + dragRef.current.joint);
-    }
+    // (debug logs removed)
     // Use snapshotted view during drag, compute fresh otherwise
     const view = dragRef.current?.view || computeView(pts);
     const sp = pts.map(p => toScreen(p, view));
@@ -217,9 +215,7 @@ export default function LegEditor() {
     const ctx = canvas.getContext('2d');
     if (ctx) ctx.scale(dpr, dpr);
 
-    console.time('LegEditor draw');
     draw();
-    console.timeEnd('LegEditor draw');
   }, [draw, botVersion]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -256,7 +252,6 @@ export default function LegEditor() {
 
     const d = dragRef.current;
     if (d) {
-      console.log('MOUSEMOVE drag, joint=' + d.joint);
       const bot = botRef.current;
       if (!bot) return;
       const opts = bot.options;
@@ -268,6 +263,10 @@ export default function LegEditor() {
 
       const dx = legPt.x - prevPt.x;
       const dy = legPt.y - prevPt.y;
+      console.log('DRAG pt', legPt.x.toFixed(1), legPt.y.toFixed(1),
+        'prev', prevPt.x.toFixed(1), prevPt.y.toFixed(1),
+        'dx', dx.toFixed(1), 'dy', dy.toFixed(1));
+
       const newLen = Math.max(5, Math.sqrt(dx * dx + dy * dy));
 
       const segNames = getSegNames(opts);
