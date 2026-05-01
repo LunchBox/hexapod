@@ -1,214 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
-import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
+import { get_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
 import { history } from '../hexapod/history';
 import LegEditor from './LegEditor';
-
-function HexapodAttributesController(container: HTMLElement, bot: any) {
-  this.container = container;
-  this.bot = bot;
-  this.attributes = get_bot_options();
-
-  this.special_attrs = [
-    ...LIMB_NAMES.map(n => n + '_length'),
-    'rotate_step', 'fb_step', 'lr_step',
-    'body_radius', 'edge_length',
-  ];
-}
-
-HexapodAttributesController.prototype.make_container = function (container, identify, class_name) {
-  let elem = document.createElement('div');
-  if (identify) elem.setAttribute('id', identify);
-  if (class_name) elem.setAttribute('class', class_name);
-  container.appendChild(elem);
-  return elem;
-};
-
-HexapodAttributesController.prototype.make_fieldset = function (container, legend_name, identify, class_name) {
-  let fieldset = document.createElement('fieldset');
-  if (identify) fieldset.setAttribute('id', identify);
-  if (class_name) fieldset.setAttribute('class', class_name);
-  container.appendChild(fieldset);
-
-  let legend = document.createElement('legend');
-  legend.innerHTML = legend_name;
-  fieldset.appendChild(legend);
-  return fieldset;
-};
-
-HexapodAttributesController.prototype.get_attr = function (attr_name) {
-  let attrs = attr_name.split('.');
-  let value = this.attributes;
-  for (let idx = 0; idx < attrs.length; idx++) {
-    if (value == null) return undefined;
-    value = value[attrs[idx]];
-  }
-  return value;
-};
-
-HexapodAttributesController.prototype.set_attr = function (attr_name, value) {
-  let attrs = attr_name.split('.');
-  let obj = this.attributes;
-  for (let i = 0; i < attrs.length - 1; i++) {
-    if (obj == null) return;
-    obj = obj[attrs[i]];
-  }
-  if (obj == null) return;
-  obj[attrs[attrs.length - 1]] = value;
-};
-
-HexapodAttributesController.prototype.redraw_bot = function () {
-  // Push current state to undo history before applying change
-  history.push(this.bot.options);
-
-  if (history.autoSave) {
-    set_bot_options(this.attributes);
-  }
-  this.bot.apply_attributes(this.attributes);
-  if (history.autoSave) {
-    history.markSaved(this.attributes);
-  }
-};
-
-HexapodAttributesController.prototype.make_input = function (container, attr_name, input_type, label_name) {
-  let label = document.createElement('label');
-  label.setAttribute('for', attr_name);
-  label.innerHTML = label_name;
-  container.appendChild(label);
-
-  let input = document.createElement('input');
-  input.setAttribute('type', input_type);
-  input.setAttribute('id', attr_name);
-  input.controller = this;
-
-  if (this.special_attrs.indexOf(attr_name) > -1) {
-    this['handle_' + attr_name](attr_name, input);
-  } else {
-    switch (input_type) {
-      case 'checkbox':
-        if (this.get_attr(attr_name)) {
-          input.checked = true;
-        }
-        break;
-      default:
-        const val = this.get_attr(attr_name);
-        input.setAttribute('value', val ?? '');
-        input.addEventListener('change', function () {
-          this.controller.set_attr(attr_name, parseFloat(this.value));
-          this.controller.redraw_bot();
-        });
-    }
-  }
-
-  container.appendChild(input);
-};
-
-// Special handlers
-LIMB_NAMES.forEach(function (part) {
-  HexapodAttributesController.prototype['handle_' + part + '_length'] = function (attr_name, input) {
-    let self = this;
-    input.setAttribute('value', this.get_attr(attr_name));
-    input.addEventListener('change', function () {
-      self.set_attr(attr_name, parseFloat(this.value));
-      for (let idx = 0; idx < self.attributes.leg_options.length; idx++) {
-        if (!self.attributes.leg_options[idx][part]) continue;
-        self.attributes.leg_options[idx][part].length = parseFloat(this.value);
-      }
-      self.redraw_bot();
-    });
-  };
-});
-
-HexapodAttributesController.prototype.handle_rotate_step = function (attr_name, input) {
-  let self = this;
-  let radius = parseFloat(this.get_attr(attr_name));
-  let angle = Math.round(radius * 180 / Math.PI);
-  input.setAttribute('value', angle);
-
-  input.addEventListener('change', function () {
-    let a = parseFloat(this.value);
-    let r = a * Math.PI / 180;
-    self.set_attr(attr_name, r);
-    let bot = this.bot;
-    bot.rotate_step = r;
-    bot.gait_controller.reset_steps();
-    bot.adjust_gait_guidelines();
-  });
-};
-
-HexapodAttributesController.prototype.handle_fb_step = function (attr_name, input) {
-  let self = this;
-  input.setAttribute('value', parseFloat(this.get_attr(attr_name)));
-  input.addEventListener('change', function () {
-    let val = parseFloat(this.value);
-    self.set_attr(attr_name, val);
-    let bot = this.bot;
-    bot.fb_step = val;
-    bot.gait_controller.reset_steps();
-  });
-};
-
-HexapodAttributesController.prototype.handle_lr_step = function (attr_name, input) {
-  let self = this;
-  input.setAttribute('value', parseFloat(this.get_attr(attr_name)));
-  input.addEventListener('change', function () {
-    let val = parseFloat(this.value);
-    self.set_attr(attr_name, val);
-    let bot = this.bot;
-    bot.lr_step = val;
-    bot.gait_controller.reset_steps();
-  });
-};
-
-HexapodAttributesController.prototype.handle_body_radius = function (attr_name, input) {
-  let self = this;
-  input.setAttribute('value', parseFloat(this.get_attr(attr_name)));
-  input.addEventListener('change', function () {
-    let val = parseFloat(this.value);
-    if (isNaN(val) || val <= 0) return;
-    self.set_attr(attr_name, val);
-
-    // Sync edge_length display
-    let edgeInput = document.getElementById('edge_length') as HTMLInputElement;
-    if (edgeInput) {
-      let legCount = self.attributes.leg_count || 6;
-      let edgeLen = 2 * val * Math.sin(Math.PI / legCount);
-      edgeInput.value = edgeLen.toFixed(1);
-    }
-
-    self.redraw_bot();
-  });
-};
-
-HexapodAttributesController.prototype.handle_edge_length = function (attr_name, input) {
-  let self = this;
-  // Display value computed from body_radius
-  let bodyRadius = parseFloat(this.get_attr('body_radius')) || 80;
-  let legCount = this.attributes.leg_count || 6;
-  let edgeLen = 2 * bodyRadius * Math.sin(Math.PI / legCount);
-  input.setAttribute('value', edgeLen.toFixed(1));
-
-  input.addEventListener('change', function () {
-    let val = parseFloat(this.value);
-    if (isNaN(val) || val <= 0) return;
-    let legCount = self.attributes.leg_count || 6;
-    let newRadius = val / (2 * Math.sin(Math.PI / legCount));
-    self.set_attr('body_radius', newRadius);
-
-    // Sync body_radius input display
-    let radiusInput = document.getElementById('body_radius') as HTMLInputElement;
-    if (radiusInput) {
-      radiusInput.value = newRadius.toFixed(1);
-    }
-
-    self.redraw_bot();
-  });
-};
+import AttrSlider from './AttrSlider';
 
 export default function AttributesPanel() {
   const { botRef, botVersion, bumpBotVersion } = useHexapod();
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const [dofLegs, setDofLegs] = useState<Set<number>>(() => {
     const o = get_bot_options();
@@ -216,15 +15,31 @@ export default function AttributesPanel() {
     return new Set(Array.from({ length: c }, (_, i) => i));
   });
 
+  const [expandedLegs, setExpandedLegs] = useState<Set<number>>(new Set());
+
+  const toggleLeg = (idx: number) => {
+    setExpandedLegs(prev => {
+      const n = new Set(prev);
+      if (n.has(idx)) n.delete(idx);
+      else n.add(idx);
+      return n;
+    });
+  };
+
+  // Body lock states — capture ratios when locked
+  const [wlLocked, setWlLocked] = useState(false);
+  const [wlRatio, setWlRatio] = useState(0.5);
+  const [hwlLocked, setHwlLocked] = useState(false);
+
   // Read config from bot.options directly (single source of truth)
   const bot = botRef.current;
   const opts = bot?.options || get_bot_options();
   const dof = opts.dof || 3;
   const legCount = opts.leg_count || 6;
   const bodyShape = opts.body_shape || 'rectangle';
-  const polyPlacement = opts.polygon_leg_placement || 'edge';
-  const oddOrientation = opts.polygon_odd_orientation || 'back';
-  const tipCircleScale = opts.tip_circle_scale ?? 1;
+  const placement = opts.polygon_leg_placement || 'vertex';
+  const firstLegDirection = opts.polygon_odd_orientation || 'back';
+  const segNames = LIMB_NAMES.slice(0, Math.min(6, Math.max(2, dof)));
 
   const applyConfig = (updates: Partial<any>) => {
     const b = botRef.current;
@@ -234,74 +49,6 @@ export default function AttributesPanel() {
     b.apply_attributes(b.options);
     bumpBotVersion();
   };
-
-  useEffect(() => {
-    if (!containerRef.current || !botRef.current) return;
-
-    let container = containerRef.current;
-    container.innerHTML = '';
-
-    let attrs_control = new HexapodAttributesController(container, botRef.current);
-
-    // Motions
-    let motion_attrs = attrs_control.make_fieldset(container, 'Motions');
-    attrs_control.make_input(motion_attrs, 'rotate_step', 'number', 'Rotate Step');
-    attrs_control.make_input(motion_attrs, 'fb_step', 'number', 'F&B Step');
-    attrs_control.make_input(motion_attrs, 'lr_step', 'number', 'L&R Step');
-
-    // Body
-    let body_attrs = attrs_control.make_fieldset(container, 'Body Attrs');
-    attrs_control.make_input(body_attrs, 'body_height', 'number', 'Body Height');
-    attrs_control.make_input(body_attrs, 'body_width', 'number', 'Body Width');
-    attrs_control.make_input(body_attrs, 'body_length', 'number', 'Body Length');
-    attrs_control.make_input(body_attrs, 'body_radius', 'number', 'Body Radius');
-    attrs_control.make_input(body_attrs, 'edge_length', 'number', 'Edge Length');
-
-    // Legs
-    let leg_attrs = attrs_control.make_fieldset(container, 'Legs Attrs');
-    const dof = attrs_control.attributes.dof || 3;
-    const segNames = LIMB_NAMES.slice(0, Math.min(6, Math.max(2, dof)));
-    for (const name of segNames) {
-      attrs_control.make_input(leg_attrs, name + '_length', 'number', name.charAt(0).toUpperCase() + name.slice(1) + ' Length');
-    }
-
-    // Per-leg attributes — each leg shows only its own DOF's segments
-    for (let idx = 0; idx < attrs_control.attributes.leg_options.length; idx++) {
-      const legOpt = attrs_control.attributes.leg_options[idx];
-      const legDof = legOpt.dof ?? attrs_control.attributes.dof ?? 3;
-      const legSegNames = LIMB_NAMES.slice(0, Math.min(6, Math.max(2, legDof)));
-
-      let leg_fieldset = attrs_control.make_fieldset(container, 'Leg ' + idx + ' Attrs', 'leg_' + idx + '_attrs', 'tab leg_attrs');
-      let leg_content = attrs_control.make_container(leg_fieldset, null, 'tab_content');
-
-      let pos_attrs = attrs_control.make_fieldset(leg_content, 'Position');
-      attrs_control.make_input(pos_attrs, 'leg_options.' + idx + '.x', 'number', 'pos x');
-      attrs_control.make_input(pos_attrs, 'leg_options.' + idx + '.y', 'number', 'pos y');
-      attrs_control.make_input(pos_attrs, 'leg_options.' + idx + '.z', 'number', 'pos z');
-
-      for (const name of legSegNames) {
-        // Skip segments that don't exist on this leg (e.g. not yet padded)
-        if (!legOpt[name]) continue;
-        let seg_attrs = attrs_control.make_fieldset(leg_content, name.charAt(0).toUpperCase() + name.slice(1));
-        attrs_control.make_input(seg_attrs, 'leg_options.' + idx + '.' + name + '.length', 'number', 'Length');
-        attrs_control.make_input(seg_attrs, 'leg_options.' + idx + '.' + name + '.radius', 'number', 'Radius');
-        attrs_control.make_input(seg_attrs, 'leg_options.' + idx + '.' + name + '.init_angle', 'number', 'Init Angle');
-      }
-    }
-
-    // Tab legend click handlers
-    let tabLegends = container.querySelectorAll('.tab legend');
-    Array.prototype.forEach.call(tabLegends, function (legend) {
-      legend.addEventListener('click', function () {
-        let tabContent = this.parentElement.querySelector('.tab_content');
-        if (tabContent.style.display === 'block') {
-          tabContent.style.display = 'none';
-        } else {
-          tabContent.style.display = 'block';
-        }
-      });
-    });
-  }, [botVersion]);
 
   return (
     <div id="attrs_control">
@@ -355,42 +102,289 @@ export default function AttributesPanel() {
           onClick={(e) => { e.preventDefault(); applyConfig({ body_shape: 'polygon' }); }}>Poly</a>
         {bodyShape === 'polygon' && (<>
           {' | '}
-          <a href="#" className={`control_btn${polyPlacement === 'vertex' ? ' active' : ''}`}
+          <a href="#" className={`control_btn${placement === 'vertex' ? ' active' : ''}`}
             onClick={(e) => { e.preventDefault(); applyConfig({ polygon_leg_placement: 'vertex' }); }}>Vertex</a>
-          <a href="#" className={`control_btn${polyPlacement === 'edge' ? ' active' : ''}`}
+          <a href="#" className={`control_btn${placement === 'edge' ? ' active' : ''}`}
             onClick={(e) => { e.preventDefault(); applyConfig({ polygon_leg_placement: 'edge' }); }}>Edge</a>
+          {' | '}
+          <a href="#" className="control_btn" onClick={(e) => { e.preventDefault();
+            const w = opts.body_width || 50;
+            const l = opts.body_length || 100;
+            const avg = Math.round((w + l) / 2);
+            applyConfig({ body_width: avg, body_length: avg });
+          }}>Regular</a>
         </>)}
         {legCount % 2 !== 0 && (<>
-          <a href="#" className={`control_btn${oddOrientation === 'back' ? ' active' : ''}`}
+          <a href="#" className={`control_btn${firstLegDirection === 'back' ? ' active' : ''}`}
             onClick={(e) => { e.preventDefault(); applyConfig({ polygon_odd_orientation: 'back' }); }}>1-Back</a>
-          <a href="#" className={`control_btn${oddOrientation === 'front' ? ' active' : ''}`}
+          <a href="#" className={`control_btn${firstLegDirection === 'front' ? ' active' : ''}`}
             onClick={(e) => { e.preventDefault(); applyConfig({ polygon_odd_orientation: 'front' }); }}>1-Front</a>
         </>)}
       </fieldset>
 
       <fieldset className="btns">
         <legend>Tip Spread</legend>
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault();
-          const bot = botRef.current; if (!bot) return;
-          history.push(bot.options);
-          const cur = bot.options.tip_circle_scale ?? 1;
-          const next = Math.min(1.5, +(cur + 0.1).toFixed(1));
-          bot.options.tip_circle_scale = next;
-          if (history.autoSave) set_bot_options(bot.options);
-          bot.adjust_tip_spread(next); bumpBotVersion();
-        }}>Expand</a>
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault();
-          const bot = botRef.current; if (!bot) return;
-          history.push(bot.options);
-          const cur = bot.options.tip_circle_scale ?? 1;
-          const next = Math.max(0.1, +(cur - 0.1).toFixed(1));
-          bot.options.tip_circle_scale = next;
-          if (history.autoSave) set_bot_options(bot.options);
-          bot.adjust_tip_spread(next); bumpBotVersion();
-        }}>Compact</a>
+        {(() => {
+          const spread = (dir: number) => (e: React.MouseEvent) => {
+            e.preventDefault();
+            const b = botRef.current; if (!b) return;
+            const step = 5 * dir;
+            history.push(b.options);
+            const cx = b.body_mesh.position.x;
+            const cz = b.body_mesh.position.z;
+            for (let i = 0; i < b.legs.length; i++) {
+              const tip = b.legs[i].get_tip_pos();
+              const dx = tip.x - cx;
+              const dz = tip.z - cz;
+              const dist = Math.sqrt(dx * dx + dz * dz) || 1;
+              const newDist = Math.max(5, dist + step);
+              tip.x = cx + (dx / dist) * newDist;
+              tip.z = cz + (dz / dist) * newDist;
+              b.legs[i].set_tip_pos(tip);
+            }
+            b.sync_guide_circles();
+            b.adjust_gait_guidelines();
+            b.after_status_change();
+            b.save_body_home();
+            bumpBotVersion();
+          };
+          return (
+            <>
+              <a href="#" className="control_btn" onClick={spread(1)}>Expand</a>
+              <a href="#" className="control_btn" onClick={spread(-1)}>Compact</a>
+            </>
+          );
+        })()}
       </fieldset>
 
-      <div ref={containerRef}></div>
+      {/* ── Motions ── */}
+      <fieldset className="attr-fieldset">
+        <legend>Motions</legend>
+        <AttrSlider label="Rotate Step"
+          value={Math.round((opts.rotate_step || Math.PI / 14) * 180 / Math.PI)}
+          min={1} max={90} step={1}
+          displayValue={Math.round((opts.rotate_step || Math.PI / 14) * 180 / Math.PI) + '°'}
+          title="Rotation angle per gait cycle (degrees)"
+          onChange={(v) => applyConfig({ rotate_step: v * Math.PI / 180 })}
+        />
+        <AttrSlider label="F&B Step"
+          value={opts.fb_step || 30}
+          min={1} max={200} step={1}
+          title="Forward/backward travel distance per gait cycle"
+          onChange={(v) => applyConfig({ fb_step: v })}
+        />
+        <AttrSlider label="L&R Step"
+          value={opts.lr_step || 30}
+          min={1} max={200} step={1}
+          title="Left/right travel distance per gait cycle"
+          onChange={(v) => applyConfig({ lr_step: v })}
+        />
+        <AttrSlider label="Lift Height"
+          value={opts.up_step ?? 10}
+          min={1} max={80} step={1}
+          title="How high leg tips lift during each gait step"
+          onChange={(v) => applyConfig({ up_step: v })}
+        />
+      </fieldset>
+
+      {/* ── Body Attrs ── */}
+      <fieldset className="attr-fieldset">
+        <legend>Body Attrs</legend>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 4, fontSize: 11 }}>
+          <label style={{ cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={wlLocked}
+              onChange={() => {
+                if (!wlLocked) {
+                  const w = opts.body_width || 50;
+                  const l = opts.body_length || 100;
+                  setWlRatio(w / l);
+                }
+                setWlLocked(!wlLocked);
+              }}
+              style={{ verticalAlign: 'middle', marginRight: 2 }} />
+            Lock W/L
+          </label>
+          <label style={{ cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={hwlLocked}
+              onChange={() => setHwlLocked(!hwlLocked)}
+              style={{ verticalAlign: 'middle', marginRight: 2 }} />
+            Lock All
+          </label>
+        </div>
+        <AttrSlider label="Body Height"
+          value={opts.body_height || 20}
+          min={5} max={200} step={1}
+          onChange={(v) => {
+            if (!hwlLocked) { applyConfig({ body_height: v }); return; }
+            const oldH = opts.body_height || 20;
+            const oldW = opts.body_width || 50;
+            const oldL = opts.body_length || 100;
+            const f = v / oldH;
+            applyConfig({ body_height: v, body_width: Math.round(oldW * f), body_length: Math.round(oldL * f) });
+          }}
+        />
+        <AttrSlider label="Body Width"
+          value={opts.body_width || 50}
+          min={10} max={500} step={1}
+          onChange={(v) => {
+            if (hwlLocked) {
+              const oldH = opts.body_height || 20;
+              const oldW = opts.body_width || 50;
+              const oldL = opts.body_length || 100;
+              const f = v / oldW;
+              applyConfig({ body_width: v, body_height: Math.round(oldH * f), body_length: Math.round(oldL * f) });
+            } else if (wlLocked) {
+              applyConfig({ body_width: v, body_length: Math.round(v / wlRatio) });
+            } else {
+              applyConfig({ body_width: v });
+            }
+          }}
+        />
+        <AttrSlider label="Body Length"
+          value={opts.body_length || 100}
+          min={10} max={500} step={1}
+          onChange={(v) => {
+            if (hwlLocked) {
+              const oldH = opts.body_height || 20;
+              const oldW = opts.body_width || 50;
+              const oldL = opts.body_length || 100;
+              const f = v / oldL;
+              applyConfig({ body_length: v, body_height: Math.round(oldH * f), body_width: Math.round(oldW * f) });
+            } else if (wlLocked) {
+              applyConfig({ body_length: v, body_width: Math.round(v * wlRatio) });
+            } else {
+              applyConfig({ body_length: v });
+            }
+          }}
+        />
+        <AttrSlider label="Body Offset"
+          value={opts.body_offset ?? 0}
+          min={-100} max={100} step={1}
+          onChange={(v) => applyConfig({ body_offset: v })}
+        />
+      </fieldset>
+
+      {/* ── Legs Attrs (global) ── */}
+      <fieldset className="attr-fieldset">
+        <legend>Legs Attrs</legend>
+        {segNames.map(name => (
+          <AttrSlider key={name}
+            label={name.charAt(0).toUpperCase() + name.slice(1) + ' Length'}
+            value={opts[name + '_length'] || 20}
+            min={5} max={200} step={1}
+            onChange={(v) => {
+              const b = botRef.current; if (!b) return;
+              history.push(b.options);
+              b.options[name + '_length'] = v;
+              for (let i = 0; i < b.options.leg_options.length; i++) {
+                if (b.options.leg_options[i][name]) {
+                  b.options.leg_options[i][name].length = v;
+                }
+              }
+              b.apply_attributes(b.options);
+              bumpBotVersion();
+            }}
+          />
+        ))}
+      </fieldset>
+
+      {/* ── Per-leg attrs ── */}
+      {opts.leg_options && opts.leg_options.map((legOpt: any, idx: number) => {
+        const legDof = legOpt.dof ?? dof;
+        const legSegNames = LIMB_NAMES.slice(0, Math.min(6, Math.max(2, legDof)));
+        const isExpanded = expandedLegs.has(idx);
+        return (
+          <fieldset key={idx} className="attr-fieldset tab leg_attrs">
+            <legend onClick={() => toggleLeg(idx)}
+              style={{ cursor: 'pointer', userSelect: 'none' }}>
+              {isExpanded ? '▼' : '▶'} Leg {idx} Attrs
+            </legend>
+            {isExpanded && (
+              <div className="tab_content">
+                <fieldset className="attr-fieldset">
+                  <legend>Position</legend>
+                  <AttrSlider label="pos x"
+                    value={legOpt.x ?? 0}
+                    min={-300} max={300} step={1}
+                    onChange={(v) => {
+                      const b = botRef.current; if (!b) return;
+                      history.push(b.options);
+                      b.options.leg_options[idx].x = v;
+                      b.apply_attributes(b.options);
+                      bumpBotVersion();
+                    }}
+                  />
+                  <AttrSlider label="pos y"
+                    value={legOpt.y ?? 0}
+                    min={-300} max={300} step={1}
+                    onChange={(v) => {
+                      const b = botRef.current; if (!b) return;
+                      history.push(b.options);
+                      b.options.leg_options[idx].y = v;
+                      b.apply_attributes(b.options);
+                      bumpBotVersion();
+                    }}
+                  />
+                  <AttrSlider label="pos z"
+                    value={legOpt.z ?? 0}
+                    min={-300} max={300} step={1}
+                    onChange={(v) => {
+                      const b = botRef.current; if (!b) return;
+                      history.push(b.options);
+                      b.options.leg_options[idx].z = v;
+                      b.apply_attributes(b.options);
+                      bumpBotVersion();
+                    }}
+                  />
+                </fieldset>
+
+                {legSegNames.map(name => {
+                  if (!legOpt[name]) return null;
+                  return (
+                    <fieldset key={name} className="attr-fieldset">
+                      <legend>{name.charAt(0).toUpperCase() + name.slice(1)}</legend>
+                      <AttrSlider label="Length"
+                        value={legOpt[name].length ?? 20}
+                        min={5} max={200} step={1}
+                        onChange={(v) => {
+                          const b = botRef.current; if (!b) return;
+                          history.push(b.options);
+                          b.options.leg_options[idx][name].length = v;
+                          b.apply_attributes(b.options);
+                          bumpBotVersion();
+                        }}
+                      />
+                      <AttrSlider label="Radius"
+                        value={legOpt[name].radius ?? 5}
+                        min={1} max={50} step={1}
+                        onChange={(v) => {
+                          const b = botRef.current; if (!b) return;
+                          history.push(b.options);
+                          b.options.leg_options[idx][name].radius = v;
+                          b.apply_attributes(b.options);
+                          bumpBotVersion();
+                        }}
+                      />
+                      <AttrSlider label="Init Angle"
+                        value={legOpt[name].init_angle ?? 0}
+                        min={-180} max={180} step={1}
+                        displayValue={(legOpt[name].init_angle ?? 0) + '°'}
+                        onChange={(v) => {
+                          const b = botRef.current; if (!b) return;
+                          history.push(b.options);
+                          b.options.leg_options[idx][name].init_angle = v;
+                          b.apply_attributes(b.options);
+                          bumpBotVersion();
+                        }}
+                      />
+                    </fieldset>
+                  );
+                })}
+              </div>
+            )}
+          </fieldset>
+        );
+      })}
     </div>
   );
 }

@@ -85,8 +85,9 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   dof: DEFAULT_DOF,
   leg_count: DEFAULT_LEG_COUNT,
   body_shape: 'rectangle',
+  body_offset: 0,
   body_radius: 80,
-  polygon_leg_placement: 'edge',
+  polygon_leg_placement: 'vertex',
   polygon_odd_orientation: 'back',
 
   color: 0x333333,
@@ -105,7 +106,6 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   target_mode: 'target',
   move_mode: 'move',
   sync_cmd: false,
-  tip_circle_scale: 1,
   _tip_lock: true,
 
   leg_options: [

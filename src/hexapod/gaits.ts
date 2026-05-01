@@ -19,7 +19,9 @@ export class GaitAction {
   constructor(controller?: any) {
     if (controller) this.controller = controller;
     this.acting_idx = 0;
-    this.up_distance = DEFAULT_HEXAPOD_OPTIONS.up_step;
+    this.up_distance = (this.controller?.bot?.options?.up_step != null)
+      ? this.controller.bot.options.up_step
+      : DEFAULT_HEXAPOD_OPTIONS.up_step;
     this.fb_direction = 0;
     this.lr_direction = 0;
     this.rotate_direction = 0;

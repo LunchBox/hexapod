@@ -20,82 +20,188 @@ interface LegLayout {
   init_angle: number; // coxa init_angle in degrees (for backward compat)
 }
 
+function computeRectangleLayout(
+  legCount: number,
+  bodyRadiusX: number,
+  bodyRadiusZ: number,
+  firstLegDirection: string,
+): LegLayout[] {
+  const FRONT_INIT_DEG = 30;
+  const REAR_INIT_DEG = -30;
+  const layouts: LegLayout[] = [];
+
+  if (legCount % 2 === 0) {
+    const pairs = legCount / 2;
+    for (let i = 0; i < pairs; i++) {
+      const z = pairs === 1 ? 0 : -bodyRadiusZ + (i * bodyRadiusZ * 2) / (pairs - 1);
+      const initDeg = pairs === 1 ? 0 : FRONT_INIT_DEG + ((REAR_INIT_DEG - FRONT_INIT_DEG) * i) / (pairs - 1);
+      const initRad = initDeg * Math.PI / 180;
+      layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
+      layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
+    }
+  } else {
+    const pairs = (legCount - 1) / 2;
+    const totalSlots = pairs + 1;
+    const extraAtFront = firstLegDirection === 'front';
+    for (let i = 0; i < pairs; i++) {
+      const slotI = extraAtFront ? i + 1 : i;
+      const z = -bodyRadiusZ + (slotI * bodyRadiusZ * 2) / (totalSlots - 1);
+      const initDeg = FRONT_INIT_DEG + ((REAR_INIT_DEG - FRONT_INIT_DEG) * slotI) / (totalSlots - 1);
+      const initRad = initDeg * Math.PI / 180;
+      layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
+      layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
+    }
+    const extraZ = extraAtFront ? -bodyRadiusZ : bodyRadiusZ;
+    const extraSign = extraAtFront ? 1 : -1;
+    layouts.push({ x: 0, z: extraZ, angle: extraAtFront ? -Math.PI / 2 : Math.PI / 2, yaw: extraSign * Math.PI / 2, init_angle: extraSign * 90 });
+  }
+
+  return layouts;
+}
+
+function computePolygonLayout(
+  legCount: number,
+  rx: number,
+  rz: number,
+  placement: 'vertex' | 'edge',
+  firstLegDirection: 'back' | 'front',
+): LegLayout[] {
+  const radiusScale = placement === 'edge' ? Math.cos(Math.PI / legCount) : 1;
+  const effRx = rx * radiusScale;
+  const effRz = rz * radiusScale;
+
+  // Legs always at vertex angles — placement mode only affects radius.
+  // Body rotates to match (see draw_body).
+  // Even leg counts: offset by π/N so legs sit on sides, not directly front/back.
+  const evenOffset = legCount % 2 === 0 ? Math.PI / legCount : 0;
+  const firstLegAngle = (firstLegDirection === 'back' ? Math.PI / 2 : -Math.PI / 2) + evenOffset;
+
+  const layouts: LegLayout[] = [];
+  for (let i = 0; i < legCount; i++) {
+    const angle = (2 * Math.PI * i) / legCount + firstLegAngle;
+    const lx = effRx * Math.cos(angle);
+    const lz = effRz * Math.sin(angle);
+    const polarAngle = Math.atan2(lz, lx);
+    const onRight = lx >= 0;
+    const initDeg = onRight
+      ? -polarAngle * 180 / Math.PI
+      : (polarAngle - Math.PI) * 180 / Math.PI;
+
+    layouts.push({ x: lx, z: lz, angle: polarAngle, yaw: polarAngle, init_angle: initDeg });
+  }
+  return layouts;
+}
+
 function computeLegLayout(
   legCount: number,
   bodyShape: string,
   bodyRadiusX: number,
   bodyRadiusZ: number,
-  polyPlacement: string = 'vertex',
-  orientation: string = 'back',
+  placement: string = 'vertex',
+  firstLegDirection: string = 'back',
 ): LegLayout[] {
-  const layouts: LegLayout[] = [];
-
   if (bodyShape === 'rectangle') {
-    if (legCount % 2 === 0) {
-      // Even: N/2 left-right pairs spread along Z
-      const pairs = legCount / 2;
-      const frontInit = 30, rearInit = -30;
-      for (let i = 0; i < pairs; i++) {
-        const z = pairs === 1 ? 0 : -bodyRadiusZ + (i * bodyRadiusZ * 2) / (pairs - 1);
-        const initDeg = pairs === 1 ? 0 : frontInit + ((rearInit - frontInit) * i) / (pairs - 1);
-        const initRad = initDeg * Math.PI / 180;
-        layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
-        layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
-      }
-    } else {
-      // Odd: (N-1)/2 full pairs, then 1 extra leg at front or back center
-      const pairs = (legCount - 1) / 2;
-      const frontInit = 30, rearInit = -30;
-      const totalSlots = pairs + 1;
-      const extraAtFront = orientation === 'front';
-      for (let i = 0; i < pairs; i++) {
-        const slotI = extraAtFront ? i + 1 : i; // skip first slot if extra at front
-        const z = -bodyRadiusZ + (slotI * bodyRadiusZ * 2) / (totalSlots - 1);
-        const initDeg = frontInit + ((rearInit - frontInit) * slotI) / (totalSlots - 1);
-        const initRad = initDeg * Math.PI / 180;
-        layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
-        layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
-      }
-      // Extra leg at front or back center
-      const extraZ = extraAtFront ? -bodyRadiusZ : bodyRadiusZ;
-      const extraSign = extraAtFront ? 1 : -1;
-      layouts.push({ x: 0, z: extraZ, angle: extraAtFront ? -Math.PI / 2 : Math.PI / 2, yaw: extraSign * Math.PI / 2, init_angle: extraSign * 90 });
-    }
-  } else {
-    // Polygon — legs radiate outward, stretched by width (X) and length (Z)
-    // Vertex: legs at polygon corners (full radius)
-    // Edge:   legs at edge midpoints (reduced radius, offset by π/N)
-    // Vertex: legs at polygon corners → full radius, no angle offset
-    // Edge:   legs at edge midpoints → reduced radius, offset by π/N
-    const isVertex = polyPlacement === 'vertex';
-    const edgeOffset = isVertex ? 0 : Math.PI / legCount;
-    const edgeScale  = isVertex ? 1 : Math.cos(Math.PI / legCount);
-    const rx = bodyRadiusX * edgeScale;
-    const rz = bodyRadiusZ * edgeScale;
-    // orientOffset = desired first-leg angle - base angle
-    // base = -PI/2 + edgeOffset; desired = PI/2 (back) or -PI/2 (front)
-    // → orientOffset = desired + PI/2 - edgeOffset = (desired == PI/2 ? PI : 0) - edgeOffset
-    const orientOffset = orientation === 'back' ? Math.PI : 0;
-    for (let i = 0; i < legCount; i++) {
-      const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset + orientOffset;
-      const legX = rx * Math.cos(angle);
-      const legZ = rz * Math.sin(angle);
-      const worldAngle = Math.atan2(legZ, legX);
-      const onRight = Math.cos(angle) >= 0;
-      const initDeg = onRight
-        ? -worldAngle * 180 / Math.PI
-        : (worldAngle - Math.PI) * 180 / Math.PI;
-      layouts.push({
-        x: legX,
-        z: legZ,
-        angle: worldAngle,
-        yaw: worldAngle,
-        init_angle: initDeg,
-      });
-    }
+    return computeRectangleLayout(legCount, bodyRadiusX, bodyRadiusZ, firstLegDirection);
+  }
+  return computePolygonLayout(legCount, bodyRadiusX, bodyRadiusZ, placement as 'vertex' | 'edge', firstLegDirection as 'back' | 'front');
+}
+
+// ── Shared leg kinematics (used by LegEditor + tip spread) ─────
+
+export function getSegNamesForLeg(opts: any, legIdx: number): string[] {
+  const leg = opts.leg_options[legIdx];
+  const dof = leg?.dof ?? opts.dof ?? 3;
+  return LIMB_NAMES.slice(0, Math.min(6, Math.max(2, dof)));
+}
+
+export function computeJointPositions(opts: any, legIdx: number): { x: number; y: number }[] {
+  const segNames = getSegNamesForLeg(opts, legIdx);
+  const leg = opts.leg_options[legIdx];
+  const pts: { x: number; y: number }[] = [{ x: 0, y: 0 }];
+
+  const coxaOpt = leg[segNames[0]] || {};
+  const coxaLen = coxaOpt.length || (opts as any)[segNames[0] + '_length'] || 32;
+  pts.push({ x: coxaLen, y: 0 });
+
+  let cumAngle = 0;
+  for (let i = 1; i < segNames.length; i++) {
+    const segOpt = leg[segNames[i]] || {};
+    const len = segOpt.length || (opts as any)[segNames[i] + '_length'] || 20;
+    const initAngle = segOpt.init_angle ?? 0;
+    cumAngle -= initAngle;
+    const rad = (cumAngle * Math.PI) / 180;
+    pts.push({
+      x: pts[i].x + len * Math.cos(rad),
+      y: pts[i].y + len * Math.sin(rad),
+    });
+  }
+  return pts;
+}
+
+export function getActualJointPositions(bot: any, legIdx: number): { x: number; y: number }[] | null {
+  const leg = bot.legs[legIdx];
+  if (!leg || !leg.limbs || leg.limbs.length === 0) return null;
+
+  const opts = bot.options;
+  const segNames = getSegNamesForLeg(opts, legIdx);
+  const legOpts = opts.leg_options[legIdx];
+
+  const pts: { x: number; y: number }[] = [{ x: 0, y: 0 }];
+
+  const coxaOpt = legOpts[segNames[0]] || {};
+  const coxaLen = coxaOpt.length || (opts as any)[segNames[0] + '_length'] || 32;
+  pts.push({ x: coxaLen, y: 0 });
+
+  let cumAngleDeg = 0;
+  for (let i = 1; i < segNames.length; i++) {
+    const segOpt = legOpts[segNames[i]] || {};
+    const len = segOpt.length || (opts as any)[segNames[i] + '_length'] || 20;
+    const actualAngleDeg = leg.get_angle(i);
+    cumAngleDeg -= actualAngleDeg;
+    const rad = (cumAngleDeg * Math.PI) / 180;
+    pts.push({
+      x: pts[i].x + len * Math.cos(rad),
+      y: pts[i].y + len * Math.sin(rad),
+    });
   }
 
-  return layouts;
+  return pts;
+}
+
+export function applyJointMove(
+  opts: any,
+  legIdx: number,
+  jointIndex: number,
+  targetPos: { x: number; y: number },
+): { segmentName: string; length: number; init_angle?: number } | null {
+  if (jointIndex < 1) return null;
+
+  const pts = computeJointPositions(opts, legIdx);
+  if (jointIndex >= pts.length) return null;
+
+  let dx: number, dy: number, newLen: number;
+  const segNames = getSegNamesForLeg(opts, legIdx);
+  const segmentName = segNames[jointIndex - 1];
+
+  if (jointIndex === 1) {
+    newLen = Math.max(5, targetPos.x);
+    return { segmentName, length: newLen };
+  }
+
+  const prevPt = pts[jointIndex - 1];
+  dx = targetPos.x - prevPt.x;
+  dy = targetPos.y - prevPt.y;
+  newLen = Math.max(5, Math.sqrt(dx * dx + dy * dy));
+
+  const absAngleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  let sumPrev = 0;
+  for (let k = 1; k < jointIndex - 1; k++) {
+    const segData = opts.leg_options[legIdx]?.[segNames[k]];
+    if (segData) sumPrev += segData.init_angle || 0;
+  }
+  const newInitAngle = -absAngleDeg - sumPrev;
+
+  return { segmentName, length: newLen, init_angle: newInitAngle };
 }
 
 // ── Hexapod ────────────────────────────────────────────────────
@@ -204,11 +310,10 @@ export class Hexapod {
     const rx = bodyWidth / 2;
     const rz = bodyLength / 2;
 
-    let polyPlacement = this.options.polygon_leg_placement || 'edge';
-    let orientation = this.options.polygon_odd_orientation || 'back';
-    console.log('draw() polyPlacement:', polyPlacement, ' orientation:', orientation, ' legCount:', legCount, ' bodyShape:', bodyShape);
+    const placement = this.options.polygon_leg_placement || 'vertex';
+    const firstLegDirection = this.options.polygon_odd_orientation || 'back';
 
-    this.leg_layout = computeLegLayout(legCount, bodyShape, rx, rz, polyPlacement, orientation);
+    this.leg_layout = computeLegLayout(legCount, bodyShape, rx, rz, placement, firstLegDirection);
 
     this.body_mesh = this.draw_body();
     this.mesh.add(this.body_mesh);
@@ -312,7 +417,9 @@ export class Hexapod {
         break;
       default:
         if (bodyShape === 'polygon' && legCount >= 3) {
-          // Build N-gon prism manually — vertex positions match leg layout exactly
+          // Build N-gon prism with corners at vertex positions (full polygon).
+          // Body shape is independent of leg placement mode — legs may attach
+          // at corners (vertex mode) or edge midpoints (edge mode).
           geometry = new THREE.Geometry();
           const halfH = bodyHeight / 2;
 
@@ -322,11 +429,23 @@ export class Hexapod {
           const topCenter = geometry.vertices.length;
           geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
 
-          // Outer ring vertices — directly from leg_layout (single source of truth)
+          // Body polygon corners — rotated in edge mode so edge midpoints align with legs.
+          // Legs stay at fixed vertex angles; body rotates to match placement.
+          const bw = this.options.body_width || 50;
+          const bl = this.options.body_length || 100;
+          const bodyRx = bw / 2;
+          const bodyRz = bl / 2;
+          const bodyPlacement = this.options.polygon_leg_placement || 'vertex';
+          const bodyOffset = bodyPlacement === 'edge' ? -Math.PI / legCount : 0;
+          const evenOffset = legCount % 2 === 0 ? Math.PI / legCount : 0;
+          const firstLegAngle = ((this.options.polygon_odd_orientation || 'back') === 'back'
+            ? Math.PI / 2 : -Math.PI / 2) + evenOffset;
+
           const btmRing: number[] = [], topRing: number[] = [];
           for (let i = 0; i < legCount; i++) {
-            const lx = this.leg_layout[i].x;
-            const lz = this.leg_layout[i].z;
+            const angle = (2 * Math.PI * i) / legCount + bodyOffset + firstLegAngle;
+            const lx = bodyRx * Math.cos(angle);
+            const lz = bodyRz * Math.sin(angle);
             btmRing.push(geometry.vertices.length);
             geometry.vertices.push(new THREE.Vector3(lx, -halfH, lz));
             topRing.push(geometry.vertices.length);
@@ -358,7 +477,12 @@ export class Hexapod {
         bodyVisual.add(axisHelper);
     }
 
-    container.add(bodyVisual);
+    // Body offset moves only the visual, not leg attachment points
+    const bodyGroup = new THREE.Object3D();
+    bodyGroup.add(bodyVisual);
+    bodyGroup.position.y = this.options.body_offset || 0;
+    container.add(bodyGroup);
+
     container.position.y = bodyHeight / 2;
     return container;
   }
@@ -820,27 +944,6 @@ export class Hexapod {
     this.transform_body(opts);
   }
 
-  adjust_tip_spread(new_scale: number) {
-    let old_scale = this.tip_circle_scale;
-    if (old_scale === new_scale || old_scale <= 0) return;
-    let ratio = new_scale / old_scale;
-    this.tip_circle_scale = new_scale;
-
-    let current_tips = this.get_tip_pos();
-    let cx = this.body_mesh.position.x;
-    let cz = this.body_mesh.position.z;
-
-    for (let i = 0; i < this.legs.length; i++) {
-      let tip = current_tips[i];
-      tip.x = cx + (tip.x - cx) * ratio;
-      tip.z = cz + (tip.z - cz) * ratio;
-      this.legs[i].set_tip_pos(tip);
-    }
-
-    this.sync_guide_circles();
-    this.after_status_change();
-  }
-
   save_body_home() {
     const tips = this.get_tip_pos();
     const home = {
@@ -855,7 +958,6 @@ export class Hexapod {
   reset_body_to_home() {
     const home = this.options._body_home;
     if (!home) return;
-    // Set body pose directly (no tip lock needed — tips are set explicitly below)
     this.body_mesh.position.set(home.px, home.py, home.pz);
     this.body_mesh.rotation.set(home.rx, home.ry, home.rz);
     this.body_mesh.updateMatrixWorld();

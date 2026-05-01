@@ -59,10 +59,6 @@ export default function SceneControls() {
   const [bodyY, setBodyY] = useState(10);
   const [bodyX, setBodyX] = useState(0);
   const [bodyZ, setBodyZ] = useState(0);
-  const [tipScale, setTipScale] = useState(1);
-  const [rotDeg, setRotDeg] = useState(10);
-  const [fbStep, setFbStep] = useState(15);
-  const [lrStep, setLrStep] = useState(10);
   const [rotX, setRotX] = useState(0);
   const [rotY, setRotY] = useState(0);
   const [rotZ, setRotZ] = useState(0);
@@ -71,10 +67,6 @@ export default function SceneControls() {
     const bot = botRef.current;
     if (!bot) return;
     setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
-    setTipScale(bot.options?.tip_circle_scale ?? 1);
-    setRotDeg(Math.round(((bot.options?.rotate_step ?? Math.PI / 18) * 180) / Math.PI));
-    setFbStep(bot.options?.fb_step ?? 15);
-    setLrStep(bot.options?.lr_step ?? 10);
     setRotX(Math.round(bot.body_mesh?.rotation?.x * 180 / Math.PI) || 0);
     setRotY(Math.round(bot.body_mesh?.rotation?.y * 180 / Math.PI) || 0);
     setRotZ(Math.round(bot.body_mesh?.rotation?.z * 180 / Math.PI) || 0);
@@ -82,16 +74,6 @@ export default function SceneControls() {
     setBodyZ(Math.round(bot.body_mesh?.position?.z ?? 0));
     setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
   }, [botVersion, botRef]);
-
-  const handleSpreadChange = (v: number) => {
-    const bot = botRef.current;
-    if (!bot) return;
-    bot.options.tip_circle_scale = v;
-    set_bot_options(bot.options);
-    bot.adjust_tip_spread(v);
-    bot.adjust_gait_guidelines();
-    setTipScale(v);
-  };
 
   const syncSliders = () => {
     const bot = botRef.current;
@@ -132,20 +114,6 @@ export default function SceneControls() {
     return ok;
   };
 
-  const handleMotionChange = (key: string, value: number) => {
-    const bot = botRef.current;
-    if (!bot) return;
-    (bot.options as any)[key] = value;
-    set_bot_options(bot.options);
-    if (key === 'rotate_step') {
-      bot.rotate_step = value;
-      bot.adjust_gait_guidelines();
-    } else if (key === 'fb_step') { bot.fb_step = value; setFbStep(value); }
-    else if (key === 'lr_step') { bot.lr_step = value; setLrStep(value); }
-    const gc = bot.gait_controller;
-    if (gc) gc.reset_steps();
-  };
-
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap',
   };
@@ -155,7 +123,7 @@ export default function SceneControls() {
   };
 
   return (
-    <div style={{ padding: '6px 10px', margin: '8px 0' }}>
+    <div style={{ padding: '12px 10px', margin: '8px 0' }}>
       {/* Row 1: Joysticks */}
       <div style={rowStyle}>
         <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
@@ -182,20 +150,6 @@ export default function SceneControls() {
       />
       <SliderColumn value={bodyZ} min={-80} max={80} label="Z" title="Body Z position"
         onChange={(v) => { setBodyZ(v); return handleBodyPos('z', v); }}
-      />
-      <SliderColumn value={tipScale} min={0.1} max={1.5} step={0.1} label="↔" title="Tip spread"
-        displayValue={tipScale.toFixed(1)}
-        onChange={(v) => { handleSpreadChange(v); return true; }}
-      />
-      <SliderColumn value={rotDeg} min={1} max={45} label="↻°" title="Rotate step (°)"
-        displayValue={rotDeg + '°'}
-        onChange={(v) => { setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180); return true; }}
-      />
-      <SliderColumn value={fbStep} min={1} max={50} label="↕" title="F&B step (mm)"
-        onChange={(v) => { setFbStep(v); handleMotionChange('fb_step', v); return true; }}
-      />
-      <SliderColumn value={lrStep} min={1} max={50} label="⇔" title="L&R step (mm)"
-        onChange={(v) => { setLrStep(v); handleMotionChange('lr_step', v); return true; }}
       />
       <SliderColumn value={rotX} min={-45} max={45} label="Rx°" title="Rotate X axis"
         displayValue={rotX + '°'}

@@ -35,3 +35,19 @@
   padding-top: 16px;
   border-top: 1px solid #ccc;
 }
+
+.attr-fieldset {
+  border: 1px solid #ccc;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+}
+
+.attr-fieldset legend {
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+}
+
+.attr-fieldset .tab_content {
+  padding-left: 4px;
+}

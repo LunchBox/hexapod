@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
+import { getSegNamesForLeg, computeJointPositions, getActualJointPositions, applyJointMove } from '../hexapod/hexapod';
 import { history } from '../hexapod/history';
-import { LIMB_NAMES } from '../hexapod/defaults';
 import './LegEditor.css';
 
 interface Point { x: number; y: number }
@@ -10,38 +10,6 @@ interface Point { x: number; y: number }
 const JOINT_R = 7, HIT_R = 16;
 const BASE_COLORS = ['#e74c3c', '#2ecc71', '#3498db', '#f39c12', '#9b59b6', '#1abc9c'];
 const JOINT_FILL = '#fff';
-
-function deg(d: number) { return (d * 180) / Math.PI; }
-
-function getSegNamesForLeg(opts: any, legIdx: number): string[] {
-  const leg = opts.leg_options[legIdx];
-  const dof = leg?.dof ?? opts.dof ?? 3;
-  return LIMB_NAMES.slice(0, Math.min(6, Math.max(2, dof)));
-}
-
-function computeJointsForLeg(opts: any, legIdx: number): Point[] {
-  const segNames = getSegNamesForLeg(opts, legIdx);
-  const leg = opts.leg_options[legIdx];
-  const pts: Point[] = [{ x: 0, y: 0 }];
-
-  const coxaOpt = leg[segNames[0]] || {};
-  const coxaLen = coxaOpt.length || (opts as any)[segNames[0] + '_length'] || 32;
-  pts.push({ x: coxaLen, y: 0 });
-
-  let cumAngle = 0;
-  for (let i = 1; i < segNames.length; i++) {
-    const segOpt = leg[segNames[i]] || {};
-    const len = segOpt.length || (opts as any)[segNames[i] + '_length'] || 20;
-    const initAngle = segOpt.init_angle ?? 0;
-    cumAngle -= initAngle;
-    const rad = (cumAngle * Math.PI) / 180;
-    pts.push({
-      x: pts[i].x + len * Math.cos(rad),
-      y: pts[i].y + len * Math.sin(rad),
-    });
-  }
-  return pts;
-}
 
 function computeView(pts: Point[], w: number, h: number) {
   const pad = 40;
@@ -163,7 +131,15 @@ export default function LegEditor() {
     }
 
     const refLeg = valid.refLeg;
-    const pts = computeJointsForLeg(opts, refLeg);
+    let pts;
+    if (dragRef.current) {
+      // During drag, use opts-based computation (bot servo values are stale)
+      pts = computeJointPositions(opts, refLeg);
+    } else {
+      const bot = botRef.current;
+      const actual = bot ? getActualJointPositions(bot, refLeg) : null;
+      pts = actual || computeJointPositions(opts, refLeg);
+    }
     const view = dragRef.current?.view || computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const sp = pts.map(p => toScreen(p, view));
 
@@ -250,7 +226,7 @@ export default function LegEditor() {
     if (!opts) return -1;
     const valid = checkedLegsSameDof();
     if (!valid.ok) return -1;
-    const pts = computeJointsForLeg(opts, valid.refLeg);
+    const pts = computeJointPositions(opts, valid.refLeg);
     const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     for (let i = 1; i < pts.length; i++) {
       const s = toScreen(pts[i], view);
@@ -294,7 +270,7 @@ export default function LegEditor() {
     // Push pre-drag state to undo history
     history.push(botRef.current.options);
 
-    const pts = computeJointsForLeg(opts, valid.refLeg);
+    const pts = computeJointPositions(opts, valid.refLeg);
     const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const legPt = toLeg(cx, cy, view);
 
@@ -324,43 +300,17 @@ export default function LegEditor() {
       const opts = bot.options;
       const legPt = toLeg(cx, cy, d.view);
 
-      const prevPts = computeJointsForLeg(d.opts, d.refLeg);
-      const prevPt = prevPts[d.joint - 1];
-
-      const dx = legPt.x - prevPt.x;
-      const dy = legPt.y - prevPt.y;
-      const newLen = Math.max(5, Math.sqrt(dx * dx + dy * dy));
-
-      const checked = getCheckedLegs();
-      const segNames = getSegNamesForLeg(opts, d.refLeg);
-
-      if (d.joint === 1) {
-        // First segment (coxa) — horizontal only
-        const firstName = segNames[0];
-        const newCoxaLen = Math.max(5, legPt.x);
-        (opts as any)[firstName + '_length'] = newCoxaLen;
+      const result = applyJointMove(opts, d.refLeg, d.joint, legPt);
+      if (result) {
+        const checked = getCheckedLegs();
+        const globalKey = result.segmentName + '_length';
+        (opts as any)[globalKey] = result.length;
         for (const i of checked) {
-          if (!opts.leg_options[i][firstName]) continue;
-          opts.leg_options[i][firstName].length = newCoxaLen;
-        }
-      } else {
-        // Non-first segment
-        const absAngleDeg = deg(Math.atan2(dy, dx));
-        const part = segNames[d.joint - 1];
-
-        let sumPrev = 0;
-        for (let k = 1; k < d.joint - 1; k++) {
-          const segData = opts.leg_options[d.refLeg]?.[segNames[k]];
-          if (segData) sumPrev += segData.init_angle || 0;
-        }
-        const newInitAngle = -absAngleDeg - sumPrev;
-
-        const lengthKey = part + '_length';
-        (opts as any)[lengthKey] = newLen;
-        for (const i of checked) {
-          if (!opts.leg_options[i][part]) continue;
-          opts.leg_options[i][part].length = newLen;
-          opts.leg_options[i][part].init_angle = newInitAngle;
+          if (!opts.leg_options[i][result.segmentName]) continue;
+          opts.leg_options[i][result.segmentName].length = result.length;
+          if (result.init_angle != null) {
+            opts.leg_options[i][result.segmentName].init_angle = result.init_angle;
+          }
         }
       }
 
@@ -390,6 +340,7 @@ export default function LegEditor() {
           set_bot_options(bot.options);
           history.markSaved(bot.options);
         }
+        delete bot.options._body_home;
         applyOpts(bot.options, true);
       }
       dragRef.current = null;
@@ -408,6 +359,7 @@ export default function LegEditor() {
           set_bot_options(bot.options);
           history.markSaved(bot.options);
         }
+        delete bot.options._body_home;
         applyOpts(bot.options, true);
       }
       dragRef.current = null;

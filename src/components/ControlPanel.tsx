@@ -56,7 +56,6 @@ export default function ControlPanel() {
   const [actionType, setActionType] = useState(saved.action_type || 'efficient');
   const [targetMode, setTargetMode] = useState(saved.target_mode || 'target');
   const [syncMode, setSyncMode] = useState(saved.sync_cmd ? 'sync' : 'manual');
-  const [tipCircleScale, setTipCircleScale] = useState(saved.tip_circle_scale ?? 1);
   const [dof, setDof] = useState(saved.dof || 3);
   // Which legs to apply DOF changes to (default all checked)
   const [dofLegs, setDofLegs] = useState<Set<number>>(() => {
@@ -108,23 +107,6 @@ export default function ControlPanel() {
           bot.move_body('y', -5);
           setBodyHeightVal(bot.body_mesh.position.y);
         }
-        break;
-      case 'act_expend': {
-        // Temporary — only visual, no persist
-        const cur = bot.options.tip_circle_scale ?? 1;
-        const next = Math.min(1.5, +(cur + 0.1).toFixed(1));
-        setTipCircleScale(next);
-        bot.adjust_tip_spread(next);
-        break;
-      }
-      case 'act_compact': {
-        // Temporary — only visual, no persist
-        const cur = bot.options.tip_circle_scale ?? 1;
-        const next = Math.max(0.1, +(cur - 0.1).toFixed(1));
-        setTipCircleScale(next);
-        bot.adjust_tip_spread(next);
-        break;
-      }
         break;
       case 'gait_switch':
         setGait(value!);
@@ -406,9 +388,6 @@ export default function ControlPanel() {
 
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_motion2', '82'); }}>Raise(r)</a>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_motion2', '70'); }}>Fall(f)</a>
-        {' | '}
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_expend'); }}>Expand</a>
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_compact'); }}>Compact</a>
       </fieldset>
 
       <fieldset className="btns">
