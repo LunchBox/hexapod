@@ -497,14 +497,12 @@ export class GaitController {
     for (let i = 0; i < leg_idxs.length; i++) {
       let idx = leg_idxs[i];
       let ori_pos = this.bot.legs[idx].get_tip_pos();
-      // Translate + rotate target around body center
-      let cx = this.bot.body_mesh.position.x;
-      let cz = this.bot.body_mesh.position.z;
-      let dx = ori_pos.x - cx - lr_offset;
-      let dz = ori_pos.z - cz - fb_offset;
+      // Translate + rotate target around mesh origin (same center as body rotation)
+      let dx = ori_pos.x - lr_offset;
+      let dz = ori_pos.z - fb_offset;
       let cosR = Math.cos(rotate_offset), sinR = Math.sin(rotate_offset);
-      ori_pos.x = cx + dx * cosR - dz * sinR;
-      ori_pos.z = cz + dx * sinR + dz * cosR;
+      ori_pos.x = dx * cosR - dz * sinR;
+      ori_pos.z = dx * sinR + dz * cosR;
       this.bot.legs[idx].set_tip_pos(ori_pos);
     }
   }
