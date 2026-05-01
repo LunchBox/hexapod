@@ -197,7 +197,7 @@ export default function ControlPanel() {
         bumpBotVersion();
         break;
     }
-    updateServoDisplay();
+    queueMicrotask(() => updateServoDisplay());
   }, [botRef, gc, updateServoDisplay]);
 
   // Keyboard handler
