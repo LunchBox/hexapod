@@ -220,7 +220,7 @@ export default function ControlPanel() {
         break;
     }
     updateServoDisplay();
-  }, [botRef, gc, updateServoDisplay]);
+  }, [botRef, gc, updateServoDisplay, dofLegs]);
 
   // Track pressed movement keys so combinations (e.g. W+A) work without
   // resetting the gait cycle on every key change.
