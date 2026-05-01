@@ -62,18 +62,6 @@ HexapodAttributesController.prototype.redraw_bot = function () {
   // Push current state to undo history before applying change
   history.push(this.bot.options);
 
-  // Sync all keys from live bot options (may have been changed via other panels)
-  let botOpts = this.bot.options;
-  for (let key of Object.keys(botOpts)) {
-    if (key === 'leg_options') continue;
-    this.attributes[key] = botOpts[key];
-  }
-  if (botOpts.leg_options && this.attributes.leg_options) {
-    for (let i = 0; i < Math.min(botOpts.leg_options.length, this.attributes.leg_options.length); i++) {
-      this.attributes.leg_options[i] = botOpts.leg_options[i];
-    }
-  }
-
   if (history.autoSave) {
     set_bot_options(this.attributes);
   }
