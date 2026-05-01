@@ -193,12 +193,9 @@ export default function SceneControls() {
           onClick={() => botRef.current?.save_body_home?.()}>Save Pose</button>
         <button className="control_btn" title="Reset to last saved pose"
           onClick={() => { botRef.current?.reset_body_to_home?.(); syncSliders(); }}>↺ Recall</button>
-        <button className="control_btn" title="Reset body to init pose + reapply leg attributes"
+        <button className="control_btn" title="Reset body to init pose, keep leg attributes"
           onClick={() => {
-            const bot = botRef.current;
-            if (!bot) return;
-            delete bot.options._body_home;
-            bot.apply_attributes(bot.options);
+            botRef.current?.reset_body_to_init?.();
             syncSliders();
           }}>↺ Init Pose</button>
         <button className="control_btn" title="Toggle tip lock (anchor tips when moving body)"

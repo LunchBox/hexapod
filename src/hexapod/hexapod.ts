@@ -765,9 +765,11 @@ export class Hexapod {
 
   reset_body_to_init() {
     delete this.options._body_home;
-    set_bot_options(this.options);
-    // Full redraw restores default body pose + leg positions from attributes
-    this.apply_attributes(this.options);
+    // Redraw without persisting (bare draw + new gait controller)
+    if (this.mesh) this.scene.remove(this.mesh);
+    this.draw();
+    this.gait_controller = new (this.gait_controller.constructor as any)(this);
+    this.on_servo_values = this.get_servo_values();
   }
 
   after_status_change(send_cmd?: boolean) {
