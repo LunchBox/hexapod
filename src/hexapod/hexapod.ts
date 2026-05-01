@@ -695,6 +695,8 @@ export class Hexapod {
   }
 
   reset_body_to_init() {
+    delete this.options._body_home;
+    set_bot_options(this.options);
     let current_tips = this.get_tip_pos();
     this.body_mesh.position.set(0, (this.options.body_height || 20) / 2, 0);
     this.body_mesh.rotation.set(0, 0, 0);
