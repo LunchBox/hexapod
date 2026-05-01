@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
@@ -66,16 +66,10 @@ function toLeg(sx: number, sy: number, v: { scale: number; ox: number; oy: numbe
 export default function LegEditor() {
   const { botRef, bumpBotVersion, botVersion } = useHexapod();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ joint: number; startLeg: Point; startScreen: Point; opts: any; view: { scale: number; ox: number; oy: number } } | null>(null);
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverRef = useRef<number>(-1);
   const sizeRef = useRef({ w: 400, h: 220 });
-  const [canvasW, setCanvasW] = useState(400);
-  const canvasH = Math.round(canvasW * 0.55);
-
-  // Keep sizeRef in sync so callbacks can read without dep changes
-  sizeRef.current = { w: canvasW, h: canvasH }; // ~16:9 leg-friendly ratio
 
   const getOpts = useCallback(() => {
     const bot = botRef.current;
@@ -206,33 +200,24 @@ export default function LegEditor() {
     return -1;
   }, [getOpts]);
 
-  // Track container width for responsive canvas
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setCanvasW(el.clientWidth);
-    });
-    ro.observe(el);
-    setCanvasW(el.clientWidth);
-    return () => ro.disconnect();
-  }, []);
-
-  // Size canvas then draw — must be ONE effect because sizing clears the buffer
+  // Size canvas then draw — reads actual CSS width from clientWidth for sharp rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     const bot = botRef.current;
     if (!canvas || !bot) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = canvasW * dpr;
-    canvas.height = canvasH * dpr;
-    canvas.style.height = canvasH + 'px'; // CSS width:100% handles horizontal
+    const cw = canvas.clientWidth || 400;
+    const ch = Math.round(cw * 0.55);
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    sizeRef.current = { w: cw, h: ch };
+
     const ctx = canvas.getContext('2d');
     if (ctx) ctx.scale(dpr, dpr);
 
     draw();
-  }, [draw, botVersion, canvasW, canvasH]);
+  }, [draw, botVersion]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
