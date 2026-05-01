@@ -355,13 +355,12 @@ export default function AttributesPanel() {
             onClick={(e) => { e.preventDefault(); setPolyPlacement('vertex'); applyConfig({ polygon_leg_placement: 'vertex' }); }}>Vertex</a>
           <a href="#" className={`control_btn${polyPlacement === 'edge' ? ' active' : ''}`}
             onClick={(e) => { e.preventDefault(); setPolyPlacement('edge'); applyConfig({ polygon_leg_placement: 'edge' }); }}>Edge</a>
-          {legCount % 2 !== 0 && (<>
-            {' | '}
-            <a href="#" className={`control_btn${oddOrientation === 'back' ? ' active' : ''}`}
-              onClick={(e) => { e.preventDefault(); setOddOrientation('back'); applyConfig({ polygon_odd_orientation: 'back' }); }}>1-Back</a>
-            <a href="#" className={`control_btn${oddOrientation === 'front' ? ' active' : ''}`}
-              onClick={(e) => { e.preventDefault(); setOddOrientation('front'); applyConfig({ polygon_odd_orientation: 'front' }); }}>1-Front</a>
-          </>)}
+        </>)}
+        {legCount % 2 !== 0 && (<>
+          <a href="#" className={`control_btn${oddOrientation === 'back' ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); setOddOrientation('back'); applyConfig({ polygon_odd_orientation: 'back' }); }}>1-Back</a>
+          <a href="#" className={`control_btn${oddOrientation === 'front' ? ' active' : ''}`}
+            onClick={(e) => { e.preventDefault(); setOddOrientation('front'); applyConfig({ polygon_odd_orientation: 'front' }); }}>1-Front</a>
         </>)}
       </fieldset>
 

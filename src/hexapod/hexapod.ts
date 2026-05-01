@@ -43,19 +43,23 @@ function computeLegLayout(
         layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
       }
     } else {
-      // Odd: (N-1)/2 full pairs, then 1 extra leg at rear center
+      // Odd: (N-1)/2 full pairs, then 1 extra leg at front or back center
       const pairs = (legCount - 1) / 2;
       const frontInit = 30, rearInit = -30;
-      const totalSlots = pairs + 1; // pair slots + rear slot
+      const totalSlots = pairs + 1;
+      const extraAtFront = orientation === 'front';
       for (let i = 0; i < pairs; i++) {
-        const z = -bodyRadiusZ + (i * bodyRadiusZ * 2) / (totalSlots - 1);
-        const initDeg = frontInit + ((rearInit - frontInit) * i) / (totalSlots - 1);
+        const slotI = extraAtFront ? i + 1 : i; // skip first slot if extra at front
+        const z = -bodyRadiusZ + (slotI * bodyRadiusZ * 2) / (totalSlots - 1);
+        const initDeg = frontInit + ((rearInit - frontInit) * slotI) / (totalSlots - 1);
         const initRad = initDeg * Math.PI / 180;
         layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
         layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
       }
-      // Single rear leg at center — coxa points forward so femur/tibia reach back
-      layouts.push({ x: 0, z: bodyRadiusZ, angle: Math.PI / 2, yaw: -Math.PI / 2, init_angle: -90 });
+      // Extra leg at front or back center
+      const extraZ = extraAtFront ? -bodyRadiusZ : bodyRadiusZ;
+      const extraSign = extraAtFront ? 1 : -1;
+      layouts.push({ x: 0, z: extraZ, angle: extraAtFront ? -Math.PI / 2 : Math.PI / 2, yaw: extraSign * Math.PI / 2, init_angle: extraSign * 90 });
     }
   } else {
     // Polygon — legs radiate outward, stretched by width (X) and length (Z)
