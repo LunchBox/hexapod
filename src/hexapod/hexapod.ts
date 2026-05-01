@@ -631,10 +631,10 @@ export class Hexapod {
   move_body(direction: string, distance: number) {
     let opts: any = {};
     opts['d' + direction] = distance;
-    // For Y-up: check at least 2 tips can reach ground
+    this.transform_body(opts);
+
+    // For Y-up: ensure at least 2 tips can still reach ground
     if (direction === 'y' && distance > 0) {
-      opts.lockTips = false; // let transform_body handle, then check
-      this.transform_body(opts);
       let grounded = 0;
       let tips = this.get_tip_pos();
       for (let i = 0; i < this.legs.length; i++) {
@@ -643,8 +643,6 @@ export class Hexapod {
       if (grounded < 2) {
         this.transform_body({ dy: -distance, lockTips: false });
       }
-    } else {
-      this.transform_body(opts);
     }
   }
 
