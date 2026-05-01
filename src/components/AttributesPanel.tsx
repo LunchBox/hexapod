@@ -41,6 +41,7 @@ HexapodAttributesController.prototype.get_attr = function (attr_name) {
   let attrs = attr_name.split('.');
   let value = this.attributes;
   for (let idx = 0; idx < attrs.length; idx++) {
+    if (value == null) return undefined;
     value = value[attrs[idx]];
   }
   return value;
@@ -50,10 +51,11 @@ HexapodAttributesController.prototype.set_attr = function (attr_name, value) {
   let attrs = attr_name.split('.');
   let obj = this.attributes;
   for (let i = 0; i < attrs.length - 1; i++) {
+    if (obj == null) return;
     obj = obj[attrs[i]];
   }
+  if (obj == null) return;
   obj[attrs[attrs.length - 1]] = value;
-  // Persistence is done in redraw_bot() after syncing with live bot.options
 };
 
 HexapodAttributesController.prototype.redraw_bot = function () {
@@ -102,7 +104,8 @@ HexapodAttributesController.prototype.make_input = function (container, attr_nam
         }
         break;
       default:
-        input.setAttribute('value', this.get_attr(attr_name));
+        const val = this.get_attr(attr_name);
+        input.setAttribute('value', val ?? '');
         input.addEventListener('change', function () {
           this.controller.set_attr(attr_name, parseFloat(this.value));
           this.controller.redraw_bot();
@@ -285,6 +288,8 @@ export default function AttributesPanel() {
       attrs_control.make_input(pos_attrs, 'leg_options.' + idx + '.z', 'number', 'pos z');
 
       for (const name of legSegNames) {
+        // Skip segments that don't exist on this leg (e.g. not yet padded)
+        if (!legOpt[name]) continue;
         let seg_attrs = attrs_control.make_fieldset(leg_content, name.charAt(0).toUpperCase() + name.slice(1));
         attrs_control.make_input(seg_attrs, 'leg_options.' + idx + '.' + name + '.length', 'number', 'Length');
         attrs_control.make_input(seg_attrs, 'leg_options.' + idx + '.' + name + '.radius', 'number', 'Radius');
