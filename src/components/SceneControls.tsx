@@ -25,7 +25,15 @@ export default function SceneControls() {
     if (inited.current || !moveJsRef.current || !bodyJsRef.current || !rotJsRef.current) return;
     inited.current = true;
 
-    const stop = () => { botRef.current?.gait_controller?.stop(); };
+    const stop = () => {
+      const gc = botRef.current?.gait_controller;
+      if (gc) {
+        gc.stop();
+        // Reset home snapshot for next activation
+        const im = gc.actions?.['internal_move'];
+        if (im) im._homeSnapped = false;
+      }
+    };
 
     // Move mode joystick
     makeJoystick(moveJsRef.current, 45, (j) => {

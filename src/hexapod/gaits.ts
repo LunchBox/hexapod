@@ -138,6 +138,7 @@ export class GaitInternal extends GaitAction {
   rotation: { x: number; y: number; z: number };
   homePos: { x: number; y: number; z: number };
   homeRot: { x: number; y: number; z: number };
+  _homeSnapped: boolean;
 
   constructor(controller: any) {
     super(controller);
@@ -145,10 +146,13 @@ export class GaitInternal extends GaitAction {
     this.rotation = { x: 0, y: 0, z: 0 };
     this.homePos = { x: 0, y: 0, z: 0 };
     this.homeRot = { x: 0, y: 0, z: 0 };
+    this._homeSnapped = false;
     this.steps = ["move"];
   }
 
   snapshotHome() {
+    if (this._homeSnapped) return;
+    this._homeSnapped = true;
     let bm = this.controller.bot.body_mesh;
     this.homePos.x = bm.position.x; this.homePos.y = bm.position.y; this.homePos.z = bm.position.z;
     this.homeRot.x = bm.rotation.x; this.homeRot.y = bm.rotation.y; this.homeRot.z = bm.rotation.z;
