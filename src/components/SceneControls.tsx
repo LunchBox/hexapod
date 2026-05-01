@@ -75,6 +75,11 @@ export default function SceneControls() {
     if (gc) gc.reset_steps();
   };
 
+  const btnStyle: React.CSSProperties = {
+    background: 'none', border: '1px solid #555', color: '#aaa',
+    cursor: 'pointer', fontSize: 10, padding: '0 3px', lineHeight: 1,
+  };
+
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
@@ -84,69 +89,91 @@ export default function SceneControls() {
       <div className="joystick-container" ref={joystickContainerRef}></div>
 
       {/* Body height */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
         <span style={{ fontSize: 10, color: '#888' }}>H</span>
+        <button style={btnStyle} onClick={() => handleHeightChange(Math.min(150, bodyY + 1))}>▲</button>
         <input type="range" min="10" max="150" value={bodyY}
           title="Body height"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 80, cursor: 'pointer' }}
           onChange={(e) => handleHeightChange(parseFloat((e.target as HTMLInputElement).value))}
         />
+        <button style={btnStyle} onClick={() => handleHeightChange(Math.max(10, bodyY - 1))}>▼</button>
         <span style={{ fontSize: 9, color: '#666' }}>{bodyY}</span>
       </div>
 
       {/* Expand/Compact */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
         <span style={{ fontSize: 10, color: '#888' }}>↔</span>
+        <button style={btnStyle} onClick={() => handleSpreadChange(Math.min(1.5, +(tipScale + 0.1).toFixed(1)))}>▲</button>
         <input type="range" max="1.5" min="0.5" step="0.1" value={tipScale}
           title="Tip spread"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 80, cursor: 'pointer' }}
           onChange={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
         />
+        <button style={btnStyle} onClick={() => handleSpreadChange(Math.max(0.5, +(tipScale - 0.1).toFixed(1)))}>▼</button>
         <span style={{ fontSize: 9, color: '#666' }}>{tipScale.toFixed(1)}</span>
       </div>
 
       {/* Rotate step */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
         <span style={{ fontSize: 10, color: '#888' }}>↻°</span>
+        <button style={btnStyle} onClick={() => {
+          const v = Math.min(45, rotDeg + 1); setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
+        }}>▲</button>
         <input type="range" min="1" max="45" value={rotDeg}
           title="Rotate step (°)"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 80, cursor: 'pointer' }}
           onChange={(e) => {
             const v = parseInt((e.target as HTMLInputElement).value);
             setRotDeg(v);
             handleMotionChange('rotate_step', v * Math.PI / 180);
           }}
         />
+        <button style={btnStyle} onClick={() => {
+          const v = Math.max(1, rotDeg - 1); setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
+        }}>▼</button>
         <span style={{ fontSize: 9, color: '#666' }}>{rotDeg}°</span>
       </div>
 
       {/* FB step */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
         <span style={{ fontSize: 10, color: '#888' }}>↕</span>
+        <button style={btnStyle} onClick={() => {
+          const v = Math.min(50, fbStep + 1); setFbStep(v); handleMotionChange('fb_step', v);
+        }}>▲</button>
         <input type="range" min="1" max="50" value={fbStep}
           title="F&B step (mm)"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 80, cursor: 'pointer' }}
           onChange={(e) => {
             const v = parseInt((e.target as HTMLInputElement).value);
             setFbStep(v);
             handleMotionChange('fb_step', v);
           }}
         />
+        <button style={btnStyle} onClick={() => {
+          const v = Math.max(1, fbStep - 1); setFbStep(v); handleMotionChange('fb_step', v);
+        }}>▼</button>
         <span style={{ fontSize: 9, color: '#666' }}>{fbStep}</span>
       </div>
 
       {/* LR step */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
         <span style={{ fontSize: 10, color: '#888' }}>⇔</span>
+        <button style={btnStyle} onClick={() => {
+          const v = Math.min(50, lrStep + 1); setLrStep(v); handleMotionChange('lr_step', v);
+        }}>▲</button>
         <input type="range" min="1" max="50" value={lrStep}
           title="L&R step (mm)"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 80, cursor: 'pointer' }}
           onChange={(e) => {
             const v = parseInt((e.target as HTMLInputElement).value);
             setLrStep(v);
             handleMotionChange('lr_step', v);
           }}
         />
+        <button style={btnStyle} onClick={() => {
+          const v = Math.max(1, lrStep - 1); setLrStep(v); handleMotionChange('lr_step', v);
+        }}>▼</button>
         <span style={{ fontSize: 9, color: '#666' }}>{lrStep}</span>
       </div>
     </div>
