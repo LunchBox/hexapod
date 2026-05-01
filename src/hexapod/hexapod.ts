@@ -175,7 +175,7 @@ export class Hexapod {
     const rx = bodyWidth / 2;
     const rz = bodyLength / 2;
 
-    let polyPlacement = this.options.polygon_leg_placement || 'vertex';
+    let polyPlacement = this.options.polygon_leg_placement || 'edge';
     let orientation = this.options.polygon_odd_orientation || 'back';
 
     this.leg_layout = computeLegLayout(legCount, bodyShape, rx, rz, polyPlacement, orientation);

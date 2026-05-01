@@ -230,7 +230,7 @@ export default function AttributesPanel() {
   });
   const [legCount, setLegCount] = useState(saved.leg_count || 6);
   const [bodyShape, setBodyShape] = useState(saved.body_shape || 'rectangle');
-  const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'vertex');
+  const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'edge');
   const [oddOrientation, setOddOrientation] = useState(saved.polygon_odd_orientation || 'back');
   const [tipCircleScale, setTipCircleScale] = useState(saved.tip_circle_scale ?? 1);
 
