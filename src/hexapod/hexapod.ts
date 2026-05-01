@@ -357,9 +357,9 @@ export class Hexapod {
     this.guideline = new THREE.Object3D();
     for (let idx = 0; idx < this.legs.length; idx++) {
       let geometry = new THREE.Geometry();
-      let mesh_pos = this.mesh.position.clone();
+      let body_pos = this.body_mesh.position.clone();
       let tip_pos = this.legs[idx].get_tip_pos();
-      geometry.vertices.push(mesh_pos, tip_pos);
+      geometry.vertices.push(body_pos, tip_pos);
       let line = new THREE.Line(geometry, material);
       this.guideline.add(line);
     }
@@ -376,10 +376,13 @@ export class Hexapod {
 
   adjust_gait_guidelines() {
     if (!this.guideline) return;
-    // Update tip-position lines
+    this.mesh.updateMatrixWorld();
+    const bodyPos = this.body_mesh.position.clone();
+    // Update tip-position lines: start from body position, end at tip world pos
     for (let idx = 0; idx < this.legs.length; idx++) {
       const line = this.guideline.children[idx] as any;
       if (!line) continue;
+      line.geometry.vertices[0].copy(bodyPos);
       line.geometry.vertices[1].copy(this.legs[idx].get_tip_pos());
       line.geometry.verticesNeedUpdate = true;
     }
@@ -388,7 +391,7 @@ export class Hexapod {
       for (let idx = 0; idx < this.legs.length; idx++) {
         const line = clone.children[idx] as any;
         if (!line) continue;
-        line.geometry.vertices[0].copy(this.guideline.children[idx].geometry.vertices[0]);
+        line.geometry.vertices[0].copy(bodyPos);
         line.geometry.vertices[1].copy(this.legs[idx].get_tip_pos());
         line.geometry.verticesNeedUpdate = true;
       }

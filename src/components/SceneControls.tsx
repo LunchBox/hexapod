@@ -111,8 +111,8 @@ export default function SceneControls() {
     const delta = v - cur;
     if (Math.abs(delta) < 0.5) return true;
     const ok = bot.transform_body({ ['d' + axis]: delta });
+    bot.adjust_gait_guidelines();
     if (!ok) {
-      // Revert state
       if (axis === 'x') setBodyX(Math.round(cur));
       else if (axis === 'y') setBodyY(Math.round(cur));
       else if (axis === 'z') setBodyZ(Math.round(cur));
@@ -127,7 +127,9 @@ export default function SceneControls() {
     const cur = (bot.body_mesh.rotation as any)[axis];
     const delta = rad - cur;
     if (Math.abs(delta) < 0.001) return true;
-    return bot.transform_body({ ['r' + axis]: delta });
+    const ok = bot.transform_body({ ['r' + axis]: delta });
+    bot.adjust_gait_guidelines();
+    return ok;
   };
 
   const handleMotionChange = (key: string, value: number) => {
