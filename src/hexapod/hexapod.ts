@@ -198,6 +198,14 @@ export class Hexapod {
       };
       (opt as any)._yaw = layout.yaw;
 
+      // Pad missing segment data when DOF increased
+      for (const name of this._limbNames) {
+        if (!opt[name]) {
+          const def = LIMB_DEFAULTS[name] || { length: 20, radius: 5, init_angle: 0 };
+          opt[name] = { length: def.length, radius: def.radius, init_angle: def.init_angle, servo_value: 1500, revert: false };
+        }
+      }
+
       let leg = new HexapodLeg(this, opt);
       leg.radial_angle = layout.angle;
       this.body_mesh.add(leg.mesh);
@@ -848,7 +856,7 @@ export class HexapodLeg {
   }
 
   draw_segment(name: string, prevName: string | null) {
-    const opt = this.options[name];
+    const opt = this.options[name] || { length: 25, radius: 5, init_angle: 0, servo_value: 1500, revert: false };
     let geometry: any, mesh: any, material: any;
     const isFirst = prevName === null;
 
