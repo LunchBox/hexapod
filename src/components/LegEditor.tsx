@@ -350,7 +350,8 @@ export default function LegEditor() {
 
         let sumPrev = 0;
         for (let k = 1; k < d.joint - 1; k++) {
-          sumPrev += opts.leg_options[d.refLeg][segNames[k]].init_angle || 0;
+          const segData = opts.leg_options[d.refLeg]?.[segNames[k]];
+          if (segData) sumPrev += segData.init_angle || 0;
         }
         const newInitAngle = -absAngleDeg - sumPrev;
 
