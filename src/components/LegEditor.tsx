@@ -255,6 +255,13 @@ export default function LegEditor() {
       const bot = botRef.current;
       if (!bot) return;
       const opts = bot.options;
+      // Log rear joint positions for debug
+      const currPts = computeJoints(opts);
+      let rearLog = '';
+      for (let r = d.joint; r < currPts.length; r++) {
+        rearLog += ' J' + r + ':(' + currPts[r].x.toFixed(0) + ',' + currPts[r].y.toFixed(0) + ')';
+      }
+      console.log('REAR' + rearLog);
       const legPt = toLeg(cx, cy, d.view); // use snapshotted view
 
       // Previous joint position (from start state)
