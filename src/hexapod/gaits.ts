@@ -521,14 +521,14 @@ export class GaitController {
     this.bot.reset_guide_pos();
     let gp = this.bot.guide_pos;
 
-    gp.position.z -= fb_offset / this.leg_groups.length * 3;
-    console.log(fb_offset / this.leg_groups.length * 3);
+    let bodyDZ = fb_offset / this.leg_groups.length * 3;
+    let bodyDX = lr_offset / this.leg_groups.length * 3;
 
-    gp.position.x -= lr_offset / this.leg_groups.length * 3;
+    gp.position.z -= bodyDZ;
+    gp.position.x -= bodyDX;
 
-    let target_pos = this.bot.get_guide_pos(0);
-    this.bot.mesh.position.x = target_pos.x;
-    this.bot.mesh.position.z = target_pos.z;
+    this.bot.mesh.position.z -= bodyDZ;
+    this.bot.mesh.position.x -= bodyDX;
 
     this.bot.mesh.rotation.y += rotate_offset / this.leg_groups.length * 3;
 
