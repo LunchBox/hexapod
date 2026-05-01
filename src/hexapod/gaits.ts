@@ -300,12 +300,10 @@ export class GaitController {
     }
 
     this.gaits = gaits;
-    console.warn('Generated gaits for n=' + n + ':', Object.keys(gaits),
-      'right=' + JSON.stringify(rightLegs), 'left=' + JSON.stringify(leftLegs), 'center=' + centerLeg);
 
-    // Restore gait from options or default to tripod
+    // Restore gait from options, fallback to first available
     let gaitName = this.bot.options.gait || 'tripod';
-    this.leg_groups = this.gaits[gaitName] || this.gaits.tripod;
+    this.leg_groups = this.gaits[gaitName] || Object.values(this.gaits)[0];
     this.leg_group_idx = 0;
     this.reset_steps();
 
