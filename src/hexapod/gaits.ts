@@ -511,8 +511,8 @@ export class GaitController {
 
     let current_tips_pos = this.bot.get_tip_pos();
 
-    let bodyDZ = fb_offset / this.leg_groups.length * 3;
-    let bodyDX = lr_offset / this.leg_groups.length * 3;
+    let bodyDZ = fb_offset / this.leg_groups.length;
+    let bodyDX = lr_offset / this.leg_groups.length;
 
     this.bot.mesh.position.z -= bodyDZ;
     this.bot.mesh.position.x -= bodyDX;
