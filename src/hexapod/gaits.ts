@@ -193,21 +193,35 @@ export class GaitController {
 
     // Build sides classification for gait validation
     const isOdd = n % 2 !== 0;
+    const bodyShape = this.bot.options.body_shape || 'rectangle';
     const leftLegs: number[] = [];
     const rightLegs: number[] = [];
     let centerLeg: number | null = null;
-    for (let i = 0; i < n; i++) {
-      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-      const c = Math.cos(angle);
-      if (isOdd && Math.abs(c) < 0.001) {
-        centerLeg = i;
-      } else if (c > 0.001) {
-        rightLegs.push(i);
-      } else if (c < -0.001) {
-        leftLegs.push(i);
-      } else {
-        if (Math.sin(angle) < 0) rightLegs.push(i);
-        else leftLegs.push(i);
+
+    if (bodyShape === 'rectangle') {
+      // Rectangle: sides by mirror/x-position
+      for (let i = 0; i < n; i++) {
+        const x = this.bot.leg_layout?.[i]?.x ?? 0;
+        if (x > 0) rightLegs.push(i);
+        else if (x < 0) leftLegs.push(i);
+        else if (isOdd) centerLeg = i;
+        else rightLegs.push(i); // even N: center x=0 goes to right
+      }
+    } else {
+      // Polygon: sides by angle around circle
+      for (let i = 0; i < n; i++) {
+        const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+        const c = Math.cos(angle);
+        if (isOdd && Math.abs(c) < 0.001) {
+          centerLeg = i;
+        } else if (c > 0.001) {
+          rightLegs.push(i);
+        } else if (c < -0.001) {
+          leftLegs.push(i);
+        } else {
+          if (Math.sin(angle) < 0) rightLegs.push(i);
+          else leftLegs.push(i);
+        }
       }
     }
 
