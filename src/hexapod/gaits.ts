@@ -257,11 +257,6 @@ export class GaitController {
       if (phaseValid(lifted)) validPhases.push(lifted);
     }
 
-    // Total possible phases = 2^n; valid phases count
-    const totalPhases = (1 << n) - 2; // exclude empty and full
-    console.warn('n=' + n + ': total phases=' + totalPhases + ' valid=' + validPhases.length
-      + ' (expected ' + ((1 << rightLegs.length) - 1) * ((1 << leftLegs.length) - 1) + ')');
-
     // Exact cover with uniform group size: each phase lifts same number of legs
     const possibleSizes = new Set<number>();
     for (const ph of validPhases) possibleSizes.add(ph.length);
@@ -285,7 +280,6 @@ export class GaitController {
       }
     }
     findCovers(new Set(allLegs), [], null);
-    console.warn('n=' + n + ': exact covers (unordered)=' + covers.length);
 
     // Deduplicate: canonical key sorts within each group, then sorts groups
     const seen = new Set<string>();
@@ -299,7 +293,6 @@ export class GaitController {
         uniqueCovers.push(grps);
       }
     }
-    console.warn('n=' + n + ': after dedup=' + uniqueCovers.length);
 
     // Build gaits — canonical ordering: sort groups by first element
     const gaits: Record<string, number[][]> = {};
