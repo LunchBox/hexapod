@@ -325,7 +325,7 @@ export class Hexapod {
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let tip = this.legs[i].get_tip_pos();
-      let geom = new THREE.PlaneGeometry(12, 12);
+      let geom = new (THREE as any).CircleGeometry(7, 16);
       let mat = new (THREE as any).MeshBasicMaterial({ color: 0x111111, side: (THREE as any).DoubleSide });
       let sq = new THREE.Mesh(geom, mat);
       sq.position.copy(tip);
