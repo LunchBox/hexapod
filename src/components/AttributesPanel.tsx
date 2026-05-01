@@ -55,10 +55,17 @@ HexapodAttributesController.prototype.set_attr = function (attr_name, value) {
 };
 
 HexapodAttributesController.prototype.redraw_bot = function () {
-  // Sync top-level keys from live bot options (may have been changed via ControlPanel)
+  // Sync all keys from live bot options (may have been changed via other panels)
   let botOpts = this.bot.options;
-  for (let key of ['leg_count', 'body_shape', 'dof', 'body_radius', 'body_width', 'body_length', 'body_height', 'polygon_leg_placement']) {
-    if (key in botOpts) this.attributes[key] = botOpts[key];
+  for (let key of Object.keys(botOpts)) {
+    if (key === 'leg_options') continue; // skip nested — synced below
+    this.attributes[key] = botOpts[key];
+  }
+  // Also sync leg_options (shared lengths/angles)
+  if (botOpts.leg_options && this.attributes.leg_options) {
+    for (let i = 0; i < Math.min(botOpts.leg_options.length, this.attributes.leg_options.length); i++) {
+      this.attributes.leg_options[i] = botOpts.leg_options[i];
+    }
   }
   set_bot_options(this.attributes);
   this.bot.apply_attributes(this.attributes);
