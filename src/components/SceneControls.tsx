@@ -90,11 +90,17 @@ export default function SceneControls() {
   const handleHeightChange = (v: number) => {
     const bot = botRef.current;
     if (!bot?.body_mesh) return;
-    const delta = v - bot.body_mesh.position.y;
-    if (Math.abs(delta) > 0.01) {
-      bot.move_body('y', delta);
-      bot.adjust_gait_guidelines();
+    // Direct height set: move body, put tips on ground (no tip lock)
+    let current_tips = bot.get_tip_pos();
+    bot.body_mesh.position.y = v;
+    bot.body_mesh.updateMatrixWorld();
+    for (let i = 0; i < bot.legs.length; i++) {
+      let t = current_tips[i];
+      t.y = 0;
+      bot.legs[i].set_tip_pos(t);
     }
+    bot.after_status_change();
+    bot.adjust_gait_guidelines();
     setBodyY(v);
   };
 
