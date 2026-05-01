@@ -43,17 +43,18 @@ function computeLegLayout(
         layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
       }
     } else {
-      // Odd: (N-1)/2 full pairs at front, 1 extra leg at rear center
+      // Odd: (N-1)/2 full pairs, then 1 extra leg at rear center
       const pairs = (legCount - 1) / 2;
       const frontInit = 30, rearInit = -30;
+      const totalSlots = pairs + 1; // pair slots + rear slot
       for (let i = 0; i < pairs; i++) {
-        const z = -bodyRadiusZ + (i * bodyRadiusZ * 2) / (pairs > 0 ? pairs : 1);
-        const initDeg = frontInit + ((rearInit - frontInit) * i) / (pairs > 0 ? pairs : 1);
+        const z = -bodyRadiusZ + (i * bodyRadiusZ * 2) / (totalSlots - 1);
+        const initDeg = frontInit + ((rearInit - frontInit) * i) / (totalSlots - 1);
         const initRad = initDeg * Math.PI / 180;
         layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
         layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
       }
-      // Single rear leg at center
+      // Single rear leg at center (last slot)
       layouts.push({ x: 0, z: bodyRadiusZ, angle: Math.PI, yaw: 0, init_angle: 0 });
     }
   } else {
