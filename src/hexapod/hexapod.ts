@@ -214,6 +214,7 @@ export class Hexapod {
 
     this.laydown();
     this.putdown_tips();
+    this.auto_level_body();
 
     this.draw_gait_guide();
     this.draw_gait_guidelines();
@@ -596,6 +597,25 @@ export class Hexapod {
     this.body_mesh.position.y -= min_y;
 
     this.after_status_change();
+  }
+
+  auto_level_body() {
+    // Adjust body height so all tips can reach the ground
+    let tips = this.get_tip_pos();
+    let minY = Infinity;
+    for (const t of tips) { if (t.y < minY) minY = t.y; }
+    if (minY > 0.5) {
+      // Body too high — lower it
+      this.body_mesh.position.y -= minY;
+      this.body_mesh.updateMatrixWorld();
+      tips = this.get_tip_pos();
+      for (const t of tips) t.y = 0;
+      for (let i = 0; i < this.legs.length; i++) this.legs[i].set_tip_pos(tips[i]);
+    } else if (minY < -0.5) {
+      // Body too low — raise it, then re-putdown
+      this.body_mesh.position.y -= minY;
+      this.putdown_tips();
+    }
   }
 
   putdown_tips() {
