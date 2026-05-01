@@ -493,21 +493,18 @@ export class GaitController {
     let lr_offset = lr_direction * this.lr_step;
     let rotate_offset = rotate_direction * this.rotate_step;
 
-    this.bot.reset_guide_pos();
-    let gp = this.bot.guide_pos;
-
-    gp.position.z -= fb_offset;
-    gp.position.x -= lr_offset;
-    gp.rotation.y += rotate_offset;
-
     let len = leg_idxs.length;
     for (let i = 0; i < len; i++) {
       let idx = leg_idxs[i];
+      let sq = this.bot._guideCircles?.[idx];
       let ori_pos = this.bot.legs[idx].get_tip_pos();
-      let target_pos = this.bot.get_guide_pos(idx);
-      ori_pos.x = target_pos.x;
-      ori_pos.z = target_pos.z;
-      this.bot.legs[idx].set_tip_pos(ori_pos);
+      // Target = current tip position + step offset (in body-local frame)
+      let target_pos = ori_pos.clone();
+      target_pos.z -= fb_offset;
+      target_pos.x -= lr_offset;
+      // Preview: move guide circle to show target
+      if (sq) { sq.position.z -= fb_offset; sq.position.x -= lr_offset; }
+      this.bot.legs[idx].set_tip_pos(target_pos);
     }
   }
 

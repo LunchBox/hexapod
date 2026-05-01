@@ -91,6 +91,7 @@ export class Hexapod {
   gait_controller: any;
   on_servo_values: number[];
   guide_pos: any;
+  _guideCircles: any[];
   guideline: any;
   left_gl: any;
   right_gl: any;
@@ -322,7 +323,7 @@ export class Hexapod {
   }
 
   draw_gait_guide() {
-    this.guide_pos = new THREE.Object3D();
+    this._guideCircles = [];
     let total_legs = this.legs.length;
     for (let i = 0; i < total_legs; i++) {
       let tip = this.legs[i].get_tip_pos();
@@ -330,35 +331,35 @@ export class Hexapod {
       let mat = new (THREE as any).MeshBasicMaterial({ color: 0x111111, side: (THREE as any).DoubleSide });
       let sq = new THREE.Mesh(geom, mat);
       sq.position.copy(tip);
-      sq.rotation.x = -Math.PI / 2; // flat on ground
-      this.guide_pos.add(sq);
+      sq.rotation.x = -Math.PI / 2;
+      this.mesh.add(sq);
+      this._guideCircles.push(sq);
     }
-    this.mesh.add(this.guide_pos);
   }
 
   sync_guide_circles() {
-    if (!this.guide_pos) return;
+    if (!this._guideCircles) return;
     for (let i = 0; i < this.legs.length; i++) {
-      const sq = this.guide_pos.children[i] as any;
+      const sq = this._guideCircles[i];
       if (sq) sq.position.copy(this.legs[i].get_tip_pos());
     }
   }
 
   reset_guide_pos() {
-    let gp = this.guide_pos;
-    gp.position.set(0, 0, 0);
-    gp.rotation.set(0, 0, 0);
-    gp.scale.set(1, 1, 1);
+    // No-op: circles are now individual meshes, no shared group
   }
 
   get_guide_pos(leg_idx: number) {
-    this.guide_pos.scale.set(this.tip_circle_scale, this.tip_circle_scale, this.tip_circle_scale);
     this.mesh.updateMatrixWorld();
-
-    let child = this.guide_pos.children[leg_idx] as any;
-    if (child) {
+    let sq = this._guideCircles?.[leg_idx];
+    if (sq) {
       let vector = new THREE.Vector3();
-      vector.setFromMatrixPosition(child.matrixWorld);
+      vector.setFromMatrixPosition(sq.matrixWorld);
+      // Apply tip_circle_scale relative to body center
+      let cx = this.body_mesh.position.x;
+      let cz = this.body_mesh.position.z;
+      vector.x = cx + (vector.x - cx) * (this.tip_circle_scale || 1);
+      vector.z = cz + (vector.z - cz) * (this.tip_circle_scale || 1);
       return vector;
     }
     return new THREE.Vector3();
