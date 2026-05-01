@@ -206,6 +206,7 @@ export class Hexapod {
 
     let polyPlacement = this.options.polygon_leg_placement || 'edge';
     let orientation = this.options.polygon_odd_orientation || 'back';
+    console.log('draw() polyPlacement:', polyPlacement, ' orientation:', orientation, ' legCount:', legCount, ' bodyShape:', bodyShape);
 
     this.leg_layout = computeLegLayout(legCount, bodyShape, rx, rz, polyPlacement, orientation);
 
