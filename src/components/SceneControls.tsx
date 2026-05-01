@@ -61,6 +61,9 @@ export default function SceneControls() {
   const [rotDeg, setRotDeg] = useState(10);
   const [fbStep, setFbStep] = useState(15);
   const [lrStep, setLrStep] = useState(10);
+  const [rotX, setRotX] = useState(0);
+  const [rotY, setRotY] = useState(0);
+  const [rotZ, setRotZ] = useState(0);
 
   useEffect(() => {
     const bot = botRef.current;
@@ -70,6 +73,9 @@ export default function SceneControls() {
     setRotDeg(Math.round(((bot.options?.rotate_step ?? Math.PI / 18) * 180) / Math.PI));
     setFbStep(bot.options?.fb_step ?? 15);
     setLrStep(bot.options?.lr_step ?? 10);
+    setRotX(Math.round(bot.body_mesh?.rotation?.x * 180 / Math.PI) || 0);
+    setRotY(Math.round(bot.body_mesh?.rotation?.y * 180 / Math.PI) || 0);
+    setRotZ(Math.round(bot.body_mesh?.rotation?.z * 180 / Math.PI) || 0);
   }, [botVersion, botRef]);
 
   const handleSpreadChange = (v: number) => {
@@ -120,6 +126,16 @@ export default function SceneControls() {
     }
     bot.after_status_change();
     return true;
+  };
+
+  const handleAxisRot = (axis: string, deg: number): boolean => {
+    const bot = botRef.current;
+    if (!bot) return false;
+    const rad = deg * Math.PI / 180;
+    const cur = (bot.body_mesh.rotation as any)[axis];
+    const delta = rad - cur;
+    if (Math.abs(delta) < 0.001) return true;
+    return bot.transform_body({ ['r' + axis]: delta });
   };
 
   const handleMotionChange = (key: string, value: number) => {
@@ -184,6 +200,18 @@ export default function SceneControls() {
       />
       <SliderColumn value={lrStep} min={1} max={50} label="⇔" title="L&R step (mm)"
         onChange={(v) => { setLrStep(v); handleMotionChange('lr_step', v); return true; }}
+      />
+      <SliderColumn value={rotX} min={-45} max={45} label="Rx°" title="Rotate X axis"
+        displayValue={rotX + '°'}
+        onChange={(v) => { setRotX(v); return handleAxisRot('x', v); }}
+      />
+      <SliderColumn value={rotY} min={-45} max={45} label="Ry°" title="Rotate Y axis"
+        displayValue={rotY + '°'}
+        onChange={(v) => { setRotY(v); return handleAxisRot('y', v); }}
+      />
+      <SliderColumn value={rotZ} min={-45} max={45} label="Rz°" title="Rotate Z axis"
+        displayValue={rotZ + '°'}
+        onChange={(v) => { setRotZ(v); return handleAxisRot('z', v); }}
       />
       </div>
 
