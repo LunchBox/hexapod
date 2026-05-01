@@ -90,7 +90,6 @@ export class Hexapod {
   legs: any[];
   gait_controller: any;
   on_servo_values: number[];
-  guide_pos: any;
   _guideCircles: any[];
   guideline: any;
   left_gl: any;
@@ -350,10 +349,6 @@ export class Hexapod {
       const sq = this._guideCircles[i];
       if (sq) sq.position.copy(this.legs[i].get_tip_pos());
     }
-  }
-
-  reset_guide_pos() {
-    // No-op: circles are now individual meshes, no shared group
   }
 
   get_guide_pos(leg_idx: number) {

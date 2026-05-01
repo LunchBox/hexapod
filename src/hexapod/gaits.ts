@@ -418,6 +418,7 @@ export class GaitController {
 
     let _send_cmd = this.actions[action_name].run();
     this.bot.after_status_change(_send_cmd);
+    this.bot.sync_guide_circles();
 
     console.log("-- calc time: " + (new Date().getTime() - time));
     console.log("-- cmd time required: " + this.bot.hold_time);
@@ -505,9 +506,6 @@ export class GaitController {
       ori_pos.x = cx + dx * cosR - dz * sinR;
       ori_pos.z = cz + dx * sinR + dz * cosR;
       this.bot.legs[idx].set_tip_pos(ori_pos);
-      // Sync circle to new tip position
-      let sq = this.bot._guideCircles?.[idx];
-      if (sq) { sq.position.x = ori_pos.x; sq.position.z = ori_pos.z; }
     }
   }
 
@@ -525,9 +523,6 @@ export class GaitController {
     this.bot.mesh.position.x -= bodyDX;
 
     this.bot.mesh.rotation.y += rotate_offset / this.leg_groups.length * 3;
-
-    // Sync world-space circles to new tip positions after body moved
-    this.bot.sync_guide_circles();
 
     for (let idx = 0; idx < this.bot.legs.length; idx++) {
       if (this.bot.legs[idx].on_floor === true) {
