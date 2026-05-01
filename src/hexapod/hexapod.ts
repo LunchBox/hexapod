@@ -321,24 +321,15 @@ export class Hexapod {
           const topCenter = geometry.vertices.length;
           geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
 
-          // Outer ring vertices — match leg layout (vertex/edge, orientation)
-          const bw = this.options.body_width || 50;
-          const bl = this.options.body_length || 100;
-          const isVtx = (this.options.polygon_leg_placement || 'edge') === 'vertex';
-          const bodyEdgeOff = isVtx ? 0 : Math.PI / legCount;
-          const bodyEdgeScl = isVtx ? 1 : Math.cos(Math.PI / legCount);
-          const bodyOrientOff = this.options.polygon_odd_orientation === 'back' ? Math.PI : 0;
-          const prx = (bw / 2) * bodyEdgeScl;
-          const prz = (bl / 2) * bodyEdgeScl;
+          // Outer ring vertices — directly from leg_layout (single source of truth)
           const btmRing: number[] = [], topRing: number[] = [];
           for (let i = 0; i < legCount; i++) {
-            const a = (2 * Math.PI * i) / legCount - Math.PI / 2 + bodyEdgeOff + bodyOrientOff;
-            const x = prx * Math.cos(a);
-            const z = prz * Math.sin(a);
+            const lx = this.leg_layout[i].x;
+            const lz = this.leg_layout[i].z;
             btmRing.push(geometry.vertices.length);
-            geometry.vertices.push(new THREE.Vector3(x, -halfH, z));
+            geometry.vertices.push(new THREE.Vector3(lx, -halfH, lz));
             topRing.push(geometry.vertices.length);
-            geometry.vertices.push(new THREE.Vector3(x, halfH, z));
+            geometry.vertices.push(new THREE.Vector3(lx, halfH, lz));
           }
 
           // Bottom & top caps
