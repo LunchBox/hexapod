@@ -255,13 +255,6 @@ export default function LegEditor() {
       const bot = botRef.current;
       if (!bot) return;
       const opts = bot.options;
-      // Log rear joint positions for debug
-      const currPts = computeJoints(opts);
-      let rearLog = '';
-      for (let r = d.joint; r < currPts.length; r++) {
-        rearLog += ' J' + r + ':(' + currPts[r].x.toFixed(0) + ',' + currPts[r].y.toFixed(0) + ')';
-      }
-      console.log('REAR' + rearLog);
       const legPt = toLeg(cx, cy, d.view); // use snapshotted view
 
       // Previous joint position (from start state)
@@ -286,11 +279,11 @@ export default function LegEditor() {
         const absAngleDeg = deg(Math.atan2(dy, dx));
         const part = segNames[d.joint - 1]; // segment being dragged
 
-        // Compute new init_angle: sum of 3D angles from segments 1..joint gives canvas angle
-        // canvas_angle = -(sum of 3D init_angles for segs 1..joint)
-        // So: new_init_angle[J] = -absAngleDeg - sum(init_angles[1..J-1])
+        // New init_angle for the dragged segment: absolute canvas angle minus cumulative
+        // angle of all PREVIOUS (non-dragged) segments. d.joint is the joint index;
+        // the dragged segment is segNames[d.joint-1], previous segments are 1..d.joint-2.
         let sumPrev = 0;
-        for (let k = 1; k < d.joint; k++) {
+        for (let k = 1; k < d.joint - 1; k++) {
           sumPrev += opts.leg_options[0][segNames[k]].init_angle || 0;
         }
         const newInitAngle = -absAngleDeg - sumPrev;
