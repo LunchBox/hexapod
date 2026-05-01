@@ -321,15 +321,18 @@ export class Hexapod {
           const topCenter = geometry.vertices.length;
           geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
 
-          // Outer ring vertices — elliptical from body_width/body_length
-          const orientOffset = this.options.polygon_odd_orientation === 'front' ? 0 : Math.PI;
-          const btmRing: number[] = [], topRing: number[] = [];
+          // Outer ring vertices — match leg layout (vertex/edge, orientation)
           const bw = this.options.body_width || 50;
           const bl = this.options.body_length || 100;
-          const prx = bw / 2;
-          const prz = bl / 2;
+          const isVtx = (this.options.polygon_leg_placement || 'edge') === 'vertex';
+          const bodyEdgeOff = isVtx ? 0 : Math.PI / legCount;
+          const bodyEdgeScl = isVtx ? 1 : Math.cos(Math.PI / legCount);
+          const bodyOrientOff = this.options.polygon_odd_orientation === 'front' ? 0 : Math.PI;
+          const prx = (bw / 2) * bodyEdgeScl;
+          const prz = (bl / 2) * bodyEdgeScl;
+          const btmRing: number[] = [], topRing: number[] = [];
           for (let i = 0; i < legCount; i++) {
-            const a = (2 * Math.PI * i) / legCount - Math.PI / 2 + orientOffset;
+            const a = (2 * Math.PI * i) / legCount - Math.PI / 2 + bodyEdgeOff + bodyOrientOff;
             const x = prx * Math.cos(a);
             const z = prz * Math.sin(a);
             btmRing.push(geometry.vertices.length);
