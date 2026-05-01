@@ -519,6 +519,9 @@ export class GaitController {
 
     this.bot.mesh.rotation.y += rotate_offset / this.leg_groups.length * 3;
 
+    // Sync world-space circles to new tip positions after body moved
+    this.bot.sync_guide_circles();
+
     for (let idx = 0; idx < this.bot.legs.length; idx++) {
       if (this.bot.legs[idx].on_floor === true) {
         this.bot.legs[idx].set_tip_pos(current_tips_pos[idx]);
