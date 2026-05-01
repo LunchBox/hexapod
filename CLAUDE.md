@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Commit convention
+
+All commits made by AI in this repo must use the correct model attribution:
+
+```
+Co-Authored-By: Deepseek V4 Pro <noreply@deepseek.com>
+```
+
+The model powering this session is **Deepseek V4 Pro**, not Claude Opus. Update this line if the underlying model changes.
+
 ## Overview
 
 JS Hexapod — a Three.js-based 3D hexapod robot simulator with optional physical bot control via Socket.IO. Originally vanilla JS (backed up in `legacy/`), now migrated to **React + Vite**. The old pre-r69 Three.js is preserved via script tags so the 3D core logic works unchanged.
