@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { HexapodProvider } from './context/HexapodContext';
 import SceneCanvas from './components/SceneCanvas';
+import SceneControls from './components/SceneControls';
 import ControlPanel from './components/ControlPanel';
 import ServoPanel from './components/ServoPanel';
 import AttributesPanel from './components/AttributesPanel';
@@ -27,6 +28,7 @@ function App() {
 
         <div className="grid-scene">
           <SceneCanvas />
+          <SceneControls />
         </div>
 
         <div className="grid-controls">

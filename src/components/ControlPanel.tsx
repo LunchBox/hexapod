@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useHexapod } from '../context/HexapodContext';
-import { JoyStick } from '../hexapod/joystick2';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 
 const drawTypes = [
@@ -44,8 +43,6 @@ const targetModes = [
 
 export default function ControlPanel() {
   const { botRef, updateServoDisplay, bumpBotVersion } = useHexapod();
-  const joystickRef = useRef(null);
-  const joystickContainerRef = useRef(null);
   const gaitIntervalRef = useRef(null);
 
   // Re-read localStorage on every mount so tab re-mount picks up latest state
@@ -202,20 +199,6 @@ export default function ControlPanel() {
     }
     updateServoDisplay();
   }, [botRef, gc, updateServoDisplay]);
-
-  // Joystick init
-  useEffect(() => {
-    if (!joystickContainerRef.current || joystickRef.current) return;
-    const joystick = new JoyStick(joystickContainerRef.current, 80);
-
-    joystick.on_handler_activated = function () {
-      if (gc()) gc().follow(this);
-    };
-    joystick.on_handler_deactivated = function () {
-      if (gc()) gc().stop();
-    };
-    joystickRef.current = joystick;
-  }, [gc]);
 
   // Keyboard handler
   useEffect(() => {
@@ -400,17 +383,6 @@ export default function ControlPanel() {
         {' | '}
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_expend'); }}>Expand</a>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_compact'); }}>Compact</a>
-        <input type="range" max="1.5" min="0.5" step="0.1" value={tipCircleScale}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            setTipCircleScale(v);
-            if (botRef.current) {
-              botRef.current.options.tip_circle_scale = v;
-              set_bot_options(botRef.current.options);
-              botRef.current.adjust_tip_spread(v);
-            }
-          }}
-        />
       </fieldset>
 
       <fieldset className="btns">
@@ -452,22 +424,7 @@ export default function ControlPanel() {
         ))}
       </fieldset>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div className="joystick-container" ref={joystickContainerRef}></div>
-        <input type="range" min="10" max="150" value={bodyHeightVal}
-          title="Body height"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 150, cursor: 'pointer' }}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            setBodyHeightVal(v);
-            const bot = botRef.current;
-            if (bot) {
-              const delta = v - bot.body_mesh.position.y;
-              if (Math.abs(delta) > 0.01) bot.move_body('y', delta);
-            }
-          }}
-        />
-      </div>
+      <div style={{ height: 10 }}></div>
 
       <div style={{ marginTop: 10 }}>
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_send_cmd'); }}>Send</a>
