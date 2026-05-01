@@ -95,7 +95,7 @@ export default function SceneControls() {
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-end', gap: 10,
-      padding: '6px 10px', marginTop: 6, flexWrap: 'wrap',
+      padding: '6px 10px', margin: '8px 0', flexWrap: 'wrap',
     }}>
       {/* Joystick */}
       <div className="joystick-container" ref={joystickContainerRef}
