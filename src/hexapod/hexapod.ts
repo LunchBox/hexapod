@@ -641,7 +641,30 @@ export class Hexapod {
     this.after_status_change();
   }
 
-  reset_body_position() {
+  save_body_home() {
+    const home = {
+      px: this.body_mesh.position.x, py: this.body_mesh.position.y, pz: this.body_mesh.position.z,
+      rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
+    };
+    this.options._body_home = home;
+    set_bot_options(this.options);
+  }
+
+  reset_body_to_home() {
+    const home = this.options._body_home;
+    if (!home) return;
+    let current_tips = this.get_tip_pos();
+    this.body_mesh.position.set(home.px, home.py, home.pz);
+    this.body_mesh.rotation.set(home.rx, home.ry, home.rz);
+    this.body_mesh.updateMatrixWorld();
+    for (let i = 0; i < this.legs.length; i++) {
+      this.legs[i].set_tip_pos(current_tips[i]);
+    }
+    this.after_status_change();
+    if (this.adjust_gait_guidelines) this.adjust_gait_guidelines();
+  }
+
+  reset_body_to_init() {
     let current_tips = this.get_tip_pos();
     this.body_mesh.position.set(0, (this.options.body_height || 20) / 2, 0);
     this.body_mesh.rotation.set(0, 0, 0);
@@ -650,7 +673,6 @@ export class Hexapod {
       this.legs[i].set_tip_pos(current_tips[i]);
     }
     this.after_status_change();
-    // Update guide if exists
     if (this.adjust_gait_guidelines) this.adjust_gait_guidelines();
   }
 

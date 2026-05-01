@@ -73,6 +73,12 @@ export default function SceneControls() {
     setTipScale(v);
   };
 
+  const syncSliders = () => {
+    const bot = botRef.current;
+    if (!bot) return;
+    setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
+  };
+
   const handleHeightChange = (v: number) => {
     const bot = botRef.current;
     if (!bot?.body_mesh) return;
@@ -139,14 +145,6 @@ export default function SceneControls() {
 
       {/* Row 2: Sliders */}
       <div style={rowStyle}>
-      {/* Reset body */}
-      <div style={colStyle}>
-        <button style={{ ...btnH, height: 24, fontSize: 11 }}
-          title="Reset body position & rotation"
-          onClick={() => botRef.current?.reset_body_position?.()}>⟲</button>
-        <span style={labelStyle}>Rst</span>
-      </div>
-
       {/* Body height */}
       <div style={colStyle}>
         <button style={btnH} onClick={() => handleHeightChange(Math.min(150, bodyY + 1))}>▲</button>
@@ -227,6 +225,16 @@ export default function SceneControls() {
         <span style={labelStyle}>⇔</span>
         <span style={valStyle}>{lrStep}</span>
       </div>
+      </div>
+
+      {/* Row 3: Body position buttons */}
+      <div style={{ ...rowStyle, marginTop: 4 }}>
+        <button className="control_btn" title="Save current pose as home"
+          onClick={() => botRef.current?.save_body_home?.()}>Save Pose</button>
+        <button className="control_btn" title="Reset to saved home pose"
+          onClick={() => { botRef.current?.reset_body_to_home?.(); syncSliders(); }}>↩ Home</button>
+        <button className="control_btn" title="Reset to factory default pose"
+          onClick={() => { botRef.current?.reset_body_to_init?.(); syncSliders(); }}>↺ Init</button>
       </div>
     </div>
   );
