@@ -506,8 +506,6 @@ export class GaitController {
       let cosR = Math.cos(rotate_offset), sinR = Math.sin(rotate_offset);
       ori_pos.x = cx + dx * cosR - dz * sinR;
       ori_pos.z = cz + dx * sinR + dz * cosR;
-      if (Math.abs(rotate_offset) > 0.001) console.warn('move_tips leg', idx, 'rot', (rotate_offset*180/Math.PI).toFixed(1)+'°',
-        'from', oldX.toFixed(0)+','+oldZ.toFixed(0), 'to', ori_pos.x.toFixed(0)+','+ori_pos.z.toFixed(0));
       this.bot.legs[idx].set_tip_pos(ori_pos);
     }
   }
