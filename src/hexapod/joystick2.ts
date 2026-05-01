@@ -81,6 +81,8 @@ export class JoyStick {
     this.handler_x = this.center_x;
     this.handler_y = this.center_y;
     this.handler_activated = false;
+    this.last_page_x = undefined as any;
+    this.last_page_y = undefined as any;
     this.draw();
     this.on_handler_deactivated();
   }
