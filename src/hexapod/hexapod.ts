@@ -54,8 +54,8 @@ function computeLegLayout(
         layouts.push({ x: bodyRadiusX, z, angle: 0, yaw: initRad, init_angle: initDeg });
         layouts.push({ x: -bodyRadiusX, z, angle: Math.PI, yaw: -initRad, init_angle: initDeg });
       }
-      // Single rear leg at center (last slot)
-      layouts.push({ x: 0, z: bodyRadiusZ, angle: Math.PI, yaw: 0, init_angle: 0 });
+      // Single rear leg at center — coxa points forward so femur/tibia reach back
+      layouts.push({ x: 0, z: bodyRadiusZ, angle: Math.PI / 2, yaw: -Math.PI / 2, init_angle: -90 });
     }
   } else {
     // Polygon — legs radiate outward, stretched by width (X) and length (Z)
