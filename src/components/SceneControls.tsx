@@ -11,7 +11,7 @@ export default function SceneControls() {
   // Joystick init
   useEffect(() => {
     if (!joystickContainerRef.current || joystickRef.current) return;
-    const joystick = new JoyStick(joystickContainerRef.current, 80);
+    const joystick = new JoyStick(joystickContainerRef.current, 60);
     joystick.on_handler_activated = function () {
       const gc = botRef.current?.gait_controller;
       if (gc) gc.follow(this);
