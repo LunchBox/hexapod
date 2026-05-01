@@ -162,35 +162,51 @@ export class GaitInternal extends GaitAction {
     let bot = this.controller.bot;
     let current_tips_pos = bot.get_tip_pos();
 
-    // Save current body pose for potential revert
-    let prevPos = bot.body_mesh.position.clone();
-    let prevRot = bot.body_mesh.rotation.clone();
+    // Compute total delta from current to target (home + joystick offset)
+    let dRotZ = (this.homeRot.z + this.rotation.z) - bot.body_mesh.rotation.z;
+    let dRotX = (this.homeRot.x + this.rotation.x) - bot.body_mesh.rotation.x;
+    let dPosX = (this.homePos.x + this.position.x) - bot.body_mesh.position.x;
+    let dPosZ = (this.homePos.z + this.position.z) - bot.body_mesh.position.z;
 
-    // Set body to home + joystick offset
-    bot.body_mesh.rotation.z = this.homeRot.z + this.rotation.z;
-    bot.body_mesh.rotation.x = this.homeRot.x + this.rotation.x;
-    bot.body_mesh.position.x = this.homePos.x + this.position.x;
-    bot.body_mesh.position.z = this.homePos.z + this.position.z;
-    bot.body_mesh.updateMatrixWorld();
+    // Subdivide so IK handles small increments (~0.5° or 5mm per step)
+    let maxStep = Math.max(Math.abs(dRotZ) / 0.008, Math.abs(dRotX) / 0.008, Math.abs(dPosX) / 5, Math.abs(dPosZ) / 5, 1);
+    let steps = Math.ceil(maxStep);
+    if (steps < 1) steps = 1;
 
     let total_legs = bot.legs.length;
-    for (let i = 0; i < total_legs; i++) {
-      bot.legs[i].set_tip_pos(current_tips_pos[i]);
-    }
+    for (let s = 0; s < steps; s++) {
+      let prevRZ = bot.body_mesh.rotation.z;
+      let prevRX = bot.body_mesh.rotation.x;
+      let prevPX = bot.body_mesh.position.x;
+      let prevPZ = bot.body_mesh.position.z;
 
-    // Revert if any tip drifted too far (IK couldn't reach)
-    let maxDrift = 0;
-    let newTips = bot.get_tip_pos();
-    for (let i = 0; i < total_legs; i++) {
-      let d = current_tips_pos[i].distanceTo(newTips[i]);
-      if (d > maxDrift) maxDrift = d;
-    }
-    if (maxDrift > 2) {
-      bot.body_mesh.position.copy(prevPos);
-      bot.body_mesh.rotation.copy(prevRot);
+      bot.body_mesh.rotation.z += dRotZ / steps;
+      bot.body_mesh.rotation.x += dRotX / steps;
+      bot.body_mesh.position.x += dPosX / steps;
+      bot.body_mesh.position.z += dPosZ / steps;
       bot.body_mesh.updateMatrixWorld();
+
       for (let i = 0; i < total_legs; i++) {
         bot.legs[i].set_tip_pos(current_tips_pos[i]);
+      }
+
+      // Drift guard
+      let newTips = bot.get_tip_pos();
+      let maxDrift = 0;
+      for (let i = 0; i < total_legs; i++) {
+        let d = current_tips_pos[i].distanceTo(newTips[i]);
+        if (d > maxDrift) maxDrift = d;
+      }
+      if (maxDrift > 1) {
+        bot.body_mesh.rotation.z = prevRZ;
+        bot.body_mesh.rotation.x = prevRX;
+        bot.body_mesh.position.x = prevPX;
+        bot.body_mesh.position.z = prevPZ;
+        bot.body_mesh.updateMatrixWorld();
+        for (let i = 0; i < total_legs; i++) {
+          bot.legs[i].set_tip_pos(current_tips_pos[i]);
+        }
+        break;
       }
     }
   }
