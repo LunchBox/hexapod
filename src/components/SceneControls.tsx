@@ -57,6 +57,8 @@ export default function SceneControls() {
 
   // Read current values from bot options on mount and when botVersion changes
   const [bodyY, setBodyY] = useState(10);
+  const [bodyX, setBodyX] = useState(0);
+  const [bodyZ, setBodyZ] = useState(0);
   const [tipScale, setTipScale] = useState(1);
   const [rotDeg, setRotDeg] = useState(10);
   const [fbStep, setFbStep] = useState(15);
@@ -76,6 +78,9 @@ export default function SceneControls() {
     setRotX(Math.round(bot.body_mesh?.rotation?.x * 180 / Math.PI) || 0);
     setRotY(Math.round(bot.body_mesh?.rotation?.y * 180 / Math.PI) || 0);
     setRotZ(Math.round(bot.body_mesh?.rotation?.z * 180 / Math.PI) || 0);
+    setBodyX(Math.round(bot.body_mesh?.position?.x ?? 0));
+    setBodyZ(Math.round(bot.body_mesh?.position?.z ?? 0));
+    setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
   }, [botVersion, botRef]);
 
   const handleSpreadChange = (v: number) => {
@@ -92,40 +97,27 @@ export default function SceneControls() {
     const bot = botRef.current;
     if (!bot) return;
     setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
+    setBodyX(Math.round(bot.body_mesh?.position?.x ?? 0));
+    setBodyZ(Math.round(bot.body_mesh?.position?.z ?? 0));
+    setRotX(Math.round(bot.body_mesh?.rotation?.x * 180 / Math.PI) || 0);
+    setRotY(Math.round(bot.body_mesh?.rotation?.y * 180 / Math.PI) || 0);
+    setRotZ(Math.round(bot.body_mesh?.rotation?.z * 180 / Math.PI) || 0);
   };
 
-  const handleHeightChange = (v: number): boolean => {
+  const handleBodyPos = (axis: string, v: number): boolean => {
     const bot = botRef.current;
-    if (!bot?.body_mesh) return false;
-    const prevY = bot.body_mesh.position.y;
-    const prevTips = bot.get_tip_pos();
-
-    // Move body, try to put all tips at Y=0
-    bot.body_mesh.position.y = v;
-    bot.body_mesh.updateMatrixWorld();
-    for (let i = 0; i < bot.legs.length; i++) {
-      let t = prevTips[i].clone();
-      t.y = 0;
-      bot.legs[i].set_tip_pos(t);
+    if (!bot) return false;
+    const cur = (bot.body_mesh.position as any)[axis];
+    const delta = v - cur;
+    if (Math.abs(delta) < 0.5) return true;
+    const ok = bot.transform_body({ ['d' + axis]: delta });
+    if (!ok) {
+      // Revert state
+      if (axis === 'x') setBodyX(Math.round(cur));
+      else if (axis === 'y') setBodyY(Math.round(cur));
+      else if (axis === 'z') setBodyZ(Math.round(cur));
     }
-    bot.adjust_gait_guidelines();
-
-    // Check if tips reached ground; revert if not
-    let maxTipY = 0;
-    let tips = bot.get_tip_pos();
-    for (const t of tips) { if (t.y > maxTipY) maxTipY = t.y; }
-    if (maxTipY > 2) {
-      bot.body_mesh.position.y = prevY;
-      bot.body_mesh.updateMatrixWorld();
-      for (let i = 0; i < bot.legs.length; i++) {
-        bot.legs[i].set_tip_pos(prevTips[i]);
-      }
-      bot.adjust_gait_guidelines();
-      bot.after_status_change();
-      return false;
-    }
-    bot.after_status_change();
-    return true;
+    return ok;
   };
 
   const handleAxisRot = (axis: string, deg: number): boolean => {
@@ -180,12 +172,14 @@ export default function SceneControls() {
 
       {/* Row 2: Sliders */}
       <div style={rowStyle}>
-      <SliderColumn value={bodyY} min={10} max={150} label="H" title="Body height"
-        onChange={(v) => {
-          const ok = handleHeightChange(v);
-          if (ok) setBodyY(v);
-          return ok;
-        }}
+      <SliderColumn value={bodyX} min={-80} max={80} label="X" title="Body X position"
+        onChange={(v) => { setBodyX(v); return handleBodyPos('x', v); }}
+      />
+      <SliderColumn value={bodyY} min={10} max={150} label="Y" title="Body height"
+        onChange={(v) => { setBodyY(v); return handleBodyPos('y', v); }}
+      />
+      <SliderColumn value={bodyZ} min={-80} max={80} label="Z" title="Body Z position"
+        onChange={(v) => { setBodyZ(v); return handleBodyPos('z', v); }}
       />
       <SliderColumn value={tipScale} min={0.1} max={1.5} step={0.1} label="↔" title="Tip spread"
         displayValue={tipScale.toFixed(1)}
