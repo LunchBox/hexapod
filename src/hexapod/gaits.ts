@@ -200,120 +200,131 @@ export class GaitController {
       const angle = (2 * Math.PI * i) / n - Math.PI / 2;
       const c = Math.cos(angle);
       if (isOdd && Math.abs(c) < 0.001) {
-        centerLeg = i; // odd N: single front (or back) leg exempt from sides
+        centerLeg = i;
       } else if (c > 0.001) {
         rightLegs.push(i);
       } else if (c < -0.001) {
         leftLegs.push(i);
       } else {
-        // Boundary leg (cos≈0): front→right, back→left
-        if (Math.sin(angle) < 0) rightLegs.push(i);  // front (sin<0 = -Z)
-        else leftLegs.push(i);                          // back (sin>0 = +Z)
+        if (Math.sin(angle) < 0) rightLegs.push(i);
+        else leftLegs.push(i);
       }
+    }
+
+    // Constraint: at least 2 grounded, distributed across sides or centerline
+    function phaseValid(liftedSet: Set<number>): boolean {
+      let rightGrounded = 0, leftGrounded = 0, centerGrounded = 0;
+      for (const l of rightLegs) { if (!liftedSet.has(l)) rightGrounded++; }
+      for (const l of leftLegs) { if (!liftedSet.has(l)) leftGrounded++; }
+      if (centerLeg !== null && !liftedSet.has(centerLeg)) centerGrounded = 1;
+      const totalGrounded = rightGrounded + leftGrounded + centerGrounded;
+      if (totalGrounded < 2) return false;
+      if ((rightGrounded > 0 && leftGrounded > 0) || centerGrounded > 0) return true;
+      return false;
     }
 
     function isValid(groups: number[][]): boolean {
       for (const g of groups) {
-        const gSet = new Set(g);
-        // Each side: lifted count must not exceed grounded count
-        let rightUp = 0, leftUp = 0;
-        for (const l of rightLegs) { if (gSet.has(l)) rightUp++; }
-        for (const l of leftLegs) { if (gSet.has(l)) leftUp++; }
-        const rightDown = rightLegs.length - rightUp;
-        const leftDown = leftLegs.length - leftUp;
-        // Exception 1: side with only 1 leg — lifting it is unavoidable
-        // Exception 2: odd N center leg on ground can stabilize imbalance
-        const centerGrounded = isOdd && centerLeg !== null && !gSet.has(centerLeg);
-        if (rightUp > rightDown && rightLegs.length >= 2 && !centerGrounded) return false;
-        if (leftUp > leftDown && leftLegs.length >= 2 && !centerGrounded) return false;
+        if (!phaseValid(new Set(g))) return false;
       }
       return true;
     }
 
-    function add(name: string, groups: number[][]) {
-      const filtered = groups.filter(g => g.length > 0);
-      if (filtered.length >= 2 && isValid(filtered)) gaits[name] = filtered;
+    // Canonical key for dedup (sort within each group, sort groups)
+    function canonKey(groups: number[][]): string {
+      return JSON.stringify(
+        groups.map(g => [...g].sort((a, b) => a - b))
+              .map(g => g.join(','))
+              .sort()
+      );
     }
 
+    // Enumerate all ordered partitions of N legs
+    const allPartitions: number[][][] = [];
+    function enumerate(remaining: number[], current: number[][]): void {
+      if (remaining.length === 0) {
+        if (current.length >= 2) allPartitions.push(current.map(g => [...g]));
+        return;
+      }
+      // Option 1: add first remaining leg to the last group (extend current group)
+      if (current.length > 0) {
+        const last = current[current.length - 1];
+        last.push(remaining[0]);
+        enumerate(remaining.slice(1), current);
+        last.pop();
+      }
+      // Option 2: start a new group with the first remaining leg
+      current.push([remaining[0]]);
+      enumerate(remaining.slice(1), current);
+      current.pop();
+    }
+
+    // Generate all permutations of [0..n-1] and enumerate each
+    // For efficiency with n>=7, limit to first 50000 permutations
+    const allLegs = Array.from({ length: n }, (_, i) => i);
+    function* permute(arr: number[]): Generator<number[]> {
+      if (arr.length <= 1) { yield arr; return; }
+      for (let i = 0; i < arr.length; i++) {
+        const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+        for (const p of permute(rest)) {
+          yield [arr[i], ...p];
+        }
+      }
+    }
+    let permCount = 0;
+    const maxPerms = n <= 6 ? 100000 : 50000;
+    for (const perm of permute(allLegs)) {
+      enumerate(perm, []);
+      permCount++;
+      if (permCount >= maxPerms) break;
+    }
+
+    console.warn('n=' + n + ': total ordered partitions=' + allPartitions.length
+      + ' (perms checked=' + permCount + ')');
+
+    // Filter by constraint
+    const valid = allPartitions.filter(g => isValid(g));
+    console.warn('n=' + n + ': after constraint filter=' + valid.length);
+
+    // Deduplicate
+    const seen = new Set<string>();
+    const unique: number[][][] = [];
+    for (const g of valid) {
+      const key = canonKey(g);
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(g);
+      }
+    }
+    console.warn('n=' + n + ': after dedup=' + unique.length);
+
+    // Build gaits object with auto-naming
     const gaits: Record<string, number[][]> = {};
-
-    // wave1 / wave2 — always valid (single-leg groups)
-    add('wave1', Array.from({ length: n }, (_, i) => [i]));
-    add('wave2', [
-      ...Array.from({ length: Math.ceil(n / 2) }, (_, i) => [i * 2]),
-      ...Array.from({ length: Math.floor(n / 2) }, (_, i) => [i * 2 + 1]),
-    ]);
-
-    // Alternating K-group patterns (tripod-like)
-    for (let k = 2; k <= Math.min(n, Math.ceil(n / 2) + 1); k++) {
-      const grps: number[][] = Array.from({ length: k }, () => []);
-      for (let i = 0; i < n; i++) grps[i % k].push(i);
-      const label = k === 2 ? 'tripod' : 'tripod' + k;
-      add(label, grps);
-    }
-
-    // Adjacent blocks (ripple-like)
-    for (let size = 2; size <= Math.ceil(n / 2); size++) {
-      const grps: number[][] = [];
-      for (let start = 0; start < n; start += size) {
-        const g = [];
-        for (let j = 0; j < size && start + j < n; j++) g.push(start + j);
-        if (g.length > 0) grps.push(g);
+    let unnamedIdx = 1;
+    for (const grps of unique) {
+      // Name based on group sizes
+      const sizes = grps.map(g => g.length).sort((a, b) => a - b).join('x');
+      const maxSize = Math.max(...grps.map(g => g.length));
+      let name: string;
+      if (maxSize === 1) {
+        name = 'wave' + (unnamedIdx > 1 ? unnamedIdx : '');
+      } else if (maxSize === 2) {
+        name = 'pairs' + (unnamedIdx > 1 ? unnamedIdx : '');
+      } else if (grps.length === 2) {
+        name = 'tripod' + (unnamedIdx > 1 ? unnamedIdx : '');
+      } else if (grps.length === 3 && n >= 6) {
+        name = 'tripod' + grps.length + (unnamedIdx > 1 ? '_' + unnamedIdx : '');
+      } else {
+        name = 'gait' + unnamedIdx;
       }
-      const label = size === 2 ? 'ripple' : 'ripple' + size;
-      add(label, grps);
-    }
-
-    // Sliding windows
-    for (let w = 2; w <= Math.min(3, Math.ceil(n / 2)); w++) {
-      const grps: number[][] = [];
-      for (let start = 0; start < n; start++) {
-        const g = [];
-        for (let j = 0; j < w; j++) g.push((start + j) % n);
-        grps.push(g);
+      // Avoid overwriting: append number if name exists
+      let finalName = name;
+      let suffix = 1;
+      while (gaits[finalName]) {
+        finalName = name + '_' + (++suffix);
       }
-      const label = w === 2 ? 'slide2' : 'slide3';
-      add(label, grps);
-    }
-
-    // Mirror pairs — enumerate all valid pairings (even N only)
-    if (n % 2 === 0 && leftLegs.length === rightLegs.length) {
-      const R = rightLegs.length;
-      // Rotated pairings: right[i] with left[(i+s)%R]
-      for (let s = 0; s < R; s++) {
-        const grps: number[][] = [];
-        for (let i = 0; i < R; i++) {
-          grps.push([rightLegs[i], leftLegs[(i + s) % R]]);
-        }
-        const label = s === 0 ? 'pairs' : 'pairs' + (s + 1);
-        add(label, grps);
-      }
-      // Crossed pairing: leg i with leg n-1-i
-      {
-        const grps: number[][] = [];
-        const used = new Set<number>();
-        for (let i = 0; i < n; i++) {
-          const j = n - 1 - i;
-          if (!used.has(i) && !used.has(j) && i !== j) {
-            grps.push([i, j]);
-            used.add(i); used.add(j);
-          }
-        }
-        add('cross', grps);
-      }
-    }
-
-    // squirm: 3-round alternating (all N)
-    {
-      const sq: number[][] = [];
-      for (let r = 0; r < 3; r++) {
-        const g: number[] = [];
-        for (let i = 0; i < n; i++) {
-          if (i % 3 === r) g.push(i);
-        }
-        if (g.length > 0) sq.push(g);
-      }
-      add('squirm', sq);
+      gaits[finalName] = grps;
+      unnamedIdx++;
     }
 
     this.gaits = gaits;
