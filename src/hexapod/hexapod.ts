@@ -697,15 +697,8 @@ export class Hexapod {
   reset_body_to_init() {
     delete this.options._body_home;
     set_bot_options(this.options);
-    let current_tips = this.get_tip_pos();
-    this.body_mesh.position.set(0, (this.options.body_height || 20) / 2, 0);
-    this.body_mesh.rotation.set(0, 0, 0);
-    this.body_mesh.updateMatrixWorld();
-    for (let i = 0; i < this.legs.length; i++) {
-      this.legs[i].set_tip_pos(current_tips[i]);
-    }
-    this.after_status_change();
-    if (this.adjust_gait_guidelines) this.adjust_gait_guidelines();
+    // Full redraw restores default body pose + leg positions from attributes
+    this.apply_attributes(this.options);
   }
 
   after_status_change(send_cmd?: boolean) {
