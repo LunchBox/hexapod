@@ -605,8 +605,8 @@ export class GaitController {
           let gait2 = this.actions["internal_move"];
           let pos2 = joystick.pos;
           gait2.snapshotHome();
-          let max_fb_radius = Math.PI / 36;
-          let max_lr_radius = Math.PI / 36;
+          let max_fb_radius = Math.PI / 18;
+          let max_lr_radius = Math.PI / 18;
           let fb_rate2 = max_fb_radius / joystick.radius;
           let lr_rate2 = max_lr_radius / joystick.radius;
           gait2.rotation.z = -pos2.x * lr_rate2;
