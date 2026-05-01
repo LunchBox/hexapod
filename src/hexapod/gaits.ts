@@ -199,11 +199,11 @@ export class GaitController {
     let centerLeg: number | null = null;
 
     if (bodyShape === 'rectangle') {
-      // Rectangle: sides by mirror/x-position
+      // Rectangle: sides by mirror/x-position (with epsilon for floating point)
       for (let i = 0; i < n; i++) {
         const x = this.bot.leg_layout?.[i]?.x ?? 0;
-        if (x > 0) rightLegs.push(i);
-        else if (x < 0) leftLegs.push(i);
+        if (x > 0.01) rightLegs.push(i);
+        else if (x < -0.01) leftLegs.push(i);
         else if (isOdd) centerLeg = i;
         else rightLegs.push(i); // even N: center x=0 goes to right
       }
@@ -314,6 +314,11 @@ export class GaitController {
     // Restore gait from options, fallback to first available
     let gaitName = this.bot.options.gait || 'tripod';
     this.leg_groups = this.gaits[gaitName] || Object.values(this.gaits)[0];
+    // Safety: if no gaits at all (shouldn't happen), create a basic wave
+    if (!this.leg_groups) {
+      this.gaits['wave'] = Array.from({ length: n }, (_, i) => [i]);
+      this.leg_groups = this.gaits['wave'];
+    }
     this.leg_group_idx = 0;
     this.reset_steps();
 
