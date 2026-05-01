@@ -63,11 +63,14 @@ function computeLegLayout(
     }
   } else {
     // Polygon — legs radiate outward, stretched by width (X) and length (Z)
-    const edgeOffset = polyPlacement === 'vertex' ? Math.PI / legCount : 0;
-    const edgeScale = polyPlacement === 'vertex' ? Math.cos(Math.PI / legCount) : 1;
+    // Vertex: legs at polygon corners (full radius, no angle offset)
+    // Edge:   legs at edge midpoints (reduced radius, offset by π/N)
+    const isVertex = polyPlacement === 'vertex';
+    const edgeOffset = isVertex ? 0 : Math.PI / legCount;
+    const edgeScale = isVertex ? 1 : Math.cos(Math.PI / legCount);
     const rx = bodyRadiusX * edgeScale;
     const rz = bodyRadiusZ * edgeScale;
-    const orientOffset = orientation === 'back' ? 0 : Math.PI;
+    const orientOffset = orientation === 'back' ? Math.PI : 0;
     for (let i = 0; i < legCount; i++) {
       const angle = (2 * Math.PI * i) / legCount - Math.PI / 2 + edgeOffset + orientOffset;
       const legX = rx * Math.cos(angle);
