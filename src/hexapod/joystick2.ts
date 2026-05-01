@@ -88,21 +88,11 @@ export class JoyStick {
   }
 
   handle_down(e_page_x: number, e_page_y: number) {
-    // Snap handler to click position (clamped to joystick radius)
-    let dx = e_page_x - this.canvas.offsetLeft - this.center_x;
-    let dy = e_page_y - this.canvas.offsetTop - this.center_y;
-    let dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > this.radius) {
-      dx = dx / dist * this.radius;
-      dy = dy / dist * this.radius;
+    let related_x = e_page_x - this.canvas.offsetLeft - this.center_x;
+    let related_y = e_page_y - this.canvas.offsetTop - this.center_y;
+    if (Math.sqrt(related_x * related_x + related_y * related_y) < this.handler_radius) {
+      this.handler_activated = true;
     }
-    this.handler_x = this.center_x + dx;
-    this.handler_y = this.center_y + dy;
-    this.handler_activated = true;
-    this.last_page_x = e_page_x;
-    this.last_page_y = e_page_y;
-    this.draw();
-    this.on_handler_activated();
   }
 
   handle_move(e_page_x: number, e_page_y: number) {
@@ -166,12 +156,12 @@ export class JoyStick {
   on_handler_deactivated() { }
 
   bind_events() {
-    // Activate on mousedown anywhere on screen
-    document.addEventListener("mousedown", (e: MouseEvent) => {
+    // Activate only when clicking the joystick canvas
+    this.canvas.addEventListener("mousedown", (e: MouseEvent) => {
       this.mouse_down(e);
     }, false);
 
-    // Track movement globally while dragging
+    // Track movement globally once activated (works outside canvas)
     document.addEventListener("mousemove", (e: MouseEvent) => {
       if (this.handler_activated) this.mouse_move(e);
     }, false);
