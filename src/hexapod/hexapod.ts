@@ -148,6 +148,11 @@ export class Hexapod {
 
     // Persist so AttributesPanel and page reload see latest state
     set_bot_options(this.options);
+
+    // Restore saved body home pose if exists
+    if (this.options._body_home) {
+      setTimeout(() => this.reset_body_to_home(), 100);
+    }
   }
 
   draw() {
