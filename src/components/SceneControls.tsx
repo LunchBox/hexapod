@@ -38,9 +38,24 @@ export default function SceneControls() {
     bot.adjust_tip_spread(v);
   };
 
+  const handleMotionChange = (key: string, value: number) => {
+    const bot = botRef.current;
+    if (!bot) return;
+    (bot.options as any)[key] = value;
+    set_bot_options(bot.options);
+    if (key === 'rotate_step') bot.rotate_step = value;
+    else if (key === 'fb_step') bot.fb_step = value;
+    else if (key === 'lr_step') bot.lr_step = value;
+    const gc = bot.gait_controller;
+    if (gc) gc.reset_steps();
+  };
+
   const bot = botRef.current;
   const bodyY = bot?.body_mesh?.position?.y ?? 10;
   const tipScale = bot?.options?.tip_circle_scale ?? 1;
+  const rotDeg = Math.round(((bot?.options?.rotate_step ?? Math.PI / 18) * 180) / Math.PI);
+  const fbStep = bot?.options?.fb_step ?? 15;
+  const lrStep = bot?.options?.lr_step ?? 10;
 
   return (
     <div style={{
@@ -70,6 +85,39 @@ export default function SceneControls() {
           onInput={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
         />
         <span style={{ fontSize: 9, color: '#666' }}>{tipScale.toFixed(1)}</span>
+      </div>
+
+      {/* Rotate step */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <span style={{ fontSize: 10, color: '#888' }}>↻°</span>
+        <input type="range" min="1" max="45" value={rotDeg}
+          title="Rotate step (°)"
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          onInput={(e) => handleMotionChange('rotate_step', parseFloat((e.target as HTMLInputElement).value) * Math.PI / 180)}
+        />
+        <span style={{ fontSize: 9, color: '#666' }}>{rotDeg}°</span>
+      </div>
+
+      {/* FB step */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <span style={{ fontSize: 10, color: '#888' }}>↕</span>
+        <input type="range" min="1" max="50" value={fbStep}
+          title="F&B step (mm)"
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          onInput={(e) => handleMotionChange('fb_step', parseFloat((e.target as HTMLInputElement).value))}
+        />
+        <span style={{ fontSize: 9, color: '#666' }}>{fbStep}</span>
+      </div>
+
+      {/* LR step */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <span style={{ fontSize: 10, color: '#888' }}>⇔</span>
+        <input type="range" min="1" max="50" value={lrStep}
+          title="L&R step (mm)"
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', height: 100, cursor: 'pointer' }}
+          onInput={(e) => handleMotionChange('lr_step', parseFloat((e.target as HTMLInputElement).value))}
+        />
+        <span style={{ fontSize: 9, color: '#666' }}>{lrStep}</span>
       </div>
     </div>
   );
