@@ -341,7 +341,7 @@ export class Hexapod {
       let geom = new (THREE as any).CircleGeometry(7, 16);
       let mat = new (THREE as any).MeshBasicMaterial({ color: 0x111111, side: (THREE as any).DoubleSide });
       let sq = new THREE.Mesh(geom, mat);
-      sq.position.copy(tip);
+      sq.position.set(tip.x, 0, tip.z);
       sq.rotation.x = -Math.PI / 2;
       this.scene.add(sq);
       this._guideCircles.push(sq);
@@ -363,7 +363,10 @@ export class Hexapod {
     if (!this._guideCircles) return;
     for (let i = 0; i < this.legs.length; i++) {
       const sq = this._guideCircles[i];
-      if (sq) sq.position.copy(this.legs[i].get_tip_pos());
+      if (sq) {
+        const tip = this.legs[i].get_tip_pos();
+        sq.position.set(tip.x, 0, tip.z);
+      }
     }
   }
 
