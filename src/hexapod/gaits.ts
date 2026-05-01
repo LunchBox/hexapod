@@ -148,6 +148,10 @@ export class GaitInternal extends GaitAction {
     let bot = this.controller.bot;
     let current_tips_pos = bot.get_tip_pos();
 
+    // Save current body pose for potential revert
+    let prevPos = bot.body_mesh.position.clone();
+    let prevRot = bot.body_mesh.rotation.clone();
+
     // Apply incremental delta from last call, then reset for next
     bot.body_mesh.rotation.z += this.rotation.z;
     bot.body_mesh.rotation.x += this.rotation.x;
@@ -156,9 +160,27 @@ export class GaitInternal extends GaitAction {
     this.rotation.z = 0; this.rotation.x = 0;
     this.position.x = 0; this.position.z = 0;
 
+    bot.body_mesh.updateMatrixWorld();
+
     let total_legs = bot.legs.length;
     for (let i = 0; i < total_legs; i++) {
       bot.legs[i].set_tip_pos(current_tips_pos[i]);
+    }
+
+    // Revert if any tip drifted too far from target (IK couldn't reach)
+    let maxDrift = 0;
+    let newTips = bot.get_tip_pos();
+    for (let i = 0; i < total_legs; i++) {
+      let d = current_tips_pos[i].distanceTo(newTips[i]);
+      if (d > maxDrift) maxDrift = d;
+    }
+    if (maxDrift > 2) {
+      bot.body_mesh.position.copy(prevPos);
+      bot.body_mesh.rotation.copy(prevRot);
+      bot.body_mesh.updateMatrixWorld();
+      for (let i = 0; i < total_legs; i++) {
+        bot.legs[i].set_tip_pos(current_tips_pos[i]);
+      }
     }
   }
 }
@@ -559,8 +581,8 @@ export class GaitController {
         case "move_body":
           let gait = this.actions["internal_move"];
           let pos = joystick.pos;
-          let max_fb_distance = 40;
-          let max_lr_distance = 40;
+          let max_fb_distance = 8;
+          let max_lr_distance = 8;
           let fb_rate = max_fb_distance / joystick.radius;
           let lr_rate = max_lr_distance / joystick.radius;
           gait.position.x = pos.x * lr_rate;
@@ -570,8 +592,8 @@ export class GaitController {
         case "rotate_body":
           let gait2 = this.actions["internal_move"];
           let pos2 = joystick.pos;
-          let max_fb_radius = Math.PI / 9;
-          let max_lr_radius = Math.PI / 9;
+          let max_fb_radius = Math.PI / 90;
+          let max_lr_radius = Math.PI / 90;
           let fb_rate2 = max_fb_radius / joystick.radius;
           let lr_rate2 = max_lr_radius / joystick.radius;
           gait2.rotation.z = -pos2.x * lr_rate2;
