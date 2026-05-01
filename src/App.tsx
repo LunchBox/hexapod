@@ -25,7 +25,7 @@ function App() {
   return (
     <HexapodProvider>
       <div className="app">
-        <h2 className="app-title">JS Hexapod Ver. 0.7.10 - developing (React)</h2>
+        <h2 className="app-title">JS Hexapod ver.0.8.0 - developing</h2>
 
         <div className="grid-scene">
           <SceneCanvas />
