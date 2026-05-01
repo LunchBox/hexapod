@@ -103,23 +103,24 @@ export default function ControlPanel() {
           setBodyHeightVal(bot.body_mesh.position.y);
         }
         break;
-      case 'act_expend':
-        setTipCircleScale((s) => {
-          const next = Math.min(1.5, +(s + 0.1).toFixed(1));
-          bot.options.tip_circle_scale = next;
-          set_bot_options(bot.options);
-          bot.adjust_tip_spread(next);
-          return next;
-        });
+      case 'act_expend': {
+        const cur = bot.options.tip_circle_scale ?? 1;
+        const next = Math.min(1.5, +(cur + 0.1).toFixed(1));
+        setTipCircleScale(next);
+        bot.options.tip_circle_scale = next;
+        set_bot_options(bot.options);
+        bot.adjust_tip_spread(next);
         break;
-      case 'act_compact':
-        setTipCircleScale((s) => {
-          const next = Math.max(0.1, +(s - 0.1).toFixed(1));
-          bot.options.tip_circle_scale = next;
-          set_bot_options(bot.options);
-          bot.adjust_tip_spread(next);
-          return next;
-        });
+      }
+      case 'act_compact': {
+        const cur = bot.options.tip_circle_scale ?? 1;
+        const next = Math.max(0.1, +(cur - 0.1).toFixed(1));
+        setTipCircleScale(next);
+        bot.options.tip_circle_scale = next;
+        set_bot_options(bot.options);
+        bot.adjust_tip_spread(next);
+        break;
+      }
         break;
       case 'gait_switch':
         setGait(value!);
@@ -197,7 +198,7 @@ export default function ControlPanel() {
         bumpBotVersion();
         break;
     }
-    queueMicrotask(() => updateServoDisplay());
+    updateServoDisplay();
   }, [botRef, gc, updateServoDisplay]);
 
   // Keyboard handler
