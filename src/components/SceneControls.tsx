@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
 import { JoyStick } from '../hexapod/joystick2';
+import SliderColumn from './SliderColumn';
 
 function makeJoystick(
   container: HTMLElement, radius: number,
@@ -87,12 +88,11 @@ export default function SceneControls() {
     setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
   };
 
-  const handleHeightChange = (v: number) => {
+  const handleHeightChange = (v: number): boolean => {
     const bot = botRef.current;
-    if (!bot?.body_mesh) return;
+    if (!bot?.body_mesh) return false;
     const prevY = bot.body_mesh.position.y;
     const prevTips = bot.get_tip_pos();
-    setBodyY(v);
 
     // Move body, try to put all tips at Y=0
     bot.body_mesh.position.y = v;
@@ -109,16 +109,17 @@ export default function SceneControls() {
     let tips = bot.get_tip_pos();
     for (const t of tips) { if (t.y > maxTipY) maxTipY = t.y; }
     if (maxTipY > 2) {
-      // Can't reach ground — revert
       bot.body_mesh.position.y = prevY;
       bot.body_mesh.updateMatrixWorld();
       for (let i = 0; i < bot.legs.length; i++) {
         bot.legs[i].set_tip_pos(prevTips[i]);
       }
       bot.adjust_gait_guidelines();
-      setBodyY(Math.round(prevY));
+      bot.after_status_change();
+      return false;
     }
     bot.after_status_change();
+    return true;
   };
 
   const handleMotionChange = (key: string, value: number) => {
@@ -135,25 +136,12 @@ export default function SceneControls() {
     if (gc) gc.reset_steps();
   };
 
-  const SLIDER_H = 100;
-  const btnStyle: React.CSSProperties = {
-    background: 'none', border: '1px solid #555', color: '#aaa',
-    cursor: 'pointer', fontSize: 10, padding: '0 3px', lineHeight: 1,
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap',
   };
   const colStyle: React.CSSProperties = {
     display: 'flex', flexDirection: 'column', alignItems: 'center',
-    height: SLIDER_H + 50,
-  };
-  const sliderStyle: React.CSSProperties = {
-    writingMode: 'vertical-lr', direction: 'rtl',
-    height: SLIDER_H, cursor: 'pointer',
-  };
-  const labelStyle: React.CSSProperties = { fontSize: 10, color: '#888', height: 16, lineHeight: '16px' };
-  const valStyle: React.CSSProperties = { fontSize: 9, color: '#666', height: 14, lineHeight: '14px' };
-  const btnH: React.CSSProperties = { ...btnStyle, height: 16, lineHeight: '14px' };
-
-  const rowStyle: React.CSSProperties = {
-    display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap',
+    height: 150,
   };
 
   return (
@@ -162,100 +150,41 @@ export default function SceneControls() {
       <div style={rowStyle}>
         <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
           <div ref={moveJsRef}></div>
-          <span style={labelStyle}>Move</span>
+          <span style={{ fontSize: 10, color: '#888', height: 16, lineHeight: '16px' }}>Move</span>
         </div>
         <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
           <div ref={bodyJsRef}></div>
-          <span style={labelStyle}>Body</span>
+          <span style={{ fontSize: 10, color: '#888', height: 16, lineHeight: '16px' }}>Body</span>
         </div>
         <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
           <div ref={rotJsRef}></div>
-          <span style={labelStyle}>Rot</span>
+          <span style={{ fontSize: 10, color: '#888', height: 16, lineHeight: '16px' }}>Rot</span>
         </div>
       </div>
 
       {/* Row 2: Sliders */}
       <div style={rowStyle}>
-      {/* Body height */}
-      <div style={colStyle}>
-        <button style={btnH} onClick={() => handleHeightChange(Math.min(150, bodyY + 1))}>▲</button>
-        <input type="range" min="10" max="150" value={bodyY} title="Body height"
-          style={sliderStyle}
-          onChange={(e) => handleHeightChange(parseFloat((e.target as HTMLInputElement).value))}
-        />
-        <button style={btnH} onClick={() => handleHeightChange(Math.max(10, bodyY - 1))}>▼</button>
-        <span style={labelStyle}>H</span>
-        <span style={valStyle}>{bodyY}</span>
-      </div>
-
-      {/* Expand/Compact */}
-      <div style={colStyle}>
-        <button style={btnH} onClick={() => handleSpreadChange(Math.min(1.5, +(tipScale + 0.1).toFixed(1)))}>▲</button>
-        <input type="range" max="1.5" min="0.1" step="0.1" value={tipScale} title="Tip spread"
-          style={sliderStyle}
-          onChange={(e) => handleSpreadChange(parseFloat((e.target as HTMLInputElement).value))}
-        />
-        <button style={btnH} onClick={() => handleSpreadChange(Math.max(0.1, +(tipScale - 0.1).toFixed(1)))}>▼</button>
-        <span style={labelStyle}>↔</span>
-        <span style={valStyle}>{tipScale.toFixed(1)}</span>
-      </div>
-
-      {/* Rotate step */}
-      <div style={colStyle}>
-        <button style={btnH} onClick={() => {
-          const v = Math.min(45, rotDeg + 1); setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
-        }}>▲</button>
-        <input type="range" min="1" max="45" value={rotDeg} title="Rotate step (°)"
-          style={sliderStyle}
-          onChange={(e) => {
-            const v = parseInt((e.target as HTMLInputElement).value);
-            setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
-          }}
-        />
-        <button style={btnH} onClick={() => {
-          const v = Math.max(1, rotDeg - 1); setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180);
-        }}>▼</button>
-        <span style={labelStyle}>↻°</span>
-        <span style={valStyle}>{rotDeg}°</span>
-      </div>
-
-      {/* FB step */}
-      <div style={colStyle}>
-        <button style={btnH} onClick={() => {
-          const v = Math.min(50, fbStep + 1); setFbStep(v); handleMotionChange('fb_step', v);
-        }}>▲</button>
-        <input type="range" min="1" max="50" value={fbStep} title="F&B step (mm)"
-          style={sliderStyle}
-          onChange={(e) => {
-            const v = parseInt((e.target as HTMLInputElement).value);
-            setFbStep(v); handleMotionChange('fb_step', v);
-          }}
-        />
-        <button style={btnH} onClick={() => {
-          const v = Math.max(1, fbStep - 1); setFbStep(v); handleMotionChange('fb_step', v);
-        }}>▼</button>
-        <span style={labelStyle}>↕</span>
-        <span style={valStyle}>{fbStep}</span>
-      </div>
-
-      {/* LR step */}
-      <div style={colStyle}>
-        <button style={btnH} onClick={() => {
-          const v = Math.min(50, lrStep + 1); setLrStep(v); handleMotionChange('lr_step', v);
-        }}>▲</button>
-        <input type="range" min="1" max="50" value={lrStep} title="L&R step (mm)"
-          style={sliderStyle}
-          onChange={(e) => {
-            const v = parseInt((e.target as HTMLInputElement).value);
-            setLrStep(v); handleMotionChange('lr_step', v);
-          }}
-        />
-        <button style={btnH} onClick={() => {
-          const v = Math.max(1, lrStep - 1); setLrStep(v); handleMotionChange('lr_step', v);
-        }}>▼</button>
-        <span style={labelStyle}>⇔</span>
-        <span style={valStyle}>{lrStep}</span>
-      </div>
+      <SliderColumn value={bodyY} min={10} max={150} label="H" title="Body height"
+        onChange={(v) => {
+          const ok = handleHeightChange(v);
+          if (ok) setBodyY(v);
+          return ok;
+        }}
+      />
+      <SliderColumn value={tipScale} min={0.1} max={1.5} step={0.1} label="↔" title="Tip spread"
+        displayValue={tipScale.toFixed(1)}
+        onChange={(v) => { handleSpreadChange(v); return true; }}
+      />
+      <SliderColumn value={rotDeg} min={1} max={45} label="↻°" title="Rotate step (°)"
+        displayValue={rotDeg + '°'}
+        onChange={(v) => { setRotDeg(v); handleMotionChange('rotate_step', v * Math.PI / 180); return true; }}
+      />
+      <SliderColumn value={fbStep} min={1} max={50} label="↕" title="F&B step (mm)"
+        onChange={(v) => { setFbStep(v); handleMotionChange('fb_step', v); return true; }}
+      />
+      <SliderColumn value={lrStep} min={1} max={50} label="⇔" title="L&R step (mm)"
+        onChange={(v) => { setLrStep(v); handleMotionChange('lr_step', v); return true; }}
+      />
       </div>
 
       {/* Row 3: Body position buttons + tip lock toggle */}
