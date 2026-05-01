@@ -581,6 +581,8 @@ export class Hexapod {
     // Subdivide into at most 3 steps for smooth IK
     let steps = 3;
 
+    console.warn('transform_body', JSON.stringify({dx:opts.dx,dy:opts.dy,dz:opts.dz,rx:opts.rx,ry:opts.ry,rz:opts.rz,lock}));
+
     let total_legs = this.legs.length;
     for (let s = 0; s < steps; s++) {
       let prevRZ = this.body_mesh.rotation.z;
