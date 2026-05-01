@@ -139,6 +139,13 @@ export class Hexapod {
     if (this.mesh) {
       this.scene.remove(this.mesh);
     }
+    // Clean up guide circles (world-space children of scene)
+    if (this._guideCircles) {
+      for (const sq of this._guideCircles) {
+        this.scene.remove(sq);
+      }
+      this._guideCircles = [];
+    }
 
     this.on_servo_values = null;
     this.draw();
@@ -332,7 +339,7 @@ export class Hexapod {
       let sq = new THREE.Mesh(geom, mat);
       sq.position.copy(tip);
       sq.rotation.x = -Math.PI / 2;
-      this.mesh.add(sq);
+      this.scene.add(sq);
       this._guideCircles.push(sq);
     }
   }
@@ -350,17 +357,14 @@ export class Hexapod {
   }
 
   get_guide_pos(leg_idx: number) {
-    this.mesh.updateMatrixWorld();
     let sq = this._guideCircles?.[leg_idx];
     if (sq) {
-      let vector = new THREE.Vector3();
-      vector.setFromMatrixPosition(sq.matrixWorld);
-      // Apply tip_circle_scale relative to body center
+      // Circle is in world space — position is the world tip position
       let cx = this.body_mesh.position.x;
       let cz = this.body_mesh.position.z;
-      vector.x = cx + (vector.x - cx) * (this.tip_circle_scale || 1);
-      vector.z = cz + (vector.z - cz) * (this.tip_circle_scale || 1);
-      return vector;
+      let wx = cx + (sq.position.x - cx) * (this.tip_circle_scale || 1);
+      let wz = cz + (sq.position.z - cz) * (this.tip_circle_scale || 1);
+      return new THREE.Vector3(wx, sq.position.y, wz);
     }
     return new THREE.Vector3();
   }
