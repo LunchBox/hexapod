@@ -40,21 +40,25 @@ export default function SceneControls() {
     setLrStep(bot.options?.lr_step ?? 10);
   }, [botVersion, botRef]);
 
-  const handleHeightChange = (v: number) => {
-    const bot = botRef.current;
-    if (!bot?.body_mesh) return;
-    const delta = v - bot.body_mesh.position.y;
-    if (Math.abs(delta) > 0.01) bot.move_body('y', delta);
-    setBodyY(v);
-  };
-
   const handleSpreadChange = (v: number) => {
     const bot = botRef.current;
     if (!bot) return;
     bot.options.tip_circle_scale = v;
     set_bot_options(bot.options);
     bot.adjust_tip_spread(v);
+    bot.adjust_gait_guidelines();
     setTipScale(v);
+  };
+
+  const handleHeightChange = (v: number) => {
+    const bot = botRef.current;
+    if (!bot?.body_mesh) return;
+    const delta = v - bot.body_mesh.position.y;
+    if (Math.abs(delta) > 0.01) {
+      bot.move_body('y', delta);
+      bot.adjust_gait_guidelines();
+    }
+    setBodyY(v);
   };
 
   const handleMotionChange = (key: string, value: number) => {
@@ -62,8 +66,10 @@ export default function SceneControls() {
     if (!bot) return;
     (bot.options as any)[key] = value;
     set_bot_options(bot.options);
-    if (key === 'rotate_step') bot.rotate_step = value;
-    else if (key === 'fb_step') { bot.fb_step = value; setFbStep(value); }
+    if (key === 'rotate_step') {
+      bot.rotate_step = value;
+      bot.adjust_gait_guidelines();
+    } else if (key === 'fb_step') { bot.fb_step = value; setFbStep(value); }
     else if (key === 'lr_step') { bot.lr_step = value; setLrStep(value); }
     const gc = bot.gait_controller;
     if (gc) gc.reset_steps();

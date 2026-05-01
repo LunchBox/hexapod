@@ -343,8 +343,26 @@ export class Hexapod {
   }
 
   adjust_gait_guidelines() {
-    this.left_gl.rotation.y = this.rotate_step;
-    this.right_gl.rotation.y = -this.rotate_step;
+    if (!this.guideline) return;
+    // Update tip-position lines
+    for (let idx = 0; idx < this.legs.length; idx++) {
+      const line = this.guideline.children[idx] as any;
+      if (!line) continue;
+      line.geometry.vertices[1].copy(this.legs[idx].get_tip_pos());
+      line.geometry.verticesNeedUpdate = true;
+    }
+    // Update rotation clones
+    const updateClone = (clone: any) => {
+      for (let idx = 0; idx < this.legs.length; idx++) {
+        const line = clone.children[idx] as any;
+        if (!line) continue;
+        line.geometry.vertices[0].copy(this.guideline.children[idx].geometry.vertices[0]);
+        line.geometry.vertices[1].copy(this.legs[idx].get_tip_pos());
+        line.geometry.verticesNeedUpdate = true;
+      }
+    };
+    if (this.left_gl) { this.left_gl.rotation.y = this.rotate_step; updateClone(this.left_gl); }
+    if (this.right_gl) { this.right_gl.rotation.y = -this.rotate_step; updateClone(this.right_gl); }
   }
 
   get_servo_values() {
