@@ -390,11 +390,14 @@ export class Hexapod {
       this.body_mesh.position.set(h.px, h.py, h.pz);
       this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
       this.body_mesh.updateMatrixWorld();
-      // Only restore tips if count matches current leg count, otherwise re-putdown
+      // Tips are stored RELATIVE to body — convert to world for IK
       if (h.tips && h.tips.length === this.legs.length) {
+        const bx = this.body_mesh.position.x;
+        const by = this.body_mesh.position.y;
+        const bz = this.body_mesh.position.z;
         for (let i = 0; i < this.legs.length; i++) {
           const t = h.tips[i];
-          this.legs[i].set_tip_pos(new THREE.Vector3(t.x, t.y, t.z));
+          this.legs[i].set_tip_pos(new THREE.Vector3(t.x + bx, t.y + by, t.z + bz));
         }
       } else {
         let tips = this.get_tip_pos();
@@ -975,25 +978,34 @@ export class Hexapod {
 
   save_body_home() {
     const tips = this.get_tip_pos();
+    const bx = this.body_mesh.position.x;
+    const by = this.body_mesh.position.y;
+    const bz = this.body_mesh.position.z;
     const home = {
-      px: this.body_mesh.position.x, py: this.body_mesh.position.y, pz: this.body_mesh.position.z,
+      px: bx, py: by, pz: bz,
       rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
-      tips: tips.map((t: any) => ({ x: t.x, y: t.y, z: t.z })),
+      // Store tips RELATIVE to body so Recall can apply them at any body position
+      tips: tips.map((t: any) => ({ x: t.x - bx, y: t.y - by, z: t.z - bz })),
     };
     this.options._body_home = home;
     set_bot_options(this.options);
   }
 
-  reset_body_to_home() {
+  reset_body_to_home(keepPosition?: boolean) {
     const home = this.options._body_home;
     if (!home) return;
-    this.body_mesh.position.set(home.px, home.py, home.pz);
+    if (!keepPosition) {
+      this.body_mesh.position.set(home.px, home.py, home.pz);
+    }
     this.body_mesh.rotation.set(home.rx, home.ry, home.rz);
     this.body_mesh.updateMatrixWorld();
-    if (home.tips) {
-      for (let i = 0; i < Math.min(this.legs.length, home.tips.length); i++) {
+    if (home.tips && home.tips.length === this.legs.length) {
+      const bx = this.body_mesh.position.x;
+      const by = this.body_mesh.position.y;
+      const bz = this.body_mesh.position.z;
+      for (let i = 0; i < this.legs.length; i++) {
         const t = home.tips[i];
-        this.legs[i].set_tip_pos(new THREE.Vector3(t.x, t.y, t.z));
+        this.legs[i].set_tip_pos(new THREE.Vector3(t.x + bx, t.y + by, t.z + bz));
       }
     }
     this.after_status_change();

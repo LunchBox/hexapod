@@ -176,8 +176,8 @@ export default function SceneControls() {
       <div style={{ ...rowStyle, marginTop: 4 }}>
         <button className="control_btn" title="Save current pose"
           onClick={() => botRef.current?.save_body_home?.()}>Save Pose</button>
-        <button className="control_btn" title="Reset to last saved pose"
-          onClick={() => { botRef.current?.reset_body_to_home?.(); syncSliders(); }}>↺ Recall</button>
+        <button className="control_btn" title="Reset rotation & stance to saved pose at current position"
+          onClick={() => { botRef.current?.reset_body_to_home?.(true); syncSliders(); }}>↺ Recall</button>
         <button className="control_btn" title="Reset body to init pose, keep leg attributes"
           onClick={() => {
             botRef.current?.reset_body_to_init?.();
