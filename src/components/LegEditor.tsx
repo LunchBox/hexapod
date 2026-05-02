@@ -132,10 +132,9 @@ export default function LegEditor() {
 
     const refLeg = valid.refLeg;
     // Always use geometry-based positions — LegEditor edits segment lengths
-    // and init_angles, not runtime servo positions affected by IK
-    const pts = dragRef.current
-      ? computeJointPositions(dragRef.current.opts, refLeg)
-      : computeJointPositions(opts, refLeg);
+    // and init_angles, not runtime servo positions affected by IK.
+    // During drag, use current opts (being mutated by handleMouseMove).
+    const pts = computeJointPositions(opts, refLeg);
     const view = dragRef.current?.view || computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const sp = pts.map(p => toScreen(p, view));
 
