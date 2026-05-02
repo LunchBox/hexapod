@@ -56,7 +56,14 @@ function toCanonical(gait: Gait): Gait {
 }
 
 function canonicalKey(gait: Gait): string {
-  return gait.map(g => [...g].sort((a, b) => a - b).join(',')).join('|');
+  const n = gait.length;
+  let best: string | null = null;
+  for (let rot = 0; rot < n; rot++) {
+    const rotated = [...gait.slice(rot), ...gait.slice(0, rot)];
+    const key = rotated.map(g => [...g].sort((a, b) => a - b).join(',')).join('|');
+    if (best === null || key < best) best = key;
+  }
+  return best!;
 }
 
 // ── Naming ──────────────────────────────────────────────────────
@@ -82,6 +89,8 @@ export function generateForK(
   rightLegs: Set<number>,
   centerLeg: number | null,
 ): Gait[] {
+  if (k < 1 || k >= n) return [];
+
   const liftsPerLeg = lcm(n, k) / n;
   const numSteps = lcm(n, k) / k;
   const allLegs = Array.from({ length: n }, (_, i) => i);
@@ -106,6 +115,8 @@ export function generateForK(
     const stepsLeft = numSteps - stepIdx;
     const forced = available.filter(l => legCounts[l] + stepsLeft === liftsPerLeg);
     if (forced.length > k) return; // impossible: more forced legs than available slots
+    // Legs that cannot possibly reach their target
+    if (available.some(l => legCounts[l] + stepsLeft < liftsPerLeg)) return;
 
     for (const combo of combinations(available, k)) {
       // Must include all forced legs
@@ -129,10 +140,9 @@ export function generateForK(
   // Deduplicate cyclic rotations
   const unique = new Map<string, Gait>();
   for (const gait of allSequences) {
-    const canonical = toCanonical(gait);
-    const key = canonicalKey(canonical);
+    const key = canonicalKey(gait);
     if (!unique.has(key)) {
-      unique.set(key, canonical);
+      unique.set(key, gait);
     }
   }
 
