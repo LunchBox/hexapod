@@ -98,6 +98,46 @@ function hasQuickRelift(gait: Gait, n: number): boolean {
   return false;
 }
 
+// ── Wave-only generator (k=1, canonical direct) ──────────────────
+
+// For k=1, generate directly in canonical form (leg 0 first) so no
+// cyclic dedup is needed. Used for n > 6 where full backtracking
+// would explode. Permutes legs 1..n-1 and validates each phase.
+function generateWaveGaits(
+  n: number,
+  leftLegs: Set<number>,
+  rightLegs: Set<number>,
+  centerLeg: number | null,
+): Gait[] {
+  const allLegs = Array.from({ length: n }, (_, i) => i);
+  const remaining = allLegs.slice(1); // legs 1..n-1
+  const results: Gait[] = [];
+
+  function* permute<T>(arr: T[]): Generator<T[]> {
+    if (arr.length <= 1) { yield arr; return; }
+    for (let i = 0; i < arr.length; i++) {
+      const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
+      for (const p of permute(rest)) {
+        yield [arr[i], ...p];
+      }
+    }
+  }
+
+  for (const perm of permute(remaining)) {
+    const gait: Gait = [[0], ...perm.map(l => [l])];
+    let valid = true;
+    for (const g of gait) {
+      if (!isValidPhase(new Set(g), allLegs, leftLegs, rightLegs, centerLeg)) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) results.push(gait);
+  }
+
+  return results;
+}
+
 // ── Main: generate all gaits for a given k ──────────────────────
 
 export function generateForK(
@@ -175,14 +215,22 @@ export function generateAllGaits(
   rightLegs: number[],
   centerLeg: number | null,
 ): Record<string, Gait> {
-  // Combinatorial explosion for n > 6: just produce a basic wave gait
-  if (n > 6) {
-    return { wave: Array.from({ length: n }, (_, i) => [i]) };
-  }
-
   const leftSet = new Set(leftLegs);
   const rightSet = new Set(rightLegs);
   const allGaits: Record<string, Gait> = {};
+
+  // For n > 6, only generate k=1 (wave) to avoid backtracking explosion
+  // from k=2,3. Wave gaits use canonical direct generation — fast.
+  if (n > 6) {
+    const gaits = generateWaveGaits(n, leftSet, rightSet, centerLeg);
+    gaits.forEach((gait, idx) => {
+      allGaits[gaitName(1, idx)] = gait;
+    });
+    if (Object.keys(allGaits).length === 0) {
+      allGaits['wave'] = Array.from({ length: n }, (_, i) => [i]);
+    }
+    return allGaits;
+  }
 
   for (let k = 1; k <= Math.min(3, n - 2); k++) {
     const gaits = generateForK(n, k, leftSet, rightSet, centerLeg)
