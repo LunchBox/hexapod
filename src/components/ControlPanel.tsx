@@ -112,7 +112,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
     const framePad = 4;
     const frameW = 56;
     const frameH = 72;
-    const frameGap = 6;
+    const frameGap = 16;
     const labelH = 10;
 
     const padX = 6;
@@ -142,15 +142,6 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
       const lifted = new Set(groups[s]);
       const fx = padX + s * (frameW + frameGap); // frame left edge
 
-      // Body outline (faint rectangle/ellipse)
-      const bodyL = cx - (rangeX / 2) * scale;
-      const bodyR = cx + (rangeX / 2) * scale;
-      const bodyT = cz - (rangeZ / 2) * scale;
-      const bodyB = cz + (rangeZ / 2) * scale;
-      ctx.strokeStyle = '#555';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(fx + bodyL, padY + bodyT, bodyR - bodyL, bodyB - bodyT);
-
       // Leg dots
       for (let l = 0; l < n; l++) {
         const p = legLayout[l];
@@ -158,7 +149,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
         const dy = padY + cz + (p.z - (minZ + maxZ) / 2) * scale;
         ctx.beginPath();
         ctx.arc(dx, dy, dotR, 0, Math.PI * 2);
-        ctx.fillStyle = lifted.has(l) ? '#e04040' : '#999';
+        ctx.fillStyle = lifted.has(l) ? '#c4685a' : '#999';
         ctx.fill();
       }
 
