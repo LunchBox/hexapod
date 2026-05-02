@@ -74,6 +74,30 @@ function gaitName(k: number, index: number): string {
   return index === 0 ? prefix : `${prefix}-${index + 1}`;
 }
 
+// ── Quick-relift filter ─────────────────────────────────────────
+
+// Filter gaits where a leg is put down for only 1 step before being
+// lifted again within the same cycle. Only applies when a leg appears
+// more than once per cycle (liftsPerLeg >= 2), e.g. k=4 with n=6.
+function hasQuickRelift(gait: Gait, n: number): boolean {
+  const m = gait.length;
+  for (let leg = 0; leg < n; leg++) {
+    const pattern = gait.map(g => g.includes(leg) ? 1 : 0);
+    const liftCount = pattern.reduce((s, v) => s + v, 0);
+    if (liftCount <= 1) continue; // lifted once per cycle, always fine
+    // Check for isolated ground (1,0,1 pattern cyclically)
+    for (let i = 0; i < m; i++) {
+      const prev = pattern[(i - 1 + m) % m];
+      const curr = pattern[i];
+      const next = pattern[(i + 1) % m];
+      if (prev === 1 && curr === 0 && next === 1) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // ── Main: generate all gaits for a given k ──────────────────────
 
 export function generateForK(
@@ -155,8 +179,9 @@ export function generateAllGaits(
   const rightSet = new Set(rightLegs);
   const allGaits: Record<string, Gait> = {};
 
-  for (let k = 1; k <= n - 2; k++) {
-    const gaits = generateForK(n, k, leftSet, rightSet, centerLeg);
+  for (let k = 1; k <= Math.min(3, n - 2); k++) {
+    const gaits = generateForK(n, k, leftSet, rightSet, centerLeg)
+      .filter(g => !hasQuickRelift(g, n));
     gaits.forEach((gait, idx) => {
       allGaits[gaitName(k, idx)] = gait;
     });
