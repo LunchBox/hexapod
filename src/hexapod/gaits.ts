@@ -320,9 +320,9 @@ export class GaitController {
   }
 
   stop() {
-    console.log("clear interval");
+    console.log("clear timeout");
     if (typeof this.action_identify !== "undefined") {
-      clearInterval(this.action_identify);
+      clearTimeout(this.action_identify);
       this.action_identify = null;
     }
 

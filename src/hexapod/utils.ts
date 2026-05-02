@@ -97,9 +97,12 @@ export function set_obj_to_local_storage(key, obj) {
   }
 }
 
-export function degree_to_redius(degree) {
+export function degree_to_radians(degree: number): number {
   return Math.PI * degree / 180;
 }
+
+/** @deprecated Use degree_to_radians instead */
+export const degree_to_redius = degree_to_radians;
 
 // Rotate an object around an arbitrary axis in object space
 let rotObjectMatrix;

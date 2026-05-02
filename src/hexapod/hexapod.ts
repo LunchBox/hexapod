@@ -5,7 +5,7 @@ import {
   DEFAULT_FRAMES_INTERVAL, SERVO_VALUE_TIME_UNIT,
   SERVO_MIN_VALUE, SERVO_MAX_VALUE,
 } from './defaults.js';
-import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage, degree_to_redius, remove_class, add_class, clearSelection } from './utils.js';
+import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage, degree_to_radians, remove_class, add_class, clearSelection } from './utils.js';
 import { GaitController } from './gaits.js';
 import { PosCalculator } from './pos_calculator.js';
 import { history } from './history.js';
@@ -1111,7 +1111,7 @@ export class Hexapod {
     this.time_interval_stack.push(time_interval);
 
     if (this.time_interval_stack.length > max_number) {
-      this.time_interval_stack = this.time_interval_stack.slice(this.time_interval_stack.length - max_number, max_number);
+      this.time_interval_stack = this.time_interval_stack.slice(-max_number);
     }
 
     let total = 0;
@@ -1238,13 +1238,13 @@ export class HexapodLeg {
       mesh.position.y = this.options.y;
       mesh.position.z = this.options.z;
       mesh.rotation.z = this.mirror * (-Math.PI / 2);
-      mesh.rotation.y = this.mirror * degree_to_redius(opt.init_angle);
+      mesh.rotation.y = this.mirror * degree_to_radians(opt.init_angle);
     } else {
       mesh.position.y = this.options[prevName!].length;
-      mesh.rotation.z = this.mirror * degree_to_redius(opt.init_angle);
+      mesh.rotation.z = this.mirror * degree_to_radians(opt.init_angle);
     }
 
-    mesh.init_radius = degree_to_redius(opt.init_angle);
+    mesh.init_radius = degree_to_radians(opt.init_angle);
     mesh.init_angle = opt.init_angle;
     mesh.servo_value = opt.servo_value;
     mesh.servo_idx = opt.servo_idx;
@@ -1255,7 +1255,7 @@ export class HexapodLeg {
 
   set_init_angle(limb_idx: number, angle: number) {
     let ori_radius = this.limbs[limb_idx].init_radius;
-    let new_radius = degree_to_redius(angle);
+    let new_radius = degree_to_radians(angle);
     let limb_mesh = this.limbs[limb_idx];
     limb_mesh.init_radius = new_radius;
 

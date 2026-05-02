@@ -1,4 +1,5 @@
-import { set_bot_options } from './hexapod';
+import { set_obj_to_local_storage } from './utils';
+import { HEXAPOD_OPTIONS_KEY } from './defaults';
 
 // Module-level singleton — used by both React and imperative code
 const MAX_SIZE = 50;
@@ -40,7 +41,7 @@ export const history = {
   },
 
   save(options: any) {
-    set_bot_options(options);
+    set_obj_to_local_storage(HEXAPOD_OPTIONS_KEY, options);
     this._lastSaved = JSON.stringify(options);
   },
 
