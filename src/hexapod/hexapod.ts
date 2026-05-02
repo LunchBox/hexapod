@@ -502,7 +502,7 @@ export class Hexapod {
       this.scene.add(sq);
       this._guideCircles.push(sq);
 
-      // Number label sprite on the ground, offset outward from tip
+      // Number label flat on the ground, offset outward from tip
       const canvas = document.createElement('canvas');
       canvas.width = 128; canvas.height = 128;
       const ctx = canvas.getContext('2d')!;
@@ -514,17 +514,18 @@ export class Hexapod {
       ctx.strokeText(String(i), 64, 64);
       const tex = new (THREE as any).Texture(canvas);
       tex.needsUpdate = true;
-      const spriteMat = new (THREE as any).SpriteMaterial({ map: tex, depthTest: false, depthWrite: false });
-      const sprite = new (THREE as any).Sprite(spriteMat);
+      const labelMat = new (THREE as any).MeshBasicMaterial({ map: tex, side: (THREE as any).DoubleSide, depthTest: false, depthWrite: false, transparent: true });
+      const labelGeom = new (THREE as any).PlaneGeometry(30, 30);
+      const label = new THREE.Mesh(labelGeom, labelMat);
       const cx = this.mesh.position.x;
       const cz = this.mesh.position.z;
       const dx = tip.x - cx; const dz = tip.z - cz;
       const dist = Math.sqrt(dx * dx + dz * dz) || 1;
       const offset = 28;
-      sprite.position.set(tip.x + (dx / dist) * offset, 0.5, tip.z + (dz / dist) * offset);
-      sprite.scale.set(30, 30, 1);
-      this.scene.add(sprite);
-      this._guideLabels.push(sprite);
+      label.position.set(tip.x + (dx / dist) * offset, 0.1, tip.z + (dz / dist) * offset);
+      label.rotation.x = -Math.PI / 2;
+      this.scene.add(label);
+      this._guideLabels.push(label);
     }
 
     // Computational guide_pos — child of mesh, drives move_tips / move_body
@@ -552,14 +553,14 @@ export class Hexapod {
     if (this._guideLabels) {
       const cx = this.mesh.position.x;
       const cz = this.mesh.position.z;
-      const offset = 12;
+      const offset = 28;
       for (let i = 0; i < this.legs.length; i++) {
         const sp = this._guideLabels[i];
         if (sp) {
           const tip = this.legs[i].get_tip_pos();
           const dx = tip.x - cx; const dz = tip.z - cz;
           const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-          sp.position.set(tip.x + (dx / dist) * offset, 0.5, tip.z + (dz / dist) * offset);
+          sp.position.set(tip.x + (dx / dist) * offset, 0.1, tip.z + (dz / dist) * offset);
         }
       }
     }
