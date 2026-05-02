@@ -3,6 +3,7 @@
   border-radius: 4px;
   padding: 8px;
   margin-bottom: 10px;
+  max-width: 400px;
 }
 
 .leg-editor__title {
