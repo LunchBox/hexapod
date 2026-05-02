@@ -24,10 +24,48 @@ const stepButtons = [
   { action: 'act_step', value: '68', label: 'Rotate Right(d)' },
 ];
 
-function getGaitList(bot: any) {
+const K_LABELS: Record<string, string> = {
+  wave: 'Wave (k=1)',
+  ripple: 'Ripple (k=2)',
+  tripod: 'Tripod (k=3)',
+  quad: 'Quad (k=4)',
+};
+
+interface GaitGroup {
+  prefix: string;
+  label: string;
+  gaits: { value: string; label: string }[];
+}
+
+function getGaitGroups(bot: any): GaitGroup[] {
   const gc = bot?.gait_controller;
   if (!gc?.gaits) return [];
-  return Object.keys(gc.gaits).map(k => ({ value: k, label: k }));
+  const names = Object.keys(gc.gaits);
+  const groups = new Map<string, { value: string; label: string }[]>();
+  for (const name of names) {
+    // Extract k-prefix: "wave" or "wave-2" → "wave"
+    const prefix = name.match(/^[a-z]+/)![0];
+    if (!groups.has(prefix)) groups.set(prefix, []);
+    groups.get(prefix)!.push({ value: name, label: name });
+  }
+  // Sort each group by numeric suffix
+  const result: GaitGroup[] = [];
+  for (const [prefix, gaits] of groups) {
+    gaits.sort((a, b) => {
+      const na = parseInt(a.label.match(/\d+$/)?.[0] || '1');
+      const nb = parseInt(b.label.match(/\d+$/)?.[0] || '1');
+      return na - nb;
+    });
+    result.push({
+      prefix,
+      label: K_LABELS[prefix] || prefix,
+      gaits,
+    });
+  }
+  // Sort groups by k (wave=1, ripple=2, etc.)
+  const kOrder = ['wave', 'ripple', 'tripod', 'quad'];
+  result.sort((a, b) => kOrder.indexOf(a.prefix) - kOrder.indexOf(b.prefix));
+  return result;
 }
 
 const actionTypes = [
@@ -392,16 +430,21 @@ export default function ControlPanel() {
 
       <fieldset className="btns">
         <legend>Gaits</legend>
-        {getGaitList(botRef.current).map((item) => (
-          <a
-            key={item.value}
-            href="#"
-            className={`control_btn${gait === item.value ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); handleAction('gait_switch', item.value); }}
-          >
-            {item.label}
-          </a>
-        ))}
+        <select
+          value={gait}
+          onChange={(e) => { handleAction('gait_switch', e.target.value); }}
+          style={{ fontSize: '13px', maxWidth: 220 }}
+        >
+          {getGaitGroups(botRef.current).map((group) => (
+            <optgroup key={group.prefix} label={group.label}>
+              {group.gaits.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </fieldset>
 
       <fieldset className="btns">
