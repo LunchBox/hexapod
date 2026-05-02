@@ -114,7 +114,7 @@ export default function SceneControls() {
 
       {/* Row 2: Sliders */}
       <div style={rowStyle}>
-      <SliderColumn value={bodyX} min={-20} max={20} label="X" title="Nudge body X" springBack
+      <SliderColumn value={bodyX} min={-40} max={40} label="X" title="Nudge body X" springBack
         displayValue={String(bodyX)}
         onChange={(v) => {
           const bot = botRef.current; if (!bot) return false;
@@ -124,7 +124,7 @@ export default function SceneControls() {
           return ok;
         }}
       />
-      <SliderColumn value={bodyY} min={-12} max={12} label="Y" title="Nudge body height" springBack
+      <SliderColumn value={bodyY} min={-24} max={24} label="Y" title="Nudge body height" springBack
         displayValue={String(bodyY)}
         onChange={(v) => {
           const bot = botRef.current; if (!bot) return false;
@@ -134,7 +134,7 @@ export default function SceneControls() {
           return ok;
         }}
       />
-      <SliderColumn value={bodyZ} min={-20} max={20} label="Z" title="Nudge body Z" springBack
+      <SliderColumn value={bodyZ} min={-40} max={40} label="Z" title="Nudge body Z" springBack
         displayValue={String(bodyZ)}
         onChange={(v) => {
           const bot = botRef.current; if (!bot) return false;
@@ -144,7 +144,7 @@ export default function SceneControls() {
           return ok;
         }}
       />
-      <SliderColumn value={rotX} min={-15} max={15} label="Rx°" title="Nudge rotate X" springBack
+      <SliderColumn value={rotX} min={-30} max={30} label="Rx°" title="Nudge rotate X" springBack
         displayValue={rotX + '°'}
         onChange={(v) => {
           const bot = botRef.current; if (!bot) return false;
@@ -155,7 +155,7 @@ export default function SceneControls() {
           return ok;
         }}
       />
-      <SliderColumn value={rotY} min={-15} max={15} label="Ry°" title="Nudge rotate Y" springBack
+      <SliderColumn value={rotY} min={-30} max={30} label="Ry°" title="Nudge rotate Y" springBack
         displayValue={rotY + '°'}
         onChange={(v) => {
           const bot = botRef.current; if (!bot) return false;
@@ -166,7 +166,7 @@ export default function SceneControls() {
           return ok;
         }}
       />
-      <SliderColumn value={rotZ} min={-15} max={15} label="Rz°" title="Nudge rotate Z" springBack
+      <SliderColumn value={rotZ} min={-30} max={30} label="Rz°" title="Nudge rotate Z" springBack
         displayValue={rotZ + '°'}
         onChange={(v) => {
           const bot = botRef.current; if (!bot) return false;
