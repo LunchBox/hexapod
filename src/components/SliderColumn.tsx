@@ -39,40 +39,59 @@ const valStyle: React.CSSProperties = {
 };
 
 export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange, springBack, homeValue }: Props) {
-  const [cur, setCur] = useState(value);
+  const home = homeValue ?? 0;
+  const [cur, setCur] = useState(springBack ? home : value);
   const [ver, setVer] = useState(0);
   const dragging = useRef(false);
-  const home = homeValue ?? 0;
+  const pendingRef = useRef<number | null>(null);
+  const rafRef = useRef(0);
 
   useEffect(() => {
     if (!springBack && !dragging.current) setCur(value);
   }, [value, ver, springBack]);
+
+  // rAF loop: apply pending value once per frame (springBack only)
+  useEffect(() => {
+    if (!springBack) return;
+    const tick = () => {
+      const v = pendingRef.current;
+      if (v !== null) {
+        pendingRef.current = null;
+        if (!onChange(v)) {
+          setCur(home);
+          setVer(x => x + 1);
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [springBack, onChange, home]);
 
   const apply = useCallback((v: number) => {
     const clamped = Math.min(max, Math.max(min, v));
     setCur(clamped);
     if (!onChange(clamped)) {
       setCur(value);
-      setVer(v => v + 1);
+      setVer(x => x + 1);
     }
   }, [onChange, value, min, max]);
 
   const onInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    apply(parseFloat(e.target.value));
+    const v = parseFloat(e.target.value);
+    const clamped = Math.min(max, Math.max(min, v));
+    setCur(clamped);
+    if (springBack) {
+      pendingRef.current = clamped;
+    } else {
+      if (!onChange(clamped)) {
+        setCur(value);
+        setVer(x => x + 1);
+      }
+    }
   };
 
-  const onPointerUp = () => {
-    if (!springBack) return;
-    dragging.current = false;
-    setCur(home);
-  };
-
-  const onPointerDown = () => {
-    if (!springBack) return;
-    dragging.current = true;
-  };
-
-  // After dragging ends, snap back to home
+  // Global pointerup: snap back to home
   useEffect(() => {
     if (!springBack) return;
     const up = () => { dragging.current = false; setCur(home); };
@@ -93,9 +112,8 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
         value={cur}
         title={title || label}
         style={sl}
-        onPointerDown={onPointerDown}
+        onPointerDown={() => { if (springBack) dragging.current = true; }}
         onChange={onInput}
-        onPointerUp={onPointerUp}
       />
       <button style={btnStyle} title={title || label}
         onMouseDown={(e) => { e.preventDefault();
