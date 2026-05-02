@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { LIMB_NAMES } from '../hexapod/defaults';
 import { generateRandomOptions } from '../hexapod/random';
-import { history } from '../hexapod/history';
+import { history, performUndo, performRedo, performSave } from '../hexapod/history';
 import LegEditor from './LegEditor';
 import AttrSlider from './AttrSlider';
 import SliderColumn from './SliderColumn';
@@ -32,6 +32,34 @@ export default function AttributesPanel() {
   const [wlLocked, setWlLocked] = useState(false);
   const [wlRatio, setWlRatio] = useState(0.5);
   const [hwlLocked, setHwlLocked] = useState(false);
+
+  // Toolbar state
+  const [, setTick] = useState(0);
+  const refresh = useCallback(() => setTick(t => t + 1), []);
+
+  // Keyboard shortcuts for undo/redo/save
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      const bot = botRef.current;
+      if (!bot) return;
+      if (e.key === 'z' || e.key === 'Z') {
+        e.preventDefault();
+        if (performUndo(bot, bumpBotVersion)) refresh();
+      } else if (e.key === 'y' || e.key === 'Y') {
+        e.preventDefault();
+        if (performRedo(bot, bumpBotVersion)) refresh();
+      } else if (e.key === 's' || e.key === 'S') {
+        if (!history.autoSave) {
+          e.preventDefault();
+          performSave(bot, bumpBotVersion);
+          refresh();
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [botRef, bumpBotVersion, refresh]);
 
   // Read config from bot.options directly (single source of truth)
   const bot = botRef.current;
@@ -116,6 +144,54 @@ export default function AttributesPanel() {
         <a href="#" className="control_btn" onClick={handleRandom}>Random</a>
         <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
           onChange={handleImport} />
+      </fieldset>
+
+      <fieldset className="btns" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+        <legend>History</legend>
+        {(() => {
+          const canUndo = history.canUndo();
+          const canRedo = history.canRedo();
+          const dirty = bot ? history.isDirty(bot.options) : false;
+          const btnStyle = (disabled: boolean): React.CSSProperties => ({
+            padding: '2px 10px', fontSize: 13,
+            cursor: disabled ? 'default' : 'pointer',
+            opacity: disabled ? 0.35 : 1,
+            border: '1px solid #888', borderRadius: 3, background: '#eee',
+          });
+          return (
+            <>
+              <button style={btnStyle(!canUndo)} disabled={!canUndo}
+                onClick={() => { const b = botRef.current; if (b && performUndo(b, bumpBotVersion)) refresh(); }}
+                title="Undo (Ctrl+Z)">↩ Undo</button>
+              <button style={btnStyle(!canRedo)} disabled={!canRedo}
+                onClick={() => { const b = botRef.current; if (b && performRedo(b, bumpBotVersion)) refresh(); }}
+                title="Redo (Ctrl+Y)">↪ Redo</button>
+              <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, marginLeft: 8 }}>
+                <input type="checkbox" checked={history.autoSave}
+                  onChange={(e) => {
+                    history.autoSave = e.currentTarget.checked;
+                    const b = botRef.current;
+                    if (history.autoSave && b && history.isDirty(b.options)) { history.save(b.options); }
+                    refresh();
+                  }} />
+                Auto Save
+              </label>
+              {!history.autoSave && (
+                <button style={{ ...btnStyle(false), background: dirty ? '#e67e22' : '#eee', color: dirty ? '#fff' : '#333', fontWeight: dirty ? 'bold' : 'normal' }}
+                  onClick={() => { const b = botRef.current; if (b) { performSave(b, bumpBotVersion); refresh(); } }}
+                  title="Save (Ctrl+S)">💾 Save</button>
+              )}
+              {dirty && (
+                <span style={{ color: '#e67e22', fontSize: 12, fontWeight: 'bold' }}>⬤ unsaved</span>
+              )}
+              <a href="#" className="control_btn" style={{ marginLeft: 12 }}
+                onClick={(e) => { e.preventDefault();
+                  localStorage.removeItem('hexapod_options');
+                  window.location.reload();
+                }}>Reset Configs</a>
+            </>
+          );
+        })()}
       </fieldset>
 
       <LegEditor />

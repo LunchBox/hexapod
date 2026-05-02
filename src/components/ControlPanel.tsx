@@ -495,8 +495,6 @@ export default function ControlPanel() {
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_action', 'act_standby'); }}>Standby</a>
         {' | '}
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_action', 'act_putdown_tips'); }}>Putdown Tips</a>
-        {' '}
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_reset_configs'); }}>Reset Configs</a>
         {' | '}
         <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_disable_console'); }}>Disable Console</a>
       </fieldset>
