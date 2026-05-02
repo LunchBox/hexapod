@@ -30,8 +30,6 @@ export class PosCalculator {
     const n = this.joint_count;
     const DIST_ERROR = 0.01;
     const MAX_LOOPS = 300;
-    const LEARNING_RATE = 0.5;
-    const MOMENTUM_BETA = 0.8;
     const STEP_DECAY = 0.85;
     const MIN_STEP = 5;
 
@@ -44,7 +42,7 @@ export class PosCalculator {
     let bestValues = [...values];
     let bestDist = dist;
     let step = 30;
-    const momentums: number[] = new Array(n).fill(0);
+    const speeds: number[] = new Array(n).fill(0);
     const lastGradients: number[] = new Array(n).fill(0);
     let count = 0;
 
@@ -59,16 +57,19 @@ export class PosCalculator {
         gradients.push(this.calc_distance(plus) - this.calc_distance(minus));
       }
 
-      // Update with momentum + clamp
+      // Update each joint — same accumulation strategy as v1, minus the unstable backtrack
       for (let i = 0; i < n; i++) {
         if (Math.sign(lastGradients[i]) !== Math.sign(gradients[i])) {
+          // Gradient sign flipped — overshot minimum, reset speed and reduce step
+          speeds[i] = 0;
           step = Math.max(MIN_STEP, step * STEP_DECAY);
+        } else {
+          speeds[i] += gradients[i];
         }
         lastGradients[i] = gradients[i];
-        momentums[i] = MOMENTUM_BETA * momentums[i] + (1 - MOMENTUM_BETA) * gradients[i];
-        values[i] -= LEARNING_RATE * momentums[i];
-        // Clamp instead of break — never leave a leg stuck mid-optimization
-        values[i] = Math.max(SERVO_MIN_VALUE, Math.min(SERVO_MAX_VALUE, Math.round(values[i])));
+        values[i] -= speeds[i];
+        // Clamp — keep as float (no rounding) to preserve gradient precision
+        values[i] = Math.max(SERVO_MIN_VALUE, Math.min(SERVO_MAX_VALUE, values[i]));
       }
 
       dist = this.calc_distance(values);
@@ -81,7 +82,7 @@ export class PosCalculator {
       count++;
     }
 
-    // Always use best solution found, even if not fully converged
+    // Apply best solution with final rounding
     const rounded = bestValues.map(v => Math.round(v));
     const finalDist = this.calc_distance(rounded);
 
