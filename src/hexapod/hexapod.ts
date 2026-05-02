@@ -504,24 +504,24 @@ export class Hexapod {
 
       // Number label flat on the ground, offset outward from tip
       const canvas = document.createElement('canvas');
-      canvas.width = 128; canvas.height = 128;
+      canvas.width = 256; canvas.height = 256;
       const ctx = canvas.getContext('2d')!;
       ctx.strokeStyle = '#000';
-      ctx.lineWidth = 5;
-      ctx.font = 'bold 96px monospace';
+      ctx.lineWidth = 3;
+      ctx.font = 'bold 192px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.strokeText(String(i), 64, 64);
+      ctx.strokeText(String(i), 128, 128);
       const tex = new (THREE as any).Texture(canvas);
       tex.needsUpdate = true;
       const labelMat = new (THREE as any).MeshBasicMaterial({ map: tex, side: (THREE as any).DoubleSide, depthTest: false, depthWrite: false, transparent: true });
-      const labelGeom = new (THREE as any).PlaneGeometry(30, 30);
+      const labelGeom = new (THREE as any).PlaneGeometry(60, 60);
       const label = new THREE.Mesh(labelGeom, labelMat);
       const cx = this.mesh.position.x;
       const cz = this.mesh.position.z;
       const dx = tip.x - cx; const dz = tip.z - cz;
       const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-      const offset = 28;
+      const offset = 48;
       label.position.set(tip.x + (dx / dist) * offset, 0.1, tip.z + (dz / dist) * offset);
       label.rotation.x = -Math.PI / 2;
       this.scene.add(label);
@@ -553,7 +553,7 @@ export class Hexapod {
     if (this._guideLabels) {
       const cx = this.mesh.position.x;
       const cz = this.mesh.position.z;
-      const offset = 28;
+      const offset = 48;
       for (let i = 0; i < this.legs.length; i++) {
         const sp = this._guideLabels[i];
         if (sp) {
