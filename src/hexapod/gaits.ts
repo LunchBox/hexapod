@@ -3,6 +3,7 @@ import {
   MOVE_LEFT_KEY, MOVE_RIGHT_KEY, RAISE_KEY, FALL_KEY,
   DEFAULT_HEXAPOD_OPTIONS, ACT_STANDBY, ACT_PUTDOWN_TIPS,
 } from './defaults.js';
+import { generateAllGaits } from './gait_generator.js';
 
 // ── GaitAction (base) ──────────────────────────────────────────
 
@@ -235,84 +236,9 @@ export class GaitController {
       }
     }
 
-    // ── 2^N model: enumerate all valid lifted-sets (phases), then find exact covers ──
-
-    // Check if a lifted-set (phase) is valid
-    function phaseValid(lifted: number[]): boolean {
-      const set = new Set(lifted);
-      let rG = 0, lG = 0, cG = 0;
-      for (const l of rightLegs) { if (!set.has(l)) rG++; }
-      for (const l of leftLegs) { if (!set.has(l)) lG++; }
-      if (centerLeg !== null && !set.has(centerLeg)) cG = 1;
-      if (rG + lG + cG < 2) return false;
-      return (rG > 0 && lG > 0) || cG > 0;
-    }
-
-    // Generate all valid phases (non-empty proper subsets satisfying constraint)
-    const allLegs = Array.from({ length: n }, (_, i) => i);
-    const validPhases: number[][] = [];
-    for (let mask = 1; mask < (1 << n) - 1; mask++) {
-      const lifted: number[] = [];
-      for (let i = 0; i < n; i++) {
-        if (mask & (1 << i)) lifted.push(i);
-      }
-      if (phaseValid(lifted)) validPhases.push(lifted);
-    }
-
-    // Exact cover with uniform group size: each phase lifts same number of legs
-    const possibleSizes = new Set<number>();
-    for (const ph of validPhases) possibleSizes.add(ph.length);
-
-    const covers: number[][][] = [];
-    function findCovers(remaining: Set<number>, current: number[][], groupSize: number | null): void {
-      if (remaining.size === 0) {
-        if (current.length >= 2) covers.push(current.map(g => [...g]));
-        return;
-      }
-      const first = Math.min(...remaining);
-      for (const ph of validPhases) {
-        if (!ph.includes(first)) continue;
-        if (groupSize !== null && ph.length !== groupSize) continue;
-        if (!ph.every(l => remaining.has(l))) continue;
-        const newRemaining = new Set(remaining);
-        for (const l of ph) newRemaining.delete(l);
-        current.push(ph);
-        findCovers(newRemaining, current, ph.length);
-        current.pop();
-      }
-    }
-    findCovers(new Set(allLegs), [], null);
-
-    // Deduplicate: canonical key sorts within each group, then sorts groups
-    const seen = new Set<string>();
-    const uniqueCovers: number[][][] = [];
-    for (const grps of covers) {
-      const key = grps.map(g => [...g].sort((a, b) => a - b).join(','))
-                      .sort()
-                      .join('|');
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniqueCovers.push(grps);
-      }
-    }
-
-    // Build gaits — canonical ordering: sort groups by first element
-    const gaits: Record<string, number[][]> = {};
-    for (let idx = 0; idx < uniqueCovers.length; idx++) {
-      const grps = uniqueCovers[idx].sort((a, b) => a[0] - b[0]);
-      // Name by group sizes
-      const sizes = grps.map(g => g.length);
-      const maxSz = Math.max(...sizes);
-      let name: string;
-      if (maxSz === 1) name = 'wave';
-      else if (maxSz === 2) name = 'pairs';
-      else if (grps.length <= 3) name = 'tripod';
-      else name = 'gait';
-      if (idx > 0) name += (idx + 1);
-      gaits[name] = grps;
-    }
-
-    this.gaits = gaits;
+    // Generate all valid gait phase-sequences grouped by legs-lifted count,
+    // with cyclic-rotation deduplication (canonical: group containing leg 0 is first).
+    this.gaits = generateAllGaits(n, leftLegs, rightLegs, centerLeg);
 
     // Restore gait from options, fallback to first available
     let gaitName = this.bot.options.gait || 'tripod';
