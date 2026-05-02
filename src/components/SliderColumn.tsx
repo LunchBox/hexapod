@@ -49,6 +49,14 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
   const pendingRef = useRef<number | null>(null);
   const rafRef = useRef(0);
 
+  // Stable refs so effect listeners don't churn on every render
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const onDragEndRef = useRef(onDragEnd);
+  onDragEndRef.current = onDragEnd;
+  const onDragStartRef = useRef(onDragStart);
+  onDragStartRef.current = onDragStart;
+
   useEffect(() => {
     if (!springBack && !dragging.current) setCur(value);
   }, [value, ver, springBack]);
@@ -64,7 +72,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
         const delta = v - lastV.current;
         lastV.current = v;
         if (Math.abs(delta) > 0.001) {
-          if (!onChange(delta)) {
+          if (!onChangeRef.current(delta)) {
             setCur(home);
             setVer(x => x + 1);
             lastV.current = home;
@@ -75,7 +83,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [springBack, onChange, home]);
+  }, [springBack, home]);
 
   const apply = useCallback((v: number) => {
     const clamped = Math.min(max, Math.max(min, v));
@@ -108,18 +116,18 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
       pendingRef.current = null;
       setCur(home);
       lastV.current = home;
-      onDragEnd?.();
+      onDragEndRef.current?.();
     };
     window.addEventListener('pointerup', up);
     return () => window.removeEventListener('pointerup', up);
-  }, [springBack, home, onDragEnd]);
+  }, [springBack, home]); // stable deps — callbacks via refs
 
   const onPointerDown = () => {
     if (!springBack) return;
     dragging.current = true;
     lastV.current = home;
     pendingRef.current = null;
-    onDragStart?.();
+    onDragStartRef.current?.();
   };
 
   const row: React.CSSProperties = {
