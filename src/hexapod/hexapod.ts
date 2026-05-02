@@ -261,10 +261,22 @@ export class Hexapod {
   apply_attributes(options: any) {
     this.options = options;
 
-    // Invalidate saved body home — old tip positions are incompatible
-    // with new leg geometry (different lengths, DOF, leg count, etc.)
-    delete this.options._body_home;
-    set_bot_options(this.options);
+    // Invalidate saved body home only when leg geometry actually changes —
+    // different leg count / DOF / body shape makes old tip positions unreachable
+    const prevLegCount = options._prev_leg_count;
+    const prevDof = options._prev_dof;
+    const prevShape = options._prev_body_shape;
+    const curLegCount = options.leg_count || 6;
+    const curDof = options.dof || 3;
+    const curShape = options.body_shape || 'rectangle';
+    if (prevLegCount !== curLegCount || prevDof !== curDof || prevShape !== curShape) {
+      delete this.options._body_home;
+      set_bot_options(this.options);
+    }
+    // Track current state for next comparison
+    options._prev_leg_count = curLegCount;
+    options._prev_dof = curDof;
+    options._prev_body_shape = curShape;
 
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
