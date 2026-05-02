@@ -86,34 +86,6 @@ export default function SceneControls() {
     setRotZ(Math.round(bot.body_mesh?.rotation?.z * 180 / Math.PI) || 0);
   };
 
-  const handleBodyPos = (axis: string, v: number): boolean => {
-    const bot = botRef.current;
-    if (!bot) return false;
-    const cur = (bot.body_mesh.position as any)[axis];
-    const delta = v - cur;
-    if (Math.abs(delta) < 0.5) return true;
-    const ok = bot.transform_body({ ['d' + axis]: delta });
-    bot.adjust_gait_guidelines();
-    if (!ok) {
-      if (axis === 'x') setBodyX(Math.round(cur));
-      else if (axis === 'y') setBodyY(Math.round(cur));
-      else if (axis === 'z') setBodyZ(Math.round(cur));
-    }
-    return ok;
-  };
-
-  const handleAxisRot = (axis: string, deg: number): boolean => {
-    const bot = botRef.current;
-    if (!bot) return false;
-    const rad = deg * Math.PI / 180;
-    const cur = (bot.body_mesh.rotation as any)[axis];
-    const delta = rad - cur;
-    if (Math.abs(delta) < 0.001) return true;
-    const ok = bot.transform_body({ ['r' + axis]: delta });
-    bot.adjust_gait_guidelines();
-    return ok;
-  };
-
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap',
   };
@@ -142,26 +114,68 @@ export default function SceneControls() {
 
       {/* Row 2: Sliders */}
       <div style={rowStyle}>
-      <SliderColumn value={bodyX} min={-80} max={80} label="X" title="Body X position"
-        onChange={(v) => { setBodyX(v); return handleBodyPos('x', v); }}
+      <SliderColumn value={bodyX} min={-80} max={80} label="X" title="Nudge body X" springBack
+        displayValue={String(bodyX)}
+        onChange={(v) => {
+          const bot = botRef.current; if (!bot) return false;
+          const ok = bot.transform_body({ dx: v });
+          bot.adjust_gait_guidelines();
+          if (ok) setBodyX(Math.round(bot.body_mesh.position.x));
+          return ok;
+        }}
       />
-      <SliderColumn value={bodyY} min={10} max={150} label="Y" title="Body height"
-        onChange={(v) => { setBodyY(v); return handleBodyPos('y', v); }}
+      <SliderColumn value={bodyY} min={-50} max={50} label="Y" title="Nudge body height" springBack
+        displayValue={String(bodyY)}
+        onChange={(v) => {
+          const bot = botRef.current; if (!bot) return false;
+          const ok = bot.transform_body({ dy: v });
+          bot.adjust_gait_guidelines();
+          if (ok) setBodyY(Math.round(bot.body_mesh.position.y));
+          return ok;
+        }}
       />
-      <SliderColumn value={bodyZ} min={-80} max={80} label="Z" title="Body Z position"
-        onChange={(v) => { setBodyZ(v); return handleBodyPos('z', v); }}
+      <SliderColumn value={bodyZ} min={-80} max={80} label="Z" title="Nudge body Z" springBack
+        displayValue={String(bodyZ)}
+        onChange={(v) => {
+          const bot = botRef.current; if (!bot) return false;
+          const ok = bot.transform_body({ dz: v });
+          bot.adjust_gait_guidelines();
+          if (ok) setBodyZ(Math.round(bot.body_mesh.position.z));
+          return ok;
+        }}
       />
-      <SliderColumn value={rotX} min={-45} max={45} label="Rx°" title="Rotate X axis"
+      <SliderColumn value={rotX} min={-45} max={45} label="Rx°" title="Nudge rotate X" springBack
         displayValue={rotX + '°'}
-        onChange={(v) => { setRotX(v); return handleAxisRot('x', v); }}
+        onChange={(v) => {
+          const bot = botRef.current; if (!bot) return false;
+          const rad = v * Math.PI / 180;
+          const ok = bot.transform_body({ rx: rad });
+          bot.adjust_gait_guidelines();
+          if (ok) setRotX(Math.round(bot.body_mesh.rotation.x * 180 / Math.PI));
+          return ok;
+        }}
       />
-      <SliderColumn value={rotY} min={-45} max={45} label="Ry°" title="Rotate Y axis"
+      <SliderColumn value={rotY} min={-45} max={45} label="Ry°" title="Nudge rotate Y" springBack
         displayValue={rotY + '°'}
-        onChange={(v) => { setRotY(v); return handleAxisRot('y', v); }}
+        onChange={(v) => {
+          const bot = botRef.current; if (!bot) return false;
+          const rad = v * Math.PI / 180;
+          const ok = bot.transform_body({ ry: rad });
+          bot.adjust_gait_guidelines();
+          if (ok) setRotY(Math.round(bot.body_mesh.rotation.y * 180 / Math.PI));
+          return ok;
+        }}
       />
-      <SliderColumn value={rotZ} min={-45} max={45} label="Rz°" title="Rotate Z axis"
+      <SliderColumn value={rotZ} min={-45} max={45} label="Rz°" title="Nudge rotate Z" springBack
         displayValue={rotZ + '°'}
-        onChange={(v) => { setRotZ(v); return handleAxisRot('z', v); }}
+        onChange={(v) => {
+          const bot = botRef.current; if (!bot) return false;
+          const rad = v * Math.PI / 180;
+          const ok = bot.transform_body({ rz: rad });
+          bot.adjust_gait_guidelines();
+          if (ok) setRotZ(Math.round(bot.body_mesh.rotation.z * 180 / Math.PI));
+          return ok;
+        }}
       />
       </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface Props {
   value: number;
@@ -8,7 +8,9 @@ interface Props {
   label: string;
   title?: string;
   displayValue?: string;
-  onChange: (v: number) => boolean; // return false to revert slider
+  onChange: (v: number) => boolean;
+  springBack?: boolean;   // snap back to homeValue on mouseup
+  homeValue?: number;      // center position when springBack=true (default 0)
 }
 
 const btnStyle: React.CSSProperties = {
@@ -36,35 +38,70 @@ const valStyle: React.CSSProperties = {
   fontSize: 10, fontFamily: 'monospace', color: '#444',
 };
 
-export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange }: Props) {
+export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange, springBack, homeValue }: Props) {
   const [cur, setCur] = useState(value);
   const [ver, setVer] = useState(0);
+  const dragging = useRef(false);
+  const home = homeValue ?? 0;
 
-  useEffect(() => { setCur(value); }, [value, ver]);
+  useEffect(() => {
+    if (!springBack && !dragging.current) setCur(value);
+  }, [value, ver, springBack]);
 
-  const apply = (v: number) => {
+  const apply = useCallback((v: number) => {
     const clamped = Math.min(max, Math.max(min, v));
     setCur(clamped);
     if (!onChange(clamped)) {
       setCur(value);
       setVer(v => v + 1);
     }
+  }, [onChange, value, min, max]);
+
+  const onInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    apply(parseFloat(e.target.value));
   };
+
+  const onPointerUp = () => {
+    if (!springBack) return;
+    dragging.current = false;
+    setCur(home);
+  };
+
+  const onPointerDown = () => {
+    if (!springBack) return;
+    dragging.current = true;
+  };
+
+  // After dragging ends, snap back to home
+  useEffect(() => {
+    if (!springBack) return;
+    const up = () => { dragging.current = false; setCur(home); };
+    window.addEventListener('pointerup', up);
+    return () => window.removeEventListener('pointerup', up);
+  }, [springBack, home]);
 
   return (
     <div style={col}>
       <button style={btnStyle} title={title || label}
-        onMouseDown={(e) => { e.preventDefault(); apply(cur + (step || 1)); }}>
+        onMouseDown={(e) => { e.preventDefault();
+          if (springBack) { const v = Math.min(max, Math.max(min, home + (step || 1))); onChange(v); }
+          else apply(cur + (step || 1));
+        }}>
         ▲
       </button>
       <input type="range" min={min} max={max} step={step || 1}
         value={cur}
         title={title || label}
         style={sl}
-        onChange={(e) => apply(parseFloat((e.target as HTMLInputElement).value))}
+        onPointerDown={onPointerDown}
+        onChange={onInput}
+        onPointerUp={onPointerUp}
       />
       <button style={btnStyle} title={title || label}
-        onMouseDown={(e) => { e.preventDefault(); apply(cur - (step || 1)); }}>
+        onMouseDown={(e) => { e.preventDefault();
+          if (springBack) { const v = Math.min(max, Math.max(min, home - (step || 1))); onChange(v); }
+          else apply(cur - (step || 1));
+        }}>
         ▼
       </button>
       <span style={lab}>{label}</span>
