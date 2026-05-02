@@ -112,7 +112,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
     const framePad = 2;
     const frameW = 28;
     const frameH = 36;
-    const frameGap = 10;
+    const frameGap = 24;
     const labelGap = 4;
     const labelH = 8;
 
@@ -167,7 +167,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
   return (
     <canvas
       ref={canvasRef}
-      style={{ display: 'block', margin: '6px auto 0', imageRendering: 'pixelated' }}
+      style={{ display: 'block', margin: '6px 0 0', imageRendering: 'pixelated' }}
     />
   );
 }

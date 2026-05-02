@@ -504,13 +504,14 @@ export class Hexapod {
 
       // Number label sprite on the ground, offset outward from tip
       const canvas = document.createElement('canvas');
-      canvas.width = 32; canvas.height = 32;
+      canvas.width = 128; canvas.height = 128;
       const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#000';
-      ctx.font = 'bold 22px monospace';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 5;
+      ctx.font = 'bold 96px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(i), 16, 16);
+      ctx.strokeText(String(i), 64, 64);
       const tex = new (THREE as any).Texture(canvas);
       tex.needsUpdate = true;
       const spriteMat = new (THREE as any).SpriteMaterial({ map: tex, depthTest: false, depthWrite: false });
@@ -519,9 +520,9 @@ export class Hexapod {
       const cz = this.mesh.position.z;
       const dx = tip.x - cx; const dz = tip.z - cz;
       const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-      const offset = 12;
+      const offset = 18;
       sprite.position.set(tip.x + (dx / dist) * offset, 0.5, tip.z + (dz / dist) * offset);
-      sprite.scale.set(10, 10, 1);
+      sprite.scale.set(30, 30, 1);
       this.scene.add(sprite);
       this._guideLabels.push(sprite);
     }
