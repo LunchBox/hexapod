@@ -28,6 +28,29 @@ function isValidPhase(
   return (rG > 0 && lG > 0) || cG > 0;
 }
 
+// ── Quick-relift filter ─────────────────────────────────────────
+
+// Reject gaits where any leg is put down for only 1 step before
+// being lifted again — including across the cycle boundary (last
+// step → first step). Only triggers when a leg is lifted ≥2 times
+// per cycle; single-lift legs have one continuous ground period.
+function hasQuickRelift(gait: Gait, n: number): boolean {
+  const m = gait.length;
+  for (let leg = 0; leg < n; leg++) {
+    const pattern = gait.map(g => g.includes(leg) ? 1 : 0);
+    const liftCount = pattern.reduce((s, v) => s + v, 0);
+    if (liftCount <= 1) continue; // one lift per cycle → single continuous ground period
+    // Check for isolated 0 (1,0,1 pattern) — including cyclic wrap
+    for (let i = 0; i < m; i++) {
+      const prev = pattern[(i - 1 + m) % m];
+      const curr = pattern[i];
+      const next = pattern[(i + 1) % m];
+      if (prev === 1 && curr === 0 && next === 1) return true;
+    }
+  }
+  return false;
+}
+
 // ── Main ────────────────────────────────────────────────────────
 
 export function generateAllGaits(
@@ -46,9 +69,10 @@ export function generateAllGaits(
   const allLegs = Array.from({ length: n }, (_, i) => i);
   const center: number | null = centerLeg ?? null;
 
-  // Filter presets: every phase must satisfy balance constraint
+  // Filter presets: balance constraint + no quick-relift
   const filtered: Record<string, Gait> = {};
   for (const [name, gait] of Object.entries(presets)) {
+    if (hasQuickRelift(gait, n)) continue;
     let valid = true;
     for (const group of gait) {
       if (!isValidPhase(new Set(group), allLegs, leftSet, rightSet, center)) {
