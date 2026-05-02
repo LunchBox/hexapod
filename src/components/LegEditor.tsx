@@ -242,14 +242,18 @@ export default function LegEditor() {
     if (!canvas || !bot) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const cw = canvas.clientWidth || 400;
+    const container = canvas.parentElement;
+    const cw = container ? container.clientWidth : 400;
     const ch = Math.round(cw * 0.55);
     canvas.width = cw * dpr;
     canvas.height = ch * dpr;
+    // Lock CSS size to match drawing buffer — prevents stretch/squash mismatches
+    canvas.style.width = cw + 'px';
+    canvas.style.height = ch + 'px';
     sizeRef.current = { w: cw, h: ch };
 
     const ctx = canvas.getContext('2d');
-    if (ctx) ctx.scale(dpr, dpr);
+    if (ctx) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
 
     draw();
   }, [draw, botVersion]);

@@ -15,7 +15,6 @@
 
 .leg-editor__canvas {
   display: block;
-  width: 100%;
   cursor: default;
   background: transparent;
   border-radius: 2px;
