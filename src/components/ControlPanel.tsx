@@ -430,21 +430,38 @@ export default function ControlPanel() {
 
       <fieldset className="btns">
         <legend>Gaits</legend>
-        <select
-          value={gait}
-          onChange={(e) => { handleAction('gait_switch', e.target.value); }}
-          style={{ fontSize: '13px', maxWidth: 220 }}
-        >
-          {getGaitGroups(botRef.current).map((group) => (
-            <optgroup key={group.prefix} label={group.label}>
-              {group.gaits.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        {(() => {
+          const groups = getGaitGroups(botRef.current);
+          const activePrefix = groups.find(g => g.gaits.some(item => item.value === gait))?.prefix || groups[0]?.prefix;
+          const activeGroup = groups.find(g => g.prefix === activePrefix);
+          const handleKSwitch = (prefix: string) => {
+            if (prefix === activePrefix) return;
+            const group = groups.find(g => g.prefix === prefix);
+            if (group?.gaits[0]?.value) handleAction('gait_switch', group.gaits[0].value);
+          };
+          return (
+            <>
+              <div style={{ marginBottom: 4 }}>
+                {groups.map(g => (
+                  <a key={g.prefix} href="#" className={`control_btn${activePrefix === g.prefix ? ' active' : ''}`}
+                    style={{ fontSize: 11, padding: '2px 6px' }}
+                    onClick={(e) => { e.preventDefault(); handleKSwitch(g.prefix); }}
+                  >{g.label}</a>
+                ))}
+              </div>
+              {activeGroup && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 180, overflowY: 'auto' }}>
+                  {activeGroup.gaits.map(item => (
+                    <a key={item.value} href="#" className={`control_btn${gait === item.value ? ' active' : ''}`}
+                      style={{ fontSize: 11, padding: '2px 6px' }}
+                      onClick={(e) => { e.preventDefault(); handleAction('gait_switch', item.value); }}
+                    >{item.label}</a>
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </fieldset>
 
       <fieldset className="btns">
