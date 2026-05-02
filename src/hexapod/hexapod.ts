@@ -366,6 +366,15 @@ export class Hexapod {
     this.putdown_tips();
     this.auto_level_body();
 
+    // Restore saved body pose (position + rotation only, tips re-solve via IK)
+    if (this.options._body_home) {
+      const h = this.options._body_home;
+      this.body_mesh.position.set(h.px, h.py, h.pz);
+      this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
+      this.body_mesh.updateMatrixWorld();
+      this.putdown_tips();
+    }
+
     this.draw_gait_guidelines();
     this.draw_gait_guide();
 
@@ -935,6 +944,15 @@ export class Hexapod {
     let opts: any = {};
     opts['r' + direction] = radius;
     this.transform_body(opts);
+  }
+
+  /** Persist current body position/rotation so Adjust changes survive refresh */
+  save_body_home() {
+    this.options._body_home = {
+      px: this.body_mesh.position.x, py: this.body_mesh.position.y, pz: this.body_mesh.position.z,
+      rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
+    };
+    set_bot_options(this.options);
   }
 
   /** Gradually pull leg servo values back toward their home positions.

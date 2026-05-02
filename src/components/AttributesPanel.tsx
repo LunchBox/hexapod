@@ -290,6 +290,7 @@ export default function AttributesPanel() {
           onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
+            b.save_body_home();
             bumpBotVersion();
           }}
         />
@@ -304,6 +305,7 @@ export default function AttributesPanel() {
           onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
+            b.save_body_home();
             bumpBotVersion();
           }}
         />
@@ -318,6 +320,7 @@ export default function AttributesPanel() {
           onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
+            b.save_body_home();
             bumpBotVersion();
           }}
         />
@@ -332,6 +335,7 @@ export default function AttributesPanel() {
           onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
+            b.save_body_home();
             bumpBotVersion();
           }}
         />
@@ -346,6 +350,7 @@ export default function AttributesPanel() {
           onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
+            b.save_body_home();
             bumpBotVersion();
           }}
         />
@@ -360,6 +365,7 @@ export default function AttributesPanel() {
           onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
+            b.save_body_home();
             bumpBotVersion();
           }}
         />
@@ -374,6 +380,7 @@ export default function AttributesPanel() {
           onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
+            b.save_body_home();
             bumpBotVersion();
           }}
         />
