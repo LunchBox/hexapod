@@ -113,12 +113,13 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
     const frameW = 28;
     const frameH = 36;
     const frameGap = 10;
-    const labelH = 5;
+    const labelGap = 4;
+    const labelH = 8;
 
     const padX = 4;
     const padY = 2;
     const totalW = padX * 2 + steps * frameW + (steps - 1) * frameGap;
-    const totalH = padY * 2 + frameH + labelH;
+    const totalH = padY * 2 + frameH + labelGap + labelH;
 
     canvas.width = totalW;
     canvas.height = totalH;
@@ -157,7 +158,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
       ctx.fillStyle = '#666';
       ctx.font = '8px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(String(s), fx + cx, padY + frameH + labelH);
+      ctx.fillText(String(s), fx + cx, padY + frameH + labelGap + labelH);
     }
   }, [groups, legLayout]);
 
