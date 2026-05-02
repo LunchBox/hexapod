@@ -459,7 +459,7 @@ export default function AttributesPanel() {
               {isExpanded ? '▼' : '▶'} Leg {idx} Attrs
             </legend>
             {isExpanded && (
-              <div className="tab_content">
+              <div className="tab_content active">
                 <fieldset className="attr-fieldset">
                   <legend>Position</legend>
                   <AttrSlider label="pos x"
