@@ -65,6 +65,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
   const lastV = useRef(home);
   useEffect(() => {
     if (!springBack) return;
+    let running = false;
     const tick = () => {
       const v = pendingRef.current;
       if (v !== null) {
@@ -79,10 +80,18 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
           }
         }
       }
-      rafRef.current = requestAnimationFrame(tick);
+      if (dragging.current || pendingRef.current !== null) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        running = false;
+      }
     };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    // Watch for drag start to kick off the loop
+    const onDown = () => {
+      if (!running) { running = true; rafRef.current = requestAnimationFrame(tick); }
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => { cancelAnimationFrame(rafRef.current); window.removeEventListener('pointerdown', onDown); };
   }, [springBack, home]);
 
   const apply = useCallback((v: number) => {
@@ -156,7 +165,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
         <span style={hLabel} title={title || label}>{label}</span>
         <button style={btnStyle}
           onMouseDown={(e) => { e.preventDefault();
-            if (springBack) { const v = Math.min(max, Math.max(min, home - (step || 1))); onChange(v); }
+            if (springBack) { onChange(-(step || 1)); }
             else apply(cur - (step || 1));
           }}>◀</button>
         <input type="range" min={min} max={max} step={step || 1}
@@ -168,7 +177,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
         />
         <button style={btnStyle}
           onMouseDown={(e) => { e.preventDefault();
-            if (springBack) { const v = Math.min(max, Math.max(min, home + (step || 1))); onChange(v); }
+            if (springBack) { onChange(step || 1); }
             else apply(cur + (step || 1));
           }}>▶</button>
         <span style={hVal}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
@@ -180,7 +189,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     <div style={col}>
       <button style={btnStyle} title={title || label}
         onMouseDown={(e) => { e.preventDefault();
-          if (springBack) { const v = Math.min(max, Math.max(min, home + (step || 1))); onChange(v); }
+          if (springBack) { onChange(step || 1); }
           else apply(cur + (step || 1));
         }}>
         ▲
@@ -194,7 +203,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
       />
       <button style={btnStyle} title={title || label}
         onMouseDown={(e) => { e.preventDefault();
-          if (springBack) { const v = Math.min(max, Math.max(min, home - (step || 1))); onChange(v); }
+          if (springBack) { onChange(-(step || 1)); }
           else apply(cur - (step || 1));
         }}>
         ▼

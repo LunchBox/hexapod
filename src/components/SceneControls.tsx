@@ -72,7 +72,6 @@ export default function SceneControls() {
     setRotZ(Math.round(bot.body_mesh?.rotation?.z * 180 / Math.PI) || 0);
     setBodyX(Math.round(bot.body_mesh?.position?.x ?? 0));
     setBodyZ(Math.round(bot.body_mesh?.position?.z ?? 0));
-    setBodyY(Math.round(bot.body_mesh?.position?.y ?? 10));
   }, [botVersion, botRef]);
 
   const syncSliders = () => {
