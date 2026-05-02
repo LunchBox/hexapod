@@ -520,7 +520,7 @@ export class Hexapod {
       const cz = this.mesh.position.z;
       const dx = tip.x - cx; const dz = tip.z - cz;
       const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-      const offset = 18;
+      const offset = 28;
       sprite.position.set(tip.x + (dx / dist) * offset, 0.5, tip.z + (dz / dist) * offset);
       sprite.scale.set(30, 30, 1);
       this.scene.add(sprite);
