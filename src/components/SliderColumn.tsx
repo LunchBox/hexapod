@@ -50,16 +50,22 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     if (!springBack && !dragging.current) setCur(value);
   }, [value, ver, springBack]);
 
-  // rAF loop: apply pending value once per frame (springBack only)
+  // rAF loop: apply delta from last value once per frame (springBack only)
+  const lastV = useRef(home);
   useEffect(() => {
     if (!springBack) return;
     const tick = () => {
       const v = pendingRef.current;
       if (v !== null) {
         pendingRef.current = null;
-        if (!onChange(v)) {
-          setCur(home);
-          setVer(x => x + 1);
+        const delta = v - lastV.current;
+        lastV.current = v;
+        if (Math.abs(delta) > 0.001) {
+          if (!onChange(delta)) {
+            setCur(home);
+            setVer(x => x + 1);
+            lastV.current = home;
+          }
         }
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -91,13 +97,20 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     }
   };
 
-  // Global pointerup: snap back to home
+  // Global pointerup: snap back to home, reset tracking
   useEffect(() => {
     if (!springBack) return;
-    const up = () => { dragging.current = false; setCur(home); };
+    const up = () => { dragging.current = false; setCur(home); lastV.current = home; };
     window.addEventListener('pointerup', up);
     return () => window.removeEventListener('pointerup', up);
   }, [springBack, home]);
+
+  const onPointerDown = () => {
+    if (!springBack) return;
+    dragging.current = true;
+    lastV.current = home;
+    pendingRef.current = null;
+  };
 
   return (
     <div style={col}>
@@ -112,7 +125,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
         value={cur}
         title={title || label}
         style={sl}
-        onPointerDown={() => { if (springBack) dragging.current = true; }}
+        onPointerDown={onPointerDown}
         onChange={onInput}
       />
       <button style={btnStyle} title={title || label}
