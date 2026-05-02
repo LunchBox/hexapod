@@ -49,12 +49,6 @@ function isValidPhase(
 
 // ── Cyclic canonical form ───────────────────────────────────────
 
-function toCanonical(gait: Gait): Gait {
-  const idx = gait.findIndex(g => g.includes(0));
-  if (idx <= 0) return gait;
-  return [...gait.slice(idx), ...gait.slice(0, idx)];
-}
-
 function canonicalKey(gait: Gait): string {
   const n = gait.length;
   let best: string | null = null;
