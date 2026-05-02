@@ -39,13 +39,26 @@ function hasQuickRelift(gait: Gait, n: number): boolean {
   for (let leg = 0; leg < n; leg++) {
     const pattern = gait.map(g => g.includes(leg) ? 1 : 0);
     const liftCount = pattern.reduce((s, v) => s + v, 0);
-    if (liftCount <= 1) continue; // one lift per cycle → single continuous ground period
-    // Check for isolated 0 (1,0,1 pattern) — including cyclic wrap
+    if (liftCount <= 1) continue;
     for (let i = 0; i < m; i++) {
       const prev = pattern[(i - 1 + m) % m];
       const curr = pattern[i];
       const next = pattern[(i + 1) % m];
       if (prev === 1 && curr === 0 && next === 1) return true;
+    }
+  }
+  return false;
+}
+
+// Reject gaits where a leg is lifted in consecutive steps
+// (including first+last), meaning it never gets a ground period
+// between lifts — the leg stays up across the step boundary.
+function hasConsecutiveLifts(gait: Gait, n: number): boolean {
+  const m = gait.length;
+  for (let leg = 0; leg < n; leg++) {
+    const pattern = gait.map(g => g.includes(leg) ? 1 : 0);
+    for (let i = 0; i < m; i++) {
+      if (pattern[i] === 1 && pattern[(i + 1) % m] === 1) return true;
     }
   }
   return false;
@@ -69,9 +82,10 @@ export function generateAllGaits(
   const allLegs = Array.from({ length: n }, (_, i) => i);
   const center: number | null = centerLeg ?? null;
 
-  // Filter presets: balance constraint + no quick-relift
+  // Filter presets: balance + no consecutive lifts + no quick-relift
   const filtered: Record<string, Gait> = {};
   for (const [name, gait] of Object.entries(presets)) {
+    if (hasConsecutiveLifts(gait, n)) continue;
     if (hasQuickRelift(gait, n)) continue;
     let valid = true;
     for (const group of gait) {
