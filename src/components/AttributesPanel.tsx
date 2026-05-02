@@ -295,7 +295,6 @@ export default function AttributesPanel() {
           }}
         />
         <SliderColumn value={0} min={-40} max={40} step={1} label="Body X" horizontal springBack
-          displayValue={String(Math.round(botRef.current?.body_mesh?.position?.x ?? 0))}
           title="Nudge body X position"
           onChange={(v) => {
             const b = botRef.current; if (!b) return false;
@@ -311,7 +310,6 @@ export default function AttributesPanel() {
           }}
         />
         <SliderColumn value={0} min={-24} max={24} step={1} label="Body Y" horizontal springBack
-          displayValue={String(Math.round(botRef.current?.body_mesh?.position?.y ?? 0))}
           title="Nudge body height"
           onChange={(v) => {
             const b = botRef.current; if (!b) return false;
@@ -327,7 +325,6 @@ export default function AttributesPanel() {
           }}
         />
         <SliderColumn value={0} min={-40} max={40} step={1} label="Body Z" horizontal springBack
-          displayValue={String(Math.round(botRef.current?.body_mesh?.position?.z ?? 0))}
           title="Nudge body Z position"
           onChange={(v) => {
             const b = botRef.current; if (!b) return false;
@@ -343,7 +340,6 @@ export default function AttributesPanel() {
           }}
         />
         <SliderColumn value={0} min={-30} max={30} step={1} label="Rot X" horizontal springBack
-          displayValue={String(Math.round((botRef.current?.body_mesh?.rotation?.x ?? 0) * 180 / Math.PI)) + '°'}
           title="Nudge body rotation X"
           onChange={(v) => {
             const b = botRef.current; if (!b) return false;
@@ -359,7 +355,6 @@ export default function AttributesPanel() {
           }}
         />
         <SliderColumn value={0} min={-30} max={30} step={1} label="Rot Y" horizontal springBack
-          displayValue={String(Math.round((botRef.current?.body_mesh?.rotation?.y ?? 0) * 180 / Math.PI)) + '°'}
           title="Nudge body rotation Y"
           onChange={(v) => {
             const b = botRef.current; if (!b) return false;
@@ -375,7 +370,6 @@ export default function AttributesPanel() {
           }}
         />
         <SliderColumn value={0} min={-30} max={30} step={1} label="Rot Z" horizontal springBack
-          displayValue={String(Math.round((botRef.current?.body_mesh?.rotation?.z ?? 0) * 180 / Math.PI)) + '°'}
           title="Nudge body rotation Z"
           onChange={(v) => {
             const b = botRef.current; if (!b) return false;
