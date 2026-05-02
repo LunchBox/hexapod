@@ -391,9 +391,11 @@ export class Hexapod {
       this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
       this.body_mesh.updateMatrixWorld();
       // Tips are stored in body-local space — convert to world for IK
+      // h.tips may be plain {x,y,z} from JSON.parse, not THREE.Vector3
       if (h.tips && h.tips.length === this.legs.length) {
         for (let i = 0; i < this.legs.length; i++) {
-          this.legs[i].set_tip_pos(this.body_mesh.localToWorld(h.tips[i].clone()));
+          const t = h.tips[i];
+          this.legs[i].set_tip_pos(this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z)));
         }
       } else {
         let tips = this.get_tip_pos();
@@ -994,7 +996,8 @@ export class Hexapod {
     this.body_mesh.updateMatrixWorld();
     if (home.tips && home.tips.length === this.legs.length) {
       for (let i = 0; i < this.legs.length; i++) {
-        const worldTip = this.body_mesh.localToWorld(home.tips[i].clone());
+        const t = home.tips[i];
+        const worldTip = this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z));
         this.legs[i].set_tip_pos(worldTip);
       }
     }
