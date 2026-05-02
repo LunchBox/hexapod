@@ -588,7 +588,8 @@ export class Hexapod {
     for (let idx = 0; idx < this.legs.length; idx++) {
       let geometry = new THREE.Geometry();
       let body_pos = this.body_mesh.position.clone();
-      let tip_pos = this.legs[idx].get_tip_pos();
+      const worldTip = this.legs[idx].get_tip_pos();
+      let tip_pos = this.mesh.worldToLocal(worldTip.clone());
       geometry.vertices.push(body_pos, tip_pos);
       let line = new THREE.Line(geometry, material);
       this.guideline.add(line);
@@ -610,12 +611,13 @@ export class Hexapod {
     const bodyPos = this.body_mesh.position.clone();
     // Update tip-position lines and guide dots
     for (let idx = 0; idx < this.legs.length; idx++) {
-      const tip = this.legs[idx].get_tip_pos();
+      const worldTip = this.legs[idx].get_tip_pos();
+      const localTip = this.mesh.worldToLocal(worldTip.clone());
       // guideline lines
       const line = this.guideline.children[idx] as any;
       if (line) {
         line.geometry.vertices[0].copy(bodyPos);
-        line.geometry.vertices[1].copy(tip);
+        line.geometry.vertices[1].copy(localTip);
         line.geometry.verticesNeedUpdate = true;
       }
     }
@@ -624,8 +626,10 @@ export class Hexapod {
       for (let idx = 0; idx < this.legs.length; idx++) {
         const line = clone.children[idx] as any;
         if (!line) continue;
+        const worldTip = this.legs[idx].get_tip_pos();
+        const localTip = this.mesh.worldToLocal(worldTip.clone());
         line.geometry.vertices[0].copy(bodyPos);
-        line.geometry.vertices[1].copy(this.legs[idx].get_tip_pos());
+        line.geometry.vertices[1].copy(localTip);
         line.geometry.verticesNeedUpdate = true;
       }
     };
