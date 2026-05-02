@@ -373,19 +373,19 @@ export class GaitController {
   }
 
   switch_gait(gait_name: string) {
-    this.legs_down(this.all_legs);
+    this.reset_tips_to_home();
     this.leg_groups = this.gaits[gait_name];
     this.reset_action();
   }
 
   switch_target_mode(target_mode: string) {
-    this.legs_down(this.all_legs);
+    this.reset_tips_to_home();
     this.target_mode = target_mode;
     this.reset_action();
   }
 
   switch_action_type(type_name: string) {
-    this.legs_down(this.all_legs);
+    this.reset_tips_to_home();
     for (let key in this.actions) {
       let action = this.actions[key];
       if (action.step_types) {
@@ -393,6 +393,26 @@ export class GaitController {
       }
     }
     this.reset_action();
+  }
+
+  reset_tips_to_home() {
+    const bot = this.bot;
+    bot.reset_guide_pos();
+    bot.mesh.updateMatrixWorld();
+    const localPositions = bot._guide_local_positions;
+    if (localPositions) {
+      for (let i = 0; i < bot.legs.length; i++) {
+        const localHome = localPositions[i];
+        if (localHome) {
+          const worldHome = localHome.clone().applyMatrix4(bot.mesh.matrixWorld);
+          worldHome.y = 0;
+          bot.legs[i].set_tip_pos(worldHome);
+          bot.legs[i].on_floor = true;
+        }
+      }
+    }
+    bot.adjust_gait_guidelines();
+    bot.sync_guide_circles();
   }
 
   legs_up(leg_idxs: number[], target_offset: number) {
