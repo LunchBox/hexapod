@@ -150,7 +150,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
         const dy = padY + cz + (p.z - (minZ + maxZ) / 2) * scale;
         ctx.beginPath();
         ctx.arc(dx, dy, dotR, 0, Math.PI * 2);
-        ctx.fillStyle = lifted.has(l) ? '#222' : '#ccc';
+        ctx.fillStyle = lifted.has(l) ? '#444' : '#ccc';
         ctx.fill();
       }
 
