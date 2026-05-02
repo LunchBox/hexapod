@@ -527,7 +527,7 @@ export default function AttributesPanel() {
                       <AttrSlider label="Init Angle"
                         value={legOpt[name].init_angle ?? 0}
                         min={-180} max={180} step={1}
-                        displayValue={(legOpt[name].init_angle ?? 0) + '°'}
+                        displayValue={(() => { const v = legOpt[name].init_angle ?? 0; return (Number.isInteger(v) ? v : v.toFixed(2)) + '°'; })()}
                         onChange={(v) => {
                           const b = botRef.current; if (!b) return;
                           history.push(b.options);
