@@ -12,6 +12,7 @@ interface Props {
   springBack?: boolean;   // snap back to homeValue on mouseup
   homeValue?: number;      // center position when springBack=true (default 0)
   horizontal?: boolean;    // horizontal layout (no ▲/▼ buttons)
+  onDragStart?: () => void; // called on pointerdown (springBack mode only)
   onDragEnd?: () => void;  // called on pointerup (springBack mode only)
 }
 
@@ -40,7 +41,7 @@ const valStyle: React.CSSProperties = {
   fontSize: 10, fontFamily: 'monospace', color: '#444',
 };
 
-export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange, springBack, homeValue, horizontal, onDragEnd }: Props) {
+export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange, springBack, homeValue, horizontal, onDragStart, onDragEnd }: Props) {
   const home = homeValue ?? 0;
   const [cur, setCur] = useState(springBack ? home : value);
   const [ver, setVer] = useState(0);
@@ -112,16 +113,29 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     dragging.current = true;
     lastV.current = home;
     pendingRef.current = null;
+    onDragStart?.();
   };
 
   const hSl: React.CSSProperties = {
     cursor: 'pointer', width: '100%', margin: '2px 0',
   };
 
+  const hBtn: React.CSSProperties = {
+    width: 18, height: 18, padding: 0, lineHeight: '16px',
+    textAlign: 'center', cursor: 'pointer', flexShrink: 0,
+    border: '1px solid #ccc', borderRadius: 2, background: '#fff',
+    fontSize: 10, userSelect: 'none',
+  };
+
   if (horizontal) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {label ? <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap', minWidth: 52 }}>{label}</span> : null}
+        <button style={hBtn} title={title || label}
+          onMouseDown={(e) => { e.preventDefault();
+            if (springBack) { const v = Math.min(max, Math.max(min, home - (step || 1))); onChange(v); }
+            else apply(cur - (step || 1));
+          }}>◀</button>
         <input type="range" min={min} max={max} step={step || 1}
           value={cur}
           title={title || label}
@@ -129,7 +143,12 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
           onPointerDown={onPointerDown}
           onChange={onInput}
         />
-        <span style={valStyle}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
+        <button style={hBtn} title={title || label}
+          onMouseDown={(e) => { e.preventDefault();
+            if (springBack) { const v = Math.min(max, Math.max(min, home + (step || 1))); onChange(v); }
+            else apply(cur + (step || 1));
+          }}>▶</button>
+        <span style={{ ...valStyle, minWidth: 32, textAlign: 'right' }}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
       </div>
     );
   }

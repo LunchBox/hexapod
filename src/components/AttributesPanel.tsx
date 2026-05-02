@@ -189,8 +189,8 @@ export default function AttributesPanel() {
       </fieldset>
 
       <fieldset className="btns">
-        <legend>Tip Spread</legend>
-        <SliderColumn value={0} min={-30} max={30} step={1} label="" horizontal springBack
+        <legend>Adjust</legend>
+        <SliderColumn value={0} min={-30} max={30} step={1} label="Tip Spread" horizontal springBack
           title="Drag to spread/compact tips"
           onChange={(v) => {
             const b = botRef.current; if (!b) return false;
@@ -211,9 +211,105 @@ export default function AttributesPanel() {
             b.after_status_change();
             return true;
           }}
+          onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
           onDragEnd={() => {
             const b = botRef.current; if (!b) return;
-            history.push(b.options);
+            b.save_body_home();
+            bumpBotVersion();
+          }}
+        />
+        <SliderColumn value={0} min={-40} max={40} step={1} label="Body X" horizontal springBack
+          displayValue={String(Math.round(botRef.current?.body_mesh?.position?.x ?? 0))}
+          title="Nudge body X position"
+          onChange={(v) => {
+            const b = botRef.current; if (!b) return false;
+            const ok = b.transform_body({ dx: v });
+            b.adjust_gait_guidelines();
+            return ok;
+          }}
+          onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
+          onDragEnd={() => {
+            const b = botRef.current; if (!b) return;
+            b.save_body_home();
+            bumpBotVersion();
+          }}
+        />
+        <SliderColumn value={0} min={-24} max={24} step={1} label="Body Y" horizontal springBack
+          displayValue={String(Math.round(botRef.current?.body_mesh?.position?.y ?? 0))}
+          title="Nudge body height"
+          onChange={(v) => {
+            const b = botRef.current; if (!b) return false;
+            const ok = b.transform_body({ dy: v });
+            b.adjust_gait_guidelines();
+            return ok;
+          }}
+          onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
+          onDragEnd={() => {
+            const b = botRef.current; if (!b) return;
+            b.save_body_home();
+            bumpBotVersion();
+          }}
+        />
+        <SliderColumn value={0} min={-40} max={40} step={1} label="Body Z" horizontal springBack
+          displayValue={String(Math.round(botRef.current?.body_mesh?.position?.z ?? 0))}
+          title="Nudge body Z position"
+          onChange={(v) => {
+            const b = botRef.current; if (!b) return false;
+            const ok = b.transform_body({ dz: v });
+            b.adjust_gait_guidelines();
+            return ok;
+          }}
+          onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
+          onDragEnd={() => {
+            const b = botRef.current; if (!b) return;
+            b.save_body_home();
+            bumpBotVersion();
+          }}
+        />
+        <SliderColumn value={0} min={-30} max={30} step={1} label="Rot X" horizontal springBack
+          displayValue={String(Math.round((botRef.current?.body_mesh?.rotation?.x ?? 0) * 180 / Math.PI)) + '°'}
+          title="Nudge body rotation X"
+          onChange={(v) => {
+            const b = botRef.current; if (!b) return false;
+            const ok = b.transform_body({ rx: v * Math.PI / 180 });
+            b.adjust_gait_guidelines();
+            return ok;
+          }}
+          onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
+          onDragEnd={() => {
+            const b = botRef.current; if (!b) return;
+            b.save_body_home();
+            bumpBotVersion();
+          }}
+        />
+        <SliderColumn value={0} min={-30} max={30} step={1} label="Rot Y" horizontal springBack
+          displayValue={String(Math.round((botRef.current?.body_mesh?.rotation?.y ?? 0) * 180 / Math.PI)) + '°'}
+          title="Nudge body rotation Y"
+          onChange={(v) => {
+            const b = botRef.current; if (!b) return false;
+            const ok = b.transform_body({ ry: v * Math.PI / 180 });
+            b.adjust_gait_guidelines();
+            return ok;
+          }}
+          onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
+          onDragEnd={() => {
+            const b = botRef.current; if (!b) return;
+            b.save_body_home();
+            bumpBotVersion();
+          }}
+        />
+        <SliderColumn value={0} min={-30} max={30} step={1} label="Rot Z" horizontal springBack
+          displayValue={String(Math.round((botRef.current?.body_mesh?.rotation?.z ?? 0) * 180 / Math.PI)) + '°'}
+          title="Nudge body rotation Z"
+          onChange={(v) => {
+            const b = botRef.current; if (!b) return false;
+            const ok = b.transform_body({ rz: v * Math.PI / 180 });
+            b.adjust_gait_guidelines();
+            return ok;
+          }}
+          onDragStart={() => { const b = botRef.current; if (b) history.push(b.options); }}
+          onDragEnd={() => {
+            const b = botRef.current; if (!b) return;
             b.save_body_home();
             bumpBotVersion();
           }}
