@@ -8,6 +8,8 @@ Three.js 3D hexapod robot simulator with optional physical bot control via Socke
 npm install
 npm run dev      # http://localhost:3000
 npm run build    # production build to dist/
+npm run preview  # preview production build
+npm run lint     # ESLint
 ```
 
 ## Features
@@ -30,17 +32,22 @@ src/
   context/HexapodContext.tsx  # botRef, sceneRef, servo display, version bump
   components/
     SceneCanvas.tsx           # Three.js scene mount, builds Hexapod
-    ControlPanel.tsx          # Draw type, move mode, gaits, actions, joystick
+    SceneControls.tsx         # Body/rot joysticks, XYZ/RxRyRz sliders, pose save/recall
+    ControlPanel.tsx          # Draw type, move mode, gaits, actions, joystick, keyboard
     AttributesPanel.tsx       # Body/leg geometry, DOF, legs, tip spread, Profile
     ServoPanel.tsx            # 18 servo sliders + end-position inputs
     LegEditor.tsx             # 2D canvas joint editor
     StatusPanel.tsx           # Status history with play/apply
     CommandDisplay.tsx        # Current + last servo command
     TimeChart.tsx             # Command time interval chart
+    Toolbar.tsx               # Undo/redo/save toolbar with keyboard shortcuts
     AttrSlider.tsx            # Reusable labeled range slider
+    SliderColumn.tsx          # Reusable slider column (vertical/horizontal, spring-back)
   hexapod/
     hexapod.ts                # Hexapod, HexapodLeg, config helpers
-    gaits.ts                  # GaitController, gait definitions
+    gaits.ts                  # GaitController, gait actions
+    gait_configs.ts           # Preset gait definitions (wave, ripple, tripod, quad)
+    gait_generator.ts         # Runtime gait filtering and validation
     pos_calculator.ts         # Gradient-descent IK solver
     scene.ts                  # initScene — Three.js setup
     joystick2.ts              # Canvas-based 2D joystick
@@ -49,6 +56,10 @@ src/
     appState.ts               # Mutable singleton state
     history.ts                # Undo/redo stack
     random.ts                 # Random options generator
+  types/
+    globals.d.ts              # Type declarations for legacy Three.js, Stats, Detector, THREEx
+    hexapod.d.ts              # Core interfaces: HexapodOptions, HexapodLegOptions, LimbOptions
+    css.d.ts                  # Module declaration for .css imports
 ```
 
 ## Design Rules
@@ -59,7 +70,7 @@ src/
 
 ## Three.js
 
-Uses pre-r69 Three.js (loaded as globals via `<script>`):
+Uses Three.js revision 72 (loaded as globals via `<script>`):
 - `THREE.Geometry` (not BufferGeometry)
 - Single-material mesh constructor
 - `.applyMatrix()` (not `.applyMatrix4()`)
