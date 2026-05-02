@@ -11,6 +11,8 @@ interface Props {
   onChange: (v: number) => boolean;
   springBack?: boolean;   // snap back to homeValue on mouseup
   homeValue?: number;      // center position when springBack=true (default 0)
+  horizontal?: boolean;    // horizontal layout (no ▲/▼ buttons)
+  onDragEnd?: () => void;  // called on pointerup (springBack mode only)
 }
 
 const btnStyle: React.CSSProperties = {
@@ -38,7 +40,7 @@ const valStyle: React.CSSProperties = {
   fontSize: 10, fontFamily: 'monospace', color: '#444',
 };
 
-export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange, springBack, homeValue }: Props) {
+export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange, springBack, homeValue, horizontal, onDragEnd }: Props) {
   const home = homeValue ?? 0;
   const [cur, setCur] = useState(springBack ? home : value);
   const [ver, setVer] = useState(0);
@@ -100,10 +102,10 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
   // Global pointerup: snap back to home, reset tracking
   useEffect(() => {
     if (!springBack) return;
-    const up = () => { dragging.current = false; setCur(home); lastV.current = home; };
+    const up = () => { dragging.current = false; setCur(home); lastV.current = home; onDragEnd?.(); };
     window.addEventListener('pointerup', up);
     return () => window.removeEventListener('pointerup', up);
-  }, [springBack, home]);
+  }, [springBack, home, onDragEnd]);
 
   const onPointerDown = () => {
     if (!springBack) return;
@@ -111,6 +113,26 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     lastV.current = home;
     pendingRef.current = null;
   };
+
+  const hSl: React.CSSProperties = {
+    cursor: 'pointer', width: '100%', margin: '2px 0',
+  };
+
+  if (horizontal) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap' }}>{label}</span>
+        <input type="range" min={min} max={max} step={step || 1}
+          value={cur}
+          title={title || label}
+          style={hSl}
+          onPointerDown={onPointerDown}
+          onChange={onInput}
+        />
+        <span style={valStyle}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
+      </div>
+    );
+  }
 
   return (
     <div style={col}>

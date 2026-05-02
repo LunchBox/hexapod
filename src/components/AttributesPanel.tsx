@@ -6,6 +6,7 @@ import { generateRandomOptions } from '../hexapod/random';
 import { history } from '../hexapod/history';
 import LegEditor from './LegEditor';
 import AttrSlider from './AttrSlider';
+import SliderColumn from './SliderColumn';
 
 export default function AttributesPanel() {
   const { botRef, botVersion, bumpBotVersion } = useHexapod();
@@ -189,12 +190,10 @@ export default function AttributesPanel() {
 
       <fieldset className="btns">
         <legend>Tip Spread</legend>
-        {(() => {
-          const spread = (dir: number) => (e: React.MouseEvent) => {
-            e.preventDefault();
-            const b = botRef.current; if (!b) return;
-            const step = 5 * dir;
-            history.push(b.options);
+        <SliderColumn value={0} min={-30} max={30} step={1} label="" horizontal springBack
+          title="Drag to spread/compact tips"
+          onChange={(v) => {
+            const b = botRef.current; if (!b) return false;
             const cx = b.body_mesh.position.x;
             const cz = b.body_mesh.position.z;
             for (let i = 0; i < b.legs.length; i++) {
@@ -202,7 +201,7 @@ export default function AttributesPanel() {
               const dx = tip.x - cx;
               const dz = tip.z - cz;
               const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-              const newDist = Math.max(5, dist + step);
+              const newDist = Math.max(5, dist + v);
               tip.x = cx + (dx / dist) * newDist;
               tip.z = cz + (dz / dist) * newDist;
               b.legs[i].set_tip_pos(tip);
@@ -210,16 +209,15 @@ export default function AttributesPanel() {
             b.sync_guide_circles();
             b.adjust_gait_guidelines();
             b.after_status_change();
+            return true;
+          }}
+          onDragEnd={() => {
+            const b = botRef.current; if (!b) return;
+            history.push(b.options);
             b.save_body_home();
             bumpBotVersion();
-          };
-          return (
-            <>
-              <a href="#" className="control_btn" onClick={spread(1)}>Expand</a>
-              <a href="#" className="control_btn" onClick={spread(-1)}>Compact</a>
-            </>
-          );
-        })()}
+          }}
+        />
       </fieldset>
 
       {/* ── Motions ── */}
