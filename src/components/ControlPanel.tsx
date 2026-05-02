@@ -109,14 +109,14 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
     const rangeZ = maxZ - minZ || 1;
 
     // Frame size per step (top-down mini view)
-    const framePad = 4;
-    const frameW = 56;
-    const frameH = 72;
-    const frameGap = 16;
-    const labelH = 10;
+    const framePad = 2;
+    const frameW = 28;
+    const frameH = 36;
+    const frameGap = 10;
+    const labelH = 5;
 
-    const padX = 6;
-    const padY = 4;
+    const padX = 4;
+    const padY = 2;
     const totalW = padX * 2 + steps * frameW + (steps - 1) * frameGap;
     const totalH = padY * 2 + frameH + labelH;
 
@@ -136,7 +136,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
     const cx = frameW / 2;  // center X within frame
     const cz = frameH / 2;  // center Z within frame
 
-    const dotR = 3.5;
+    const dotR = 2.5;
 
     for (let s = 0; s < steps; s++) {
       const lifted = new Set(groups[s]);
@@ -155,7 +155,7 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
 
       // Step label
       ctx.fillStyle = '#666';
-      ctx.font = '10px monospace';
+      ctx.font = '8px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(String(s), fx + cx, padY + frameH + labelH);
     }
