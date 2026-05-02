@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { set_bot_options } from '../hexapod/hexapod';
-import { getSegNamesForLeg, computeJointPositions, applyJointMove } from '../hexapod/hexapod';
+import { getSegNamesForLeg, computeJointPositions, getActualJointPositions, applyJointMove } from '../hexapod/hexapod';
 import { history } from '../hexapod/history';
 import './LegEditor.css';
 
@@ -131,10 +131,16 @@ export default function LegEditor() {
     }
 
     const refLeg = valid.refLeg;
-    // Always use geometry-based positions — LegEditor edits segment lengths
-    // and init_angles, not runtime servo positions affected by IK.
-    // During drag, use current opts (being mutated by handleMouseMove).
-    const pts = computeJointPositions(opts, refLeg);
+    // When not dragging: show actual 3D joint positions (matches scene).
+    // During drag: use opts-based positions for live feedback (servo values stale).
+    let pts;
+    if (dragRef.current) {
+      pts = computeJointPositions(opts, refLeg);
+    } else {
+      const bot = botRef.current;
+      const actual = bot ? getActualJointPositions(bot, refLeg) : null;
+      pts = actual || computeJointPositions(opts, refLeg);
+    }
     const view = dragRef.current?.view || computeView(pts, sizeRef.current.w, sizeRef.current.h);
     const sp = pts.map(p => toScreen(p, view));
 
@@ -221,7 +227,10 @@ export default function LegEditor() {
     if (!opts) return -1;
     const valid = checkedLegsSameDof();
     if (!valid.ok) return -1;
-    const pts = computeJointPositions(opts, valid.refLeg);
+    // Match draw(): use actual 3D positions when not dragging
+    const bot = botRef.current;
+    const pts = (bot ? getActualJointPositions(bot, valid.refLeg) : null)
+      || computeJointPositions(opts, valid.refLeg);
     const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     for (let i = 1; i < pts.length; i++) {
       const s = toScreen(pts[i], view);
