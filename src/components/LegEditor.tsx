@@ -226,14 +226,17 @@ export default function LegEditor() {
     if (!opts) return -1;
     const valid = checkedLegsSameDof();
     if (!valid.ok) return -1;
-    const pts = computeJointPositions(opts, valid.refLeg);
+    // Match draw(): use actual 3D positions, fall back to opts-based
+    const bot = botRef.current;
+    const pts = (bot ? getActualJointPositions(bot, valid.refLeg) : null)
+      || computeJointPositions(opts, valid.refLeg);
     const view = computeView(pts, sizeRef.current.w, sizeRef.current.h);
     for (let i = 1; i < pts.length; i++) {
       const s = toScreen(pts[i], view);
       if ((cx - s.x) ** 2 + (cy - s.y) ** 2 <= HIT_R * HIT_R) return i;
     }
     return -1;
-  }, [getOpts, checkedLegsSameDof]);
+  }, [getOpts, checkedLegsSameDof, botRef]);
 
   // Size canvas then draw
   useEffect(() => {
