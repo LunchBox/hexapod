@@ -273,6 +273,8 @@ export class Hexapod {
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
 
+    const isInitialBuild = !this.mesh;
+
     if (this.mesh) {
       this.scene.remove(this.mesh);
     }
@@ -307,6 +309,33 @@ export class Hexapod {
     }
     this.laydown();
     this.sync_guide_circles();
+
+    // Restore saved body pose on top of init_angles baseline.
+    // Body position/rotation always applies; tip positions only on initial build
+    // (subsequent apply_attributes() calls come from geometry edits where old tips are stale).
+    if (this.options._body_home) {
+      const h = this.options._body_home;
+      this.body_mesh.position.set(h.px, h.py, h.pz);
+      this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
+      this.body_mesh.updateMatrixWorld();
+      if (isInitialBuild && h.tips && h.tips.length === this.legs.length) {
+        for (let i = 0; i < this.legs.length; i++) {
+          const t = h.tips[i];
+          this.legs[i].set_tip_pos(this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z)));
+        }
+      }
+      this.laydown();
+      this.sync_guide_circles();
+      this.adjust_gait_guidelines();
+      // Rebuild guide local positions from restored state so gait targets are correct
+      this.mesh.updateMatrixWorld();
+      this._guide_local_positions = [];
+      for (let i = 0; i < this.legs.length; i++) {
+        const worldPos = this.legs[i].get_tip_pos();
+        this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
+      }
+      this._guide_local_positions.push(new THREE.Vector3(0, 0, 0));
+    }
 
     this.gait_controller = new GaitController(this);
 
@@ -390,22 +419,6 @@ export class Hexapod {
     this.laydown();
     this.putdown_tips();
     this.auto_level_body();
-
-    // Restore saved body pose (position + rotation + body-local tips)
-    if (this.options._body_home) {
-      const h = this.options._body_home;
-      this.body_mesh.position.set(h.px, h.py, h.pz);
-      this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
-      this.body_mesh.updateMatrixWorld();
-      if (h.tips && h.tips.length === this.legs.length) {
-        for (let i = 0; i < this.legs.length; i++) {
-          const t = h.tips[i];
-          this.legs[i].set_tip_pos(this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z)));
-        }
-      } else {
-        this.putdown_tips();
-      }
-    }
 
     this.draw_gait_guidelines();
     this.draw_gait_guide();
@@ -986,7 +999,7 @@ export class Hexapod {
       rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
       tips: tips.map((t: any) => this.body_mesh.worldToLocal(t.clone())),
     };
-    set_bot_options(this.options);
+    history.save(this.options);
   }
 
   /** Gradually pull leg servo values back toward their home positions.
