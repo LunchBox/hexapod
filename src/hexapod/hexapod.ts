@@ -7,7 +7,7 @@ import {
 } from './defaults.js';
 import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage, degree_to_radians, remove_class, add_class, clearSelection } from './utils.js';
 import { GaitController } from './gaits.js';
-import { PosCalculator } from './pos_calculator.js';
+import { PosCalculator, PosResult } from './pos_calculator.js';
 import { history } from './history.js';
 
 // ── Leg layout computation ─────────────────────────────────────
@@ -853,7 +853,7 @@ export class Hexapod {
         let d = current_tips[i].distanceTo(newTips[i]);
         if (d > maxDrift) maxDrift = d;
       }
-      if (maxDrift > 2) {
+      if (maxDrift > 8) {
         this.body_mesh.rotation.z = prevRZ;
         this.body_mesh.rotation.x = prevRX;
         this.body_mesh.rotation.y = prevRY;
@@ -1316,7 +1316,7 @@ export class HexapodLeg {
     return getWorldPosition(this.bot.mesh, this.tip);
   }
 
-  set_tip_pos(new_pos: any) {
+  set_tip_pos(new_pos: any): PosResult {
     let calculator = new PosCalculator(this, new_pos);
     return calculator.run();
   }

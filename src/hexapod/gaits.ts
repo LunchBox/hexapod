@@ -420,7 +420,7 @@ export class GaitController {
       let idx = leg_idxs[i];
       let ori_pos = this.bot.legs[idx].get_tip_pos();
       ori_pos.y = target_offset;
-      if (this.bot.legs[idx].set_tip_pos(ori_pos)) {
+      if (this.bot.legs[idx].set_tip_pos(ori_pos).success) {
         this.bot.legs[idx].on_floor = false;
       }
     }
@@ -431,7 +431,7 @@ export class GaitController {
       let idx = leg_idxs[i];
       let ori_pos = this.bot.legs[idx].get_tip_pos();
       ori_pos.y = 0;
-      if (this.bot.legs[idx].set_tip_pos(ori_pos)) {
+      if (this.bot.legs[idx].set_tip_pos(ori_pos).success) {
         this.bot.legs[idx].on_floor = true;
       }
     }

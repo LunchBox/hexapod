@@ -1,5 +1,12 @@
 // Core type interfaces for hexapod classes
 
+interface PosResult {
+  success: boolean;
+  distance: number;
+  iterations: number;
+  values: number[];
+}
+
 interface HexapodLegOptions {
   x: number;
   y: number;
@@ -76,7 +83,7 @@ interface HexapodLegInstance {
   limbs: [LimbMesh, LimbMesh, LimbMesh, ThreeObj];
   set_servo_value(limb_idx: number, value: number): void;
   set_servo_values(values: number[]): void;
-  set_tip_pos(pos: any): boolean;
+  set_tip_pos(pos: any): PosResult;
   get_tip_pos(): any;
 }
 
