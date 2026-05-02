@@ -80,6 +80,58 @@ const targetModes = [
   { value: 'target', label: 'target' },
 ];
 
+// ── Gait cycle dot diagram ──────────────────────────────────────
+
+function GaitDiagram({ groups }: { groups: number[][] | null }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !groups || groups.length === 0) return;
+
+    const n = Math.max(...groups.flat()) + 1;
+    const steps = groups.length;
+
+    const dotR = 4;
+    const stepGap = 18;
+    const legGap = 10;
+    const padX = 14;
+    const padY = 8;
+
+    const w = padX * 2 + (steps - 1) * stepGap;
+    const h = padY * 2 + (n - 1) * legGap;
+
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, w, h);
+
+    for (let s = 0; s < steps; s++) {
+      const lifted = new Set(groups[s]);
+      for (let l = 0; l < n; l++) {
+        const x = padX + s * stepGap;
+        const y = padY + l * legGap;
+        ctx.beginPath();
+        ctx.arc(x, y, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = lifted.has(l) ? '#e04040' : '#888';
+        ctx.fill();
+      }
+    }
+  }, [groups]);
+
+  if (!groups || groups.length === 0) return null;
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ display: 'block', margin: '6px auto 0', imageRendering: 'pixelated' }}
+    />
+  );
+}
+
 export default function ControlPanel() {
   const { botRef, updateServoDisplay, bumpBotVersion } = useHexapod();
   const gaitIntervalRef = useRef(null);
@@ -463,6 +515,8 @@ export default function ControlPanel() {
           );
         })()}
       </fieldset>
+
+      <GaitDiagram groups={botRef.current?.gait_controller?.gaits[gait] ?? null} />
 
       <fieldset className="btns">
         <legend>...</legend>
