@@ -175,6 +175,11 @@ export function generateAllGaits(
   rightLegs: number[],
   centerLeg: number | null,
 ): Record<string, Gait> {
+  // Combinatorial explosion for n > 6: just produce a basic wave gait
+  if (n > 6) {
+    return { wave: Array.from({ length: n }, (_, i) => [i]) };
+  }
+
   const leftSet = new Set(leftLegs);
   const rightSet = new Set(rightLegs);
   const allGaits: Record<string, Gait> = {};
