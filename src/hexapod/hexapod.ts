@@ -390,14 +390,10 @@ export class Hexapod {
       this.body_mesh.position.set(h.px, h.py, h.pz);
       this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
       this.body_mesh.updateMatrixWorld();
-      // Tips are stored RELATIVE to body — convert to world for IK
+      // Tips are stored in body-local space — convert to world for IK
       if (h.tips && h.tips.length === this.legs.length) {
-        const bx = this.body_mesh.position.x;
-        const by = this.body_mesh.position.y;
-        const bz = this.body_mesh.position.z;
         for (let i = 0; i < this.legs.length; i++) {
-          const t = h.tips[i];
-          this.legs[i].set_tip_pos(new THREE.Vector3(t.x + bx, t.y + by, t.z + bz));
+          this.legs[i].set_tip_pos(this.body_mesh.localToWorld(h.tips[i].clone()));
         }
       } else {
         let tips = this.get_tip_pos();
@@ -978,14 +974,11 @@ export class Hexapod {
 
   save_body_home() {
     const tips = this.get_tip_pos();
-    const bx = this.body_mesh.position.x;
-    const by = this.body_mesh.position.y;
-    const bz = this.body_mesh.position.z;
     const home = {
-      px: bx, py: by, pz: bz,
+      px: this.body_mesh.position.x, py: this.body_mesh.position.y, pz: this.body_mesh.position.z,
       rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
-      // Store tips RELATIVE to body so Recall can apply them at any body position
-      tips: tips.map((t: any) => ({ x: t.x - bx, y: t.y - by, z: t.z - bz })),
+      // Store tips in body-local space so Recall works correctly at any body position/rotation
+      tips: tips.map((t: any) => this.body_mesh.worldToLocal(t.clone())),
     };
     this.options._body_home = home;
     set_bot_options(this.options);
@@ -1000,12 +993,9 @@ export class Hexapod {
     this.body_mesh.rotation.set(home.rx, home.ry, home.rz);
     this.body_mesh.updateMatrixWorld();
     if (home.tips && home.tips.length === this.legs.length) {
-      const bx = this.body_mesh.position.x;
-      const by = this.body_mesh.position.y;
-      const bz = this.body_mesh.position.z;
       for (let i = 0; i < this.legs.length; i++) {
-        const t = home.tips[i];
-        this.legs[i].set_tip_pos(new THREE.Vector3(t.x + bx, t.y + by, t.z + bz));
+        const worldTip = this.body_mesh.localToWorld(home.tips[i].clone());
+        this.legs[i].set_tip_pos(worldTip);
       }
     }
     this.after_status_change();
@@ -1014,7 +1004,17 @@ export class Hexapod {
 
   reset_body_to_init() {
     delete this.options._body_home;
-    // Redraw without persisting (bare draw + new gait controller)
+    // Clean up old guide circles and labels before redrawing
+    if (this._guideCircles) {
+      for (const sq of this._guideCircles) this.scene.remove(sq);
+      this._guideCircles = [];
+    }
+    if (this._guideLabels) {
+      for (const sp of this._guideLabels) this.scene.remove(sp);
+      this._guideLabels = [];
+    }
+    this.guide_pos = null;
+    this._guide_local_positions = [];
     if (this.mesh) this.scene.remove(this.mesh);
     this.draw();
     this.gait_controller = new (this.gait_controller.constructor as any)(this);
