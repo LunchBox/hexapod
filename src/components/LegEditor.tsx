@@ -340,8 +340,8 @@ export default function LegEditor() {
           set_bot_options(bot.options);
           history.markSaved(bot.options);
         }
-        delete bot.options._body_home;
-        applyOpts(bot.options, true);
+
+applyOpts(bot.options, true);
       }
       dragRef.current = null;
       draw();
@@ -359,8 +359,8 @@ export default function LegEditor() {
           set_bot_options(bot.options);
           history.markSaved(bot.options);
         }
-        delete bot.options._body_home;
-        applyOpts(bot.options, true);
+
+applyOpts(bot.options, true);
       }
       dragRef.current = null;
     }

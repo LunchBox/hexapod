@@ -261,23 +261,6 @@ export class Hexapod {
   apply_attributes(options: any) {
     this.options = options;
 
-    // Invalidate saved body home only when leg geometry actually changes —
-    // different leg count / DOF / body shape makes old tip positions unreachable
-    const prevLegCount = options._prev_leg_count;
-    const prevDof = options._prev_dof;
-    const prevShape = options._prev_body_shape;
-    const curLegCount = options.leg_count || 6;
-    const curDof = options.dof || 3;
-    const curShape = options.body_shape || 'rectangle';
-    if (prevLegCount !== curLegCount || prevDof !== curDof || prevShape !== curShape) {
-      delete this.options._body_home;
-      set_bot_options(this.options);
-    }
-    // Track current state for next comparison
-    options._prev_leg_count = curLegCount;
-    options._prev_dof = curDof;
-    options._prev_body_shape = curShape;
-
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
@@ -382,26 +365,6 @@ export class Hexapod {
     this.laydown();
     this.putdown_tips();
     this.auto_level_body();
-
-    // Restore saved body home pose BEFORE drawing guidelines/guide
-    // so the reference lines and guide_pos reflect the saved state.
-    if (this.options._body_home) {
-      const h = this.options._body_home;
-      this.body_mesh.position.set(h.px, h.py, h.pz);
-      this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
-      this.body_mesh.updateMatrixWorld();
-      // Tips are stored in body-local space — convert to world for IK
-      // h.tips may be plain {x,y,z} from JSON.parse, not THREE.Vector3
-      if (h.tips && h.tips.length === this.legs.length) {
-        for (let i = 0; i < this.legs.length; i++) {
-          const t = h.tips[i];
-          this.legs[i].set_tip_pos(this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z)));
-        }
-      } else {
-        let tips = this.get_tip_pos();
-        for (let i = 0; i < this.legs.length; i++) this.legs[i].set_tip_pos(tips[i]);
-      }
-    }
 
     this.draw_gait_guidelines();
     this.draw_gait_guide();
@@ -972,56 +935,6 @@ export class Hexapod {
     let opts: any = {};
     opts['r' + direction] = radius;
     this.transform_body(opts);
-  }
-
-  save_body_home() {
-    const tips = this.get_tip_pos();
-    const home = {
-      px: this.body_mesh.position.x, py: this.body_mesh.position.y, pz: this.body_mesh.position.z,
-      rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
-      // Store tips in body-local space so Recall works correctly at any body position/rotation
-      tips: tips.map((t: any) => this.body_mesh.worldToLocal(t.clone())),
-    };
-    this.options._body_home = home;
-    set_bot_options(this.options);
-  }
-
-  reset_body_to_home(keepPosition?: boolean) {
-    const home = this.options._body_home;
-    if (!home) return;
-    if (!keepPosition) {
-      this.body_mesh.position.set(home.px, home.py, home.pz);
-    }
-    this.body_mesh.rotation.set(home.rx, home.ry, home.rz);
-    this.body_mesh.updateMatrixWorld();
-    if (home.tips && home.tips.length === this.legs.length) {
-      for (let i = 0; i < this.legs.length; i++) {
-        const t = home.tips[i];
-        const worldTip = this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z));
-        this.legs[i].set_tip_pos(worldTip);
-      }
-    }
-    this.after_status_change();
-    if (this.adjust_gait_guidelines) this.adjust_gait_guidelines();
-  }
-
-  reset_body_to_init() {
-    delete this.options._body_home;
-    // Clean up old guide circles and labels before redrawing
-    if (this._guideCircles) {
-      for (const sq of this._guideCircles) this.scene.remove(sq);
-      this._guideCircles = [];
-    }
-    if (this._guideLabels) {
-      for (const sp of this._guideLabels) this.scene.remove(sp);
-      this._guideLabels = [];
-    }
-    this.guide_pos = null;
-    this._guide_local_positions = [];
-    if (this.mesh) this.scene.remove(this.mesh);
-    this.draw();
-    this.gait_controller = new (this.gait_controller.constructor as any)(this);
-    this.on_servo_values = this.get_servo_values();
   }
 
   /** Gradually pull leg servo values back toward their home positions.
