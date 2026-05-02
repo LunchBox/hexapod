@@ -374,6 +374,10 @@ export class Hexapod {
         if (!opt[name]) {
           const def = LIMB_DEFAULTS[name] || { length: 20, radius: 5, init_angle: 0 };
           opt[name] = { length: def.length, radius: def.radius, init_angle: def.init_angle, servo_value: 1500, revert: false };
+          // Write back to original so LegEditor sees the new segment
+          if (!this.options.leg_options[idx][name]) {
+            this.options.leg_options[idx][name] = { ...opt[name] };
+          }
         }
       }
 
