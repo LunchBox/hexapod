@@ -69,7 +69,8 @@ const PRESETS: Record<number, Record<string, Gait>> = {
     'wave-lr': [[0], [2], [4], [1], [3]],
     'wave-skip': [[0], [3], [1], [4], [2]],
 
-    // k=2 (max k=2) — ripple, liftsPerLeg=2, chain design
+    // k=2 (max k=2) — ripple
+    ripple: [[0, 1], [2, 3], [4]],         // remainder leg 4 as solo step
     'ripple-chain': chain(5, 2),
     'ripple-skip': [[0, 2], [2, 4], [4, 1], [1, 3], [3, 0]],
   },
@@ -101,11 +102,13 @@ const PRESETS: Record<number, Record<string, Gait>> = {
     wave: [[0], [1], [2], [3], [4], [5], [6]],
     'wave-lr': [[0], [2], [4], [6], [1], [3], [5]],
 
-    // k=2 — ripple (7 steps, liftsPerLeg=2)
+    // k=2 — ripple
+    ripple: [[0, 1], [2, 3], [4, 5], [6]],   // remainder leg 6 solo
     'ripple-chain': chain(7, 2),
     'ripple-skip': [[0, 2], [2, 4], [4, 6], [6, 1], [1, 3], [3, 5], [5, 0]],
 
-    // k=3 (max k=3) — tripod (7 steps, liftsPerLeg=3)
+    // k=3 (max k=3) — tripod
+    tripod: [[0, 1, 2], [3, 4, 5], [6]],     // remainder leg 6 solo
     'tripod-chain': chain(7, 3),
   },
 
@@ -136,14 +139,16 @@ const PRESETS: Record<number, Record<string, Gait>> = {
     wave: [[0], [1], [2], [3], [4], [5], [6], [7], [8]],
     'wave-lr': [[0], [2], [4], [6], [8], [1], [3], [5], [7]],
 
-    // k=2 (9 steps, liftsPerLeg=2)
+    // k=2 — ripple
+    ripple: [[0, 1], [2, 3], [4, 5], [6, 7], [8]],   // remainder leg 8 solo
     'ripple-chain': chain(9, 2),
 
-    // k=3 — tripod (3 steps)
+    // k=3 — tripod (3 steps, divides evenly)
     tripod: [[0, 3, 6], [1, 4, 7], [2, 5, 8]],
     'tripod-alt': [[0, 1, 2], [3, 4, 5], [6, 7, 8]],
 
-    // k=4 (max k=4) — quad (9 steps, liftsPerLeg=4)
+    // k=4 (max k=4) — quad
+    quad: [[0, 1, 2, 3], [4, 5, 6, 7], [8]],         // remainder leg 8 solo
     'quad-chain': chain(9, 4),
   },
 };
