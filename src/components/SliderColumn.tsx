@@ -100,10 +100,16 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     }
   };
 
-  // Global pointerup: snap back to home, reset tracking
+  // Global pointerup: snap back to home, reset tracking, flush pending
   useEffect(() => {
     if (!springBack) return;
-    const up = () => { dragging.current = false; setCur(home); lastV.current = home; onDragEnd?.(); };
+    const up = () => {
+      dragging.current = false;
+      pendingRef.current = null;
+      setCur(home);
+      lastV.current = home;
+      onDragEnd?.();
+    };
     window.addEventListener('pointerup', up);
     return () => window.removeEventListener('pointerup', up);
   }, [springBack, home, onDragEnd]);
@@ -116,22 +122,31 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     onDragStart?.();
   };
 
-  const hSl: React.CSSProperties = {
-    cursor: 'pointer', width: '100%', margin: '2px 0',
+  const row: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 4,
+    padding: '3px 0', fontSize: 12,
   };
 
-  const hBtn: React.CSSProperties = {
-    width: 18, height: 18, padding: 0, lineHeight: '16px',
-    textAlign: 'center', cursor: 'pointer', flexShrink: 0,
-    border: '1px solid #ccc', borderRadius: 2, background: '#fff',
-    fontSize: 10, userSelect: 'none',
+  const hLabel: React.CSSProperties = {
+    width: 100, textAlign: 'right', fontWeight: 'bold',
+    flexShrink: 0, marginRight: 2, overflow: 'hidden',
+    textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12,
+  };
+
+  const hSl: React.CSSProperties = {
+    flex: 1, minWidth: 60, margin: '0 2px',
+  };
+
+  const hVal: React.CSSProperties = {
+    width: 52, textAlign: 'right', fontSize: 11,
+    fontFamily: 'monospace', flexShrink: 0,
   };
 
   if (horizontal) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {label ? <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap', minWidth: 52 }}>{label}</span> : null}
-        <button style={hBtn} title={title || label}
+      <div style={row}>
+        <span style={hLabel} title={title || label}>{label}</span>
+        <button style={btnStyle}
           onMouseDown={(e) => { e.preventDefault();
             if (springBack) { const v = Math.min(max, Math.max(min, home - (step || 1))); onChange(v); }
             else apply(cur - (step || 1));
@@ -143,12 +158,12 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
           onPointerDown={onPointerDown}
           onChange={onInput}
         />
-        <button style={hBtn} title={title || label}
+        <button style={btnStyle}
           onMouseDown={(e) => { e.preventDefault();
             if (springBack) { const v = Math.min(max, Math.max(min, home + (step || 1))); onChange(v); }
             else apply(cur + (step || 1));
           }}>▶</button>
-        <span style={{ ...valStyle, minWidth: 32, textAlign: 'right' }}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
+        <span style={hVal}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
       </div>
     );
   }
