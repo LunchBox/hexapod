@@ -8,15 +8,19 @@ export interface PosResult {
   values: number[];
 }
 
+const REG_STRENGTH = 0.002; // tiny pull toward init per iteration
+
 export class PosCalculator {
   leg: any;
   joint_count: number;
   target_tip_pos: any;
+  initValues: number[] | null;
 
-  constructor(hexapod_leg: any, target_tip_pos: any) {
+  constructor(hexapod_leg: any, target_tip_pos: any, initValues?: number[]) {
     this.leg = hexapod_leg;
     this.joint_count = hexapod_leg.joint_count || 3;
     this.target_tip_pos = target_tip_pos;
+    this.initValues = initValues && initValues.length === this.joint_count ? initValues : null;
   }
 
   calc_distance(values: number[]) {
@@ -57,10 +61,9 @@ export class PosCalculator {
         gradients.push(this.calc_distance(plus) - this.calc_distance(minus));
       }
 
-      // Update each joint — same accumulation strategy as v1, minus the unstable backtrack
+      // Update each joint — gradient descent + regularization pull toward init
       for (let i = 0; i < n; i++) {
         if (Math.sign(lastGradients[i]) !== Math.sign(gradients[i])) {
-          // Gradient sign flipped — overshot minimum, reset speed and reduce step
           speeds[i] = 0;
           step = Math.max(MIN_STEP, step * STEP_DECAY);
         } else {
@@ -68,7 +71,12 @@ export class PosCalculator {
         }
         lastGradients[i] = gradients[i];
         values[i] -= speeds[i];
-        // Clamp — keep as float (no rounding) to preserve gradient precision
+        // Regularization: tiny pull toward initial servo value
+        // Redundant DOFs (weak position gradient) drift back to init;
+        // primary DOFs are dominated by the much stronger position signal
+        if (this.initValues) {
+          values[i] -= REG_STRENGTH * (values[i] - this.initValues[i]);
+        }
         values[i] = Math.max(SERVO_MIN_VALUE, Math.min(SERVO_MAX_VALUE, values[i]));
       }
 

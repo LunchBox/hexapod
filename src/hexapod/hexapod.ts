@@ -386,6 +386,11 @@ export class Hexapod {
 
     this.draw_gait_guidelines();
     this.draw_gait_guide();
+
+    // Capture initial servo values as home reference for regularization + snap-back
+    for (let i = 0; i < this.legs.length; i++) {
+      this.legs[i].capture_servo_home();
+    }
   }
 
   draw_body() {
@@ -986,6 +991,15 @@ export class Hexapod {
     this.on_servo_values = this.get_servo_values();
   }
 
+  /** Gradually pull leg servo values back toward their home positions.
+   *  strength: 0..1 fraction to move toward home per call (e.g. 0.3 = 30%). */
+  snap_legs_to_init(strength: number, legIdxs?: number[]) {
+    const idxs = legIdxs || Array.from({ length: this.legs.length }, (_, i) => i);
+    for (const i of idxs) {
+      this.legs[i]?.snap_to_home(strength);
+    }
+  }
+
   after_status_change(send_cmd?: boolean) {
     this.display_values();
 
@@ -1151,6 +1165,7 @@ export class HexapodLeg {
   joint_count: number;
   _limbNames: string[];
   radial_angle: number;
+  _home_servos?: number[];
 
   constructor(bot: any, options: any) {
     this.bot = bot;
@@ -1317,8 +1332,28 @@ export class HexapodLeg {
   }
 
   set_tip_pos(new_pos: any): PosResult {
-    let calculator = new PosCalculator(this, new_pos);
+    let calculator = new PosCalculator(this, new_pos, this._home_servos);
     return calculator.run();
+  }
+
+  capture_servo_home() {
+    this._home_servos = [];
+    for (let i = 0; i < this.limbs.length; i++) {
+      this._home_servos.push(this.limbs[i].servo_value);
+    }
+  }
+
+  snap_to_home(strength: number) {
+    if (!this._home_servos) return;
+    const values: number[] = [];
+    for (let i = 0; i < this.limbs.length; i++) {
+      const target = this._home_servos[i];
+      const cur = this.limbs[i].servo_value;
+      const v = Math.round(cur + (target - cur) * strength);
+      values.push(Math.max(SERVO_MIN_VALUE, Math.min(SERVO_MAX_VALUE, v)));
+    }
+    this.set_servo_values(values);
+    this.bot.after_status_change();
   }
 }
 

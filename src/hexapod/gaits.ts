@@ -435,6 +435,8 @@ export class GaitController {
         this.bot.legs[idx].on_floor = true;
       }
     }
+    // Light snap-back after touchdown — pulls redundant DOFs toward home
+    this.bot.snap_legs_to_init(0.15, leg_idxs);
   }
 
   move_tips(leg_idxs: number[], fb_direction: number, lr_direction: number, rotate_direction: number) {

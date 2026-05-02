@@ -83,8 +83,11 @@ interface HexapodLegInstance {
   limbs: [LimbMesh, LimbMesh, LimbMesh, ThreeObj];
   set_servo_value(limb_idx: number, value: number): void;
   set_servo_values(values: number[]): void;
+  _home_servos?: number[];
   set_tip_pos(pos: any): PosResult;
   get_tip_pos(): any;
+  capture_servo_home(): void;
+  snap_to_home(strength: number): void;
 }
 
 interface GaitControllerInstance {
