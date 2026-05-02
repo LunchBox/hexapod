@@ -82,47 +82,95 @@ const targetModes = [
 
 // ── Gait cycle dot diagram ──────────────────────────────────────
 
-function GaitDiagram({ groups }: { groups: number[][] | null }) {
+interface LegDot {
+  x: number;
+  z: number;
+}
+
+function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayout: LegDot[] | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !groups || groups.length === 0) return;
+    if (!canvas || !groups || groups.length === 0 || !legLayout || legLayout.length === 0) return;
 
-    const n = Math.max(...groups.flat()) + 1;
     const steps = groups.length;
+    const n = legLayout.length;
 
-    const dotR = 4;
-    const stepGap = 18;
-    const legGap = 10;
-    const padX = 14;
-    const padY = 8;
+    // Compute bounding box of leg positions
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of legLayout) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z;
+      if (p.z > maxZ) maxZ = p.z;
+    }
+    const rangeX = maxX - minX || 1;
+    const rangeZ = maxZ - minZ || 1;
 
-    const w = padX * 2 + (steps - 1) * stepGap;
-    const h = padY * 2 + (n - 1) * legGap;
+    // Frame size per step (top-down mini view)
+    const framePad = 4;
+    const frameW = 56;
+    const frameH = 72;
+    const frameGap = 6;
+    const labelH = 10;
 
-    canvas.width = w;
-    canvas.height = h;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
+    const padX = 6;
+    const padY = 4;
+    const totalW = padX * 2 + steps * frameW + (steps - 1) * frameGap;
+    const totalH = padY * 2 + frameH + labelH;
+
+    canvas.width = totalW;
+    canvas.height = totalH;
+    canvas.style.width = totalW + 'px';
+    canvas.style.height = totalH + 'px';
 
     const ctx = canvas.getContext('2d')!;
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, totalW, totalH);
+
+    // Scale: fit leg positions into frame (preserving aspect ratio)
+    const scale = Math.min(
+      (frameW - framePad * 2) / rangeX,
+      (frameH - framePad * 2) / rangeZ,
+    );
+    const cx = frameW / 2;  // center X within frame
+    const cz = frameH / 2;  // center Z within frame
+
+    const dotR = 3.5;
 
     for (let s = 0; s < steps; s++) {
       const lifted = new Set(groups[s]);
+      const fx = padX + s * (frameW + frameGap); // frame left edge
+
+      // Body outline (faint rectangle/ellipse)
+      const bodyL = cx - (rangeX / 2) * scale;
+      const bodyR = cx + (rangeX / 2) * scale;
+      const bodyT = cz - (rangeZ / 2) * scale;
+      const bodyB = cz + (rangeZ / 2) * scale;
+      ctx.strokeStyle = '#555';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(fx + bodyL, padY + bodyT, bodyR - bodyL, bodyB - bodyT);
+
+      // Leg dots
       for (let l = 0; l < n; l++) {
-        const x = padX + s * stepGap;
-        const y = padY + l * legGap;
+        const p = legLayout[l];
+        const dx = fx + cx + (p.x - (minX + maxX) / 2) * scale;
+        const dy = padY + cz + (p.z - (minZ + maxZ) / 2) * scale;
         ctx.beginPath();
-        ctx.arc(x, y, dotR, 0, Math.PI * 2);
-        ctx.fillStyle = lifted.has(l) ? '#e04040' : '#888';
+        ctx.arc(dx, dy, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = lifted.has(l) ? '#e04040' : '#999';
         ctx.fill();
       }
-    }
-  }, [groups]);
 
-  if (!groups || groups.length === 0) return null;
+      // Step label
+      ctx.fillStyle = '#666';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(s), fx + cx, padY + frameH + labelH);
+    }
+  }, [groups, legLayout]);
+
+  if (!groups || groups.length === 0 || !legLayout || legLayout.length === 0) return null;
 
   return (
     <canvas
@@ -516,7 +564,10 @@ export default function ControlPanel() {
         })()}
       </fieldset>
 
-      <GaitDiagram groups={botRef.current?.gait_controller?.gaits[gait] ?? null} />
+      <GaitDiagram
+        groups={botRef.current?.gait_controller?.gaits[gait] ?? null}
+        legLayout={botRef.current?.leg_layout?.map((l: any) => ({ x: l.x, z: l.z })) ?? null}
+      />
 
       <fieldset className="btns">
         <legend>...</legend>
