@@ -261,6 +261,11 @@ export class Hexapod {
   apply_attributes(options: any) {
     this.options = options;
 
+    // Invalidate saved body home — old tip positions are incompatible
+    // with new leg geometry (different lengths, DOF, leg count, etc.)
+    delete this.options._body_home;
+    set_bot_options(this.options);
+
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
@@ -373,8 +378,9 @@ export class Hexapod {
       this.body_mesh.position.set(h.px, h.py, h.pz);
       this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
       this.body_mesh.updateMatrixWorld();
-      if (h.tips) {
-        for (let i = 0; i < Math.min(this.legs.length, h.tips.length); i++) {
+      // Only restore tips if count matches current leg count, otherwise re-putdown
+      if (h.tips && h.tips.length === this.legs.length) {
+        for (let i = 0; i < this.legs.length; i++) {
           const t = h.tips[i];
           this.legs[i].set_tip_pos(new THREE.Vector3(t.x, t.y, t.z));
         }
