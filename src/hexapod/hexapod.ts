@@ -261,6 +261,14 @@ export class Hexapod {
   apply_attributes(options: any) {
     this.options = options;
 
+    // Invalidate saved body home if leg geometry changed
+    if (options._body_home) {
+      const prev = options._prev_leg_count;
+      const cur = options.leg_count || 6;
+      if (prev !== cur) { delete options._body_home; set_bot_options(options); }
+      options._prev_leg_count = cur;
+    }
+
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
@@ -366,13 +374,20 @@ export class Hexapod {
     this.putdown_tips();
     this.auto_level_body();
 
-    // Restore saved body pose (position + rotation only, tips re-solve via IK)
+    // Restore saved body pose (position + rotation + body-local tips)
     if (this.options._body_home) {
       const h = this.options._body_home;
       this.body_mesh.position.set(h.px, h.py, h.pz);
       this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
       this.body_mesh.updateMatrixWorld();
-      this.putdown_tips();
+      if (h.tips && h.tips.length === this.legs.length) {
+        for (let i = 0; i < this.legs.length; i++) {
+          const t = h.tips[i];
+          this.legs[i].set_tip_pos(this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z)));
+        }
+      } else {
+        this.putdown_tips();
+      }
     }
 
     this.draw_gait_guidelines();
@@ -946,11 +961,13 @@ export class Hexapod {
     this.transform_body(opts);
   }
 
-  /** Persist current body position/rotation so Adjust changes survive refresh */
+  /** Persist body pose + body-local tip positions so Adjust changes survive refresh */
   save_body_home() {
+    const tips = this.get_tip_pos();
     this.options._body_home = {
       px: this.body_mesh.position.x, py: this.body_mesh.position.y, pz: this.body_mesh.position.z,
       rx: this.body_mesh.rotation.x, ry: this.body_mesh.rotation.y, rz: this.body_mesh.rotation.z,
+      tips: tips.map((t: any) => this.body_mesh.worldToLocal(t.clone())),
     };
     set_bot_options(this.options);
   }
