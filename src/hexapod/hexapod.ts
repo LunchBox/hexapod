@@ -295,12 +295,12 @@ export class Hexapod {
     this.on_servo_values = null;
     this.draw();
 
-    // Reset all servos to midpoint so joint angles match init_angles.
+    // Reset servos to midpoint so joint angles match init_angles.
     // putdown_tips() during draw() runs IK which offsets servo values —
     // reverting to 1500 makes legs show their pure design geometry.
+    // Only iterate joint_count (exclude tip at end of limbs array).
     for (let i = 0; i < this.legs.length; i++) {
-      const limbCount = this.legs[i].limbs.length;
-      for (let j = 0; j < limbCount; j++) {
+      for (let j = 0; j < this.legs[i].joint_count; j++) {
         this.legs[i].set_servo_value(j, 1500);
       }
       this.legs[i].capture_servo_home();
