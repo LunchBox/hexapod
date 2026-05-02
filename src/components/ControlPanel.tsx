@@ -63,7 +63,7 @@ function getGaitGroups(bot: any): GaitGroup[] {
     });
   }
   // Sort groups by k (wave=1, ripple=2, etc.)
-  const kOrder = ['wave', 'ripple', 'tripod', 'quad'];
+  const kOrder = Object.keys(K_LABELS);
   result.sort((a, b) => kOrder.indexOf(a.prefix) - kOrder.indexOf(b.prefix));
   return result;
 }
