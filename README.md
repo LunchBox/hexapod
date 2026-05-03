@@ -1,4 +1,4 @@
-# JS Hexapod ver.0.8.0
+# JS Hexapod ver.0.9.0
 
 Three.js 3D hexapod robot simulator with optional physical bot control via Socket.IO.
 
@@ -15,11 +15,15 @@ npm run lint     # ESLint
 ## Features
 
 - **3D Preview** — OrbitControls, grid, mesh/bone/points draw modes
-- **Gait Engine** — tripod, ripple, quad, wave, dual_tripod gaits with power/efficient/fast modes
+- **Gait Engine** — tripod, ripple, quad, wave, dual_tripod gaits with power/efficient/body_first/fast modes
 - **Inverse Kinematics** — gradient-descent PosCalculator, no trig-based joint computation
-- **Leg Editor** — 2D canvas drag-to-adjust segment lengths and angles, per-leg DOF support
+- **Servo Speed Simulation** — configurable servo rotation speed (units/sec), 60fps keyframe animation
+- **Physics Modes** — None (instant tip teleport) / Servo Constraint (realistic servo speed simulation)
+- **Micro Steps** — subdivide body movement into N keyframes for stable IK during large displacements
+- **Multi-leg Constraint Solver** — PhysicsSolver coordinates all legs simultaneously during body movement
+- **Leg Editor** — 2D canvas drag-to-adjust segment lengths and angles, per-leg DOF support, per-segment IK feedback
 - **Servo Control** — 18-servo sliders with real-time command display and time chart
-- **Physical Bot** — Socket.IO to `localhost:8888`, servo pulse command protocol
+- **Physical Bot** — Socket.IO to `localhost:8888`, servo pulse command protocol (`#0 P1500 #1 P1500 ... T500`)
 - **Config Persistence** — localStorage save/load, export/import JSON profiles, undo/redo
 - **Random Generator** — one-click random bot parameters
 
@@ -49,6 +53,7 @@ src/
     gait_configs.ts           # Preset gait definitions (wave, ripple, tripod, quad)
     gait_generator.ts         # Runtime gait filtering and validation
     pos_calculator.ts         # Gradient-descent IK solver
+    physics_solver.ts         # Multi-leg constraint solver
     scene.ts                  # initScene — Three.js setup
     joystick2.ts              # Canvas-based 2D joystick
     defaults.ts               # Constants, DEFAULT_HEXAPOD_OPTIONS
@@ -67,6 +72,10 @@ src/
 - **No trig for joints** — `PosCalculator` uses gradient descent, never sin/cos/atan2
 - **guide_pos** is the unified reference frame for all gait tip/body movement
 - **Gait step factors**: tips move by full step, body by `step / leg_groups.length * 3`
+- **Servo Constraint principle**: animation reflects physical reality — servos rotate at constant speed independently, different arrival times are correct, never fake synchronization
+- **Keyframe animation**: unified `_servo_keyframes` / `_mesh_keyframes` arrays replace old single-target fields; per-leg segment advancement is independent
+
+See `CLAUDE.md` for full non-negotiable design rules. See `CLAUDE_CN.md` for Chinese version.
 
 ## Three.js
 
