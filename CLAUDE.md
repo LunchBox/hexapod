@@ -64,6 +64,7 @@ src/
     scene.ts                     # initScene(container) — Three.js setup, returns {scene, camera, ...}
     joystick2.ts                 # JoyStick class (canvas-based, accepts element or selector)
     pos_calculator.ts            # Inverse kinematics: gradient-descent solver for tip→servo values
+    physics_solver.ts            # Multi-leg constraint solver (PhysicsSolver.solveAll)
     hexapod.ts                   # Hexapod + HexapodLeg classes, layout computation, config helpers
     gaits.ts                     # GaitController + GaitAction hierarchy (standby, move, internal, putdown)
     gait_configs.ts              # Preset gait definitions by leg count (wave, ripple, tripod, quad)
@@ -151,3 +152,104 @@ Follow the legacy scaling convention:
 - **Tips**: move by full step (`fb_step`, `lr_step`, `rotate_step`)
 - **Body**: move by `step / leg_groups.length * 3`
 - Do NOT use `(n-1)/n` factors or negate rotation direction for tips; tips and body rotate in the same direction
+
+### Servo constraint principle — animation MUST reflect physical reality
+
+There are two physics modes (toggled in ControlPanel, stored as `options.physics_mode`):
+
+**None** (`'none'`): Tips teleport instantly to targets. Servos snap to computed values. `hold_time` uses legacy `SERVO_VALUE_TIME_UNIT` formula (or 0 in manual mode). No animation. This is the original pre-animation behavior.
+
+**Servo Constraint** (`'servo_constraint'`): Each servo has a fixed rotation speed (`servo_speed`, units/sec). The simulation models real servo physics:
+- Every servo rotates at **constant speed** toward its target — same speed for all joints
+- Joints with larger deltas take longer; joints with smaller deltas finish earlier — **different arrival times**
+- During body movement, **tip drift is physically real** — when some servos finish before others, the tip position deviates. This is NOT a bug; real hardware behaves identically
+- `hold_time = max(|delta|) / servo_speed * 1000` — gait waits for the slowest servo before the next step
+
+**NEVER artificially synchronize servo timing to make animation "look better."** The animation is a simulation output, not a visual effect. Adding fake uniform timing (e.g., forcing all joints to finish together) violates the servo constraint principle.
+
+### Keyframe animation system (replaced single-target fields)
+
+The animation system was refactored to use **keyframe arrays** instead of individual start/target fields. Old fields that NO LONGER EXIST:
+- `leg._anim_targets`, `leg._anim_starts`, `leg._anim_start_time`
+- `bot._mesh_start_pos`, `bot._mesh_target_pos`, `bot._mesh_start_rotY`, `bot._mesh_target_rotY`, `bot._mesh_anim_start`, `bot._mesh_anim_duration`
+
+**Current fields:**
+- `Hexapod._mesh_keyframes: {pos, rotY}[]` — N+1 mesh poses (N = micro_steps)
+- `Hexapod._segment_durations: number[]` — N durations in ms, one per segment
+- `Hexapod._current_segment: number` — which segment is playing
+- `Hexapod._segment_start_time: number` — when current segment began (performance.now)
+- `HexapodLeg._servo_keyframes: number[][]` — N+1 servo value arrays per leg
+- `HexapodLeg._current_segment: number` — segment index (independent per leg)
+- `HexapodLeg._segment_start_time: number` — when current segment began
+
+**Animation flow:**
+- `move_body()` → computes keyframes → calls `apply_physics_keyframes()` to store them
+- `set_tip_pos()` (standalone, no body movement) → creates 2 keyframes `[start, target]`
+- `update_servo_animations()` (rAF, 60fps): interpolates mesh + legs between adjacent keyframes
+- `update_animation()` (per leg): each leg independently advances its own `_current_segment` based on per-segment servo deltas
+
+**Key rule**: Each leg's `_current_segment` advances independently. The mesh has its own `_current_segment`. They are NOT synchronized — legs can finish a segment before or after the mesh. This is correct for servo constraint (independent servo speeds).
+
+### Micro steps — subdividing body movement
+
+`options.micro_steps` (default 1, range 1–20, session-only, slider in ControlPanel > Physics).
+
+When `micro_steps > 1`, body movement is subdivided into N evenly-spaced keyframes. At each keyframe, IK is solved for ALL legs at the intermediate body pose. This reduces per-segment linear interpolation error (nonlinear kinematics cause tip drift during linear interpolation; smaller segments = less error).
+
+- `micro_steps = 1`: one segment, same as original behavior
+- `micro_steps = 5`: five segments, each 1/5 the body delta, smoother tip tracking
+
+**Computation** in `move_body()` servo constraint path:
+1. Build N+1 mesh keyframes (evenly spaced from start to target)
+2. Keyframe 0 = current rendered servo values
+3. For each keyframe k ≥ 1: reset all legs to kf0 servos, move mesh to kf[k], run `PhysicsSolver.solveAll()` → servo keyframe k
+4. Compute `_segment_durations[k] = max(|servoKf[k+1] - servoKf[k]|) / servo_speed * 1000`
+
+**Resetting to kf0 before each solve is CRITICAL.** PosCalculator starts from current `limb.servo_value`. If we don't reset, each keyframe's solve drifts from the previous result toward different local minima, causing locked tips to slide.
+
+### PhysicsSolver — multi-leg constraint solver
+
+`src/hexapod/physics_solver.ts` — pure computation, no DOM, no persistent Three.js mutation.
+
+```typescript
+PhysicsSolver.solveAll(bot, targets: THREE.Vector3[]): PhysicsSolverResult
+```
+
+- `targets[i]` is the world-space target for leg i's tip
+- The caller must move the body (mesh/body_mesh) to the target pose BEFORE calling
+- Internally runs `PosCalculator` for each leg independently
+- Returns `{ success, servoTargets, legResults }`
+
+**Caller's responsibility**: compute explicit world targets for all legs:
+- Locked legs (on_floor): target = original world tip position (tip stays fixed in world space)
+- Free legs (floating): target = body-local tip transformed through new body pose (tip follows body)
+
+### Reference line system
+
+`guideline`, `left_gl`, `right_gl` are children of `this.mesh`. They show lines from body center to tip positions in mesh-local space.
+
+- **Vertex source**: `_guide_local_positions` (stable home positions), NOT current animated tip positions
+- **`guideline`**: body → home tips
+- **`left_gl`**: same vertices, Object3D.rotation.y = +rotate_step (shows rotation target)
+- **`right_gl`**: same vertices, Object3D.rotation.y = -rotate_step
+
+**`adjust_gait_guidelines()` MUST NOT be called during animation.** It is called only at stable states:
+- `apply_attributes()` — bot rebuilt
+- rotate_step changes
+- After `_body_home` restoration
+
+**`sync_guide_circles()` IS called during animation** — guide circles are world-space ground markers that track current tip positions, not reference indicators.
+
+### _body_home restoration order
+
+`apply_attributes()` flow (order matters):
+1. `draw()` — geometry, laydown, putdown_tips, auto_level_body, draw_gait_guidelines, draw_gait_guide
+2. Servo reset to 1500 (init_angles baseline)
+3. `laydown()`, `sync_guide_circles()`
+4. `_body_home` restoration (body pose + tips, tips only on initial build)
+5. `laydown()` — re-ground after restoration
+6. `sync_guide_circles()`
+7. **Rebuild `_guide_local_positions`** from current tip positions
+8. `adjust_gait_guidelines()` — MUST be after step 7
+
+`_body_home.save_body_home()` uses `history.save()` (not `set_bot_options()` directly) to keep `history._lastSaved` in sync.
