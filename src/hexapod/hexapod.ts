@@ -1525,7 +1525,8 @@ export class HexapodLeg {
     const kf0 = kfs[this._current_segment];
     const kf1 = kfs[this._current_segment + 1];
 
-    // Duration = time needed for the joint with largest delta in this segment
+    // Each joint moves at constant servo_speed; joints with larger deltas take longer.
+    // Duration = time needed for the joint with the largest delta in this segment.
     let maxDelta = 0;
     for (let i = 0; i < this.joint_count; i++) {
       maxDelta = Math.max(maxDelta, Math.abs(kf1[i] - kf0[i]));
