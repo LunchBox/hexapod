@@ -526,6 +526,12 @@ export class GaitController {
 
       // Solve IK at each intermediate keyframe
       for (let k = 1; k <= microSteps; k++) {
+        // Reset all legs to keyframe-0 servo values before each solve
+        // so PosCalculator starts from a consistent initial state
+        for (let i = 0; i < totalLegs; i++) {
+          this.bot.legs[i].set_servo_values(servoKfs[i][0]);
+        }
+
         this.bot.mesh.position.copy(meshKfs[k].pos);
         this.bot.mesh.rotation.y = meshKfs[k].rotY;
         this.bot.mesh.updateMatrixWorld();
