@@ -604,20 +604,6 @@ export class GaitController {
         segmentDurs.push((maxDelta / speed) * 1000);
       }
 
-      // Apply light homeward bias to each leg's final keyframe.
-      // Counteracts servo drift accumulated over many gait cycles
-      // (IK solves tend to push servos away from home toward extremes).
-      // Each body movement pulls ~12% toward home; ~10 moves = 72% effective.
-      const HOME_BIAS = 0.12;
-      for (let i = 0; i < totalLegs; i++) {
-        const home = this.bot.legs[i]._home_servos;
-        if (!home) continue;
-        const finalKf = servoKfs[i][servoKfs[i].length - 1];
-        for (let j = 0; j < finalKf.length; j++) {
-          finalKf[j] += HOME_BIAS * ((home[j] || 1500) - finalKf[j]);
-        }
-      }
-
       // Revert mesh to start; store keyframes
       this.bot.mesh.position.copy(startPos);
       this.bot.mesh.rotation.y = startRotY;
