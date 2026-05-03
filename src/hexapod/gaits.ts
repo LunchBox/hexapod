@@ -604,17 +604,23 @@ export class GaitController {
         segmentDurs.push((maxDelta / speed) * 1000);
       }
 
-      // Apply light homeward bias to each leg's final keyframe.
-      // Counteracts servo drift accumulated over many gait cycles
-      // (IK solves tend to push servos away from home toward extremes).
-      // Each body movement pulls ~12% toward home; ~10 moves = 72% effective.
-      const HOME_BIAS = 0.12;
+      // Apply homeward bias to the final keyframe of floating legs.
+      // During the swing phase their tips are not constrained, so a
+      // strong pull toward home preserves natural leg shape.
+      // Locked legs are excluded — their tip lock constraint takes
+      // priority; they are restored via snap_legs_to_init() on touchdown.
+      const HOME_BIAS = 0.25;
       for (let i = 0; i < totalLegs; i++) {
+        if (this.bot.legs[i].on_floor) continue;
         const home = this.bot.legs[i]._home_servos;
         if (!home) continue;
-        const finalKf = servoKfs[i][servoKfs[i].length - 1];
-        for (let j = 0; j < finalKf.length; j++) {
-          finalKf[j] += HOME_BIAS * ((home[j] || 1500) - finalKf[j]);
+        const kfs = servoKfs[i];
+        // Pull every keyframe (not just final) so the whole animation
+        // arc stays near home, not just the endpoint.
+        for (let k = 1; k < kfs.length; k++) {
+          for (let j = 0; j < kfs[k].length; j++) {
+            kfs[k][j] += HOME_BIAS * ((home[j] || 1500) - kfs[k][j]);
+          }
         }
       }
 
