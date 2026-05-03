@@ -510,9 +510,10 @@ export default function ControlPanel() {
         <a href="#" className={`control_btn${physicsMode === 'servo_constraint' ? ' active' : ''}`}
           onClick={(e) => { e.preventDefault(); setPhysicsMode('servo_constraint'); }}>Servo Constraint</a>
         <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-          <span>Micro Steps:</span>
+          <span>Min Micro Steps:</span>
           <input type="range" min={1} max={20} step={1} value={microSteps}
             style={{ width: 80 }}
+            title="Minimum micro steps per body movement. Adaptive algorithm auto-increases for large displacements (max auto: 10)."
             onChange={(e) => setMicroSteps(parseInt(e.target.value))} />
           <span style={{ fontFamily: 'monospace', width: 20 }}>{microSteps}</span>
         </div>
