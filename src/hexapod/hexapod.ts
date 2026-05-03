@@ -656,20 +656,6 @@ export class Hexapod {
     this.mesh.add(this.right_gl);
   }
 
-  /** Rebuild _guide_local_positions from current tip world positions,
-   *  then update reference lines. Call at stable states — after body
-   *  movement animation completes or after tips are placed on ground. */
-  rebuild_guide_references() {
-    this.mesh.updateMatrixWorld();
-    this._guide_local_positions = [];
-    for (let i = 0; i < this.legs.length; i++) {
-      const worldPos = this.legs[i].get_tip_pos();
-      this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
-    }
-    this._guide_local_positions.push(new THREE.Vector3(0, 0, 0));
-    this.adjust_gait_guidelines();
-  }
-
   adjust_gait_guidelines() {
     if (!this.guideline) return;
     const homePositions = this._guide_local_positions;
@@ -1034,10 +1020,9 @@ export class Hexapod {
     if (anyAnimating) {
       this.mesh.updateMatrixWorld();
 
-      // Only run drift correction + rebuild reference lines at animation
-      // completion, not mid-segment, so it doesn't fight keyframe interpolation.
+      // Only run drift correction at animation completion (not mid-segment),
+      // so it doesn't fight the keyframe interpolation during continuous movement.
       if (meshJustCompleted) {
-        // --- drift correction for locked legs ---
         const DRIFT_THRESHOLD = 3.0;
         for (let i = 0; i < this.legs.length; i++) {
           const leg = this.legs[i];
@@ -1045,6 +1030,8 @@ export class Hexapod {
           const currentTip = leg.get_tip_pos();
           const drift = currentTip.distanceTo(leg._locked_tip_target);
           if (drift > DRIFT_THRESHOLD) {
+            // Sync logical servo_value with rendered state so IK starts from
+            // current animated joint positions, not stale pre-animation values
             for (let j = 0; j < leg.joint_count; j++) {
               leg.limbs[j].servo_value = Math.round(leg.limbs[j]._rendered_servo_value);
             }
@@ -1056,9 +1043,6 @@ export class Hexapod {
             }
           }
         }
-
-        // --- rebuild reference lines after body movement ---
-        this.rebuild_guide_references();
       }
 
       this.sync_guide_circles();
