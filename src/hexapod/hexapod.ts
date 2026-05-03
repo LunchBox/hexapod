@@ -231,6 +231,12 @@ export class Hexapod {
   right_gl: any;
   center_offset: number;
   hold_time: number;
+  servo_speed: number;
+  _servo_anim_disabled: boolean = true;
+  _mesh_keyframes: { pos: any; rotY: number }[] | null = null;
+  _segment_durations: number[] = [];
+  _current_segment: number = 0;
+  _segment_start_time: number = 0;
   time_interval_stack: number[];
   onServoUpdate: (() => void) | null;
   leg_layout: LegLayout[];
@@ -269,9 +275,11 @@ export class Hexapod {
       options._prev_leg_count = cur;
     }
 
+    this._servo_anim_disabled = true; // no animation during full rebuild
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
+    this.servo_speed = this.options.servo_speed ?? 2000;
 
     const isInitialBuild = !this.mesh;
 
@@ -326,8 +334,7 @@ export class Hexapod {
       }
       this.laydown();
       this.sync_guide_circles();
-      this.adjust_gait_guidelines();
-      // Rebuild guide local positions from restored state so gait targets are correct
+      // Rebuild guide local positions from restored state so gait targets + guidelines are correct
       this.mesh.updateMatrixWorld();
       this._guide_local_positions = [];
       for (let i = 0; i < this.legs.length; i++) {
@@ -335,6 +342,7 @@ export class Hexapod {
         this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
       }
       this._guide_local_positions.push(new THREE.Vector3(0, 0, 0));
+      this.adjust_gait_guidelines();
     }
 
     this.gait_controller = new GaitController(this);
@@ -650,29 +658,33 @@ export class Hexapod {
 
   adjust_gait_guidelines() {
     if (!this.guideline) return;
+    const homePositions = this._guide_local_positions;
+    if (!homePositions || homePositions.length === 0) return;
+
     this.mesh.updateMatrixWorld();
     const bodyPos = this.body_mesh.position.clone();
-    // Update tip-position lines and guide dots
+
+    // Update guideline lines from stable home positions (not current animated tips)
     for (let idx = 0; idx < this.legs.length; idx++) {
-      const worldTip = this.legs[idx].get_tip_pos();
-      const localTip = this.mesh.worldToLocal(worldTip.clone());
-      // guideline lines
+      const homeLocal = homePositions[idx];
+      if (!homeLocal) continue;
       const line = this.guideline.children[idx] as any;
       if (line) {
         line.geometry.vertices[0].copy(bodyPos);
-        line.geometry.vertices[1].copy(localTip);
+        line.geometry.vertices[1].copy(homeLocal);
         line.geometry.verticesNeedUpdate = true;
       }
     }
-    // Update rotation clones
+
+    // Update rotation clones with same home positions
     const updateClone = (clone: any) => {
       for (let idx = 0; idx < this.legs.length; idx++) {
         const line = clone.children[idx] as any;
         if (!line) continue;
-        const worldTip = this.legs[idx].get_tip_pos();
-        const localTip = this.mesh.worldToLocal(worldTip.clone());
+        const homeLocal = homePositions[idx];
+        if (!homeLocal) continue;
         line.geometry.vertices[0].copy(bodyPos);
-        line.geometry.vertices[1].copy(localTip);
+        line.geometry.vertices[1].copy(homeLocal);
         line.geometry.verticesNeedUpdate = true;
       }
     };
@@ -731,12 +743,13 @@ export class Hexapod {
 
   get_min_interval(new_servo_values: number[], old_servo_values: number[]) {
     let len = new_servo_values.length;
-    let intervals = [DEFAULT_FRAMES_INTERVAL];
+    let max_delta = 0;
     for (let i = 0; i < len; i++) {
-      let temp = Math.abs(new_servo_values[i] - old_servo_values[i]) * SERVO_VALUE_TIME_UNIT;
-      intervals.push(temp);
+      max_delta = Math.max(max_delta, Math.abs(new_servo_values[i] - old_servo_values[i]));
     }
-    return Math.round(Math.max.apply(null, intervals));
+    const speed = this.servo_speed || 2000;
+    const ms = (max_delta / speed) * 1000;
+    return Math.max(DEFAULT_FRAMES_INTERVAL, Math.round(ms));
   }
 
   apply_status(status: any) {
@@ -937,6 +950,76 @@ export class Hexapod {
     this.after_status_change();
   }
 
+  /** Populate keyframe animation state from pre-computed keyframes.
+   *  Called by move_body() after building mesh + servo keyframes. */
+  apply_physics_keyframes(
+    meshKfs: { pos: any; rotY: number }[],
+    segmentDurs: number[],
+    servoKfs: number[][][],  // [legIdx][k][jointIdx]
+  ) {
+    const now = performance.now();
+
+    this._mesh_keyframes = meshKfs;
+    this._segment_durations = segmentDurs;
+    this._current_segment = 0;
+    this._segment_start_time = now;
+
+    for (let i = 0; i < this.legs.length; i++) {
+      const leg = this.legs[i];
+      leg._servo_keyframes = servoKfs[i];
+      leg._current_segment = 0;
+      leg._segment_start_time = now;
+
+      // Revert joints to keyframe[0] visual state for smooth animation start
+      const kf0 = servoKfs[i][0];
+      for (let j = 0; j < leg.joint_count; j++) {
+        leg._set_joint_rotation(j, kf0[j]);
+        leg.limbs[j]._rendered_servo_value = kf0[j];
+      }
+    }
+  }
+
+  /** Drive servo + mesh animation through keyframes. Called from rAF loop. */
+  update_servo_animations(now: number) {
+    const speed = this.servo_speed || 2000;
+    let anyAnimating = false;
+
+    // Mesh keyframe animation (shared timing for body movement)
+    if (this._mesh_keyframes && this._current_segment < this._segment_durations.length) {
+      anyAnimating = true;
+      const dur = this._segment_durations[this._current_segment];
+      const elapsed = now - this._segment_start_time;
+      const t = dur > 0.001 ? Math.min(1, elapsed / dur) : 1;
+
+      const kf0 = this._mesh_keyframes[this._current_segment];
+      const kf1 = this._mesh_keyframes[this._current_segment + 1];
+      this.mesh.position.x = kf0.pos.x + (kf1.pos.x - kf0.pos.x) * t;
+      this.mesh.position.z = kf0.pos.z + (kf1.pos.z - kf0.pos.z) * t;
+      this.mesh.rotation.y = kf0.rotY + (kf1.rotY - kf0.rotY) * t;
+
+      if (t >= 1) {
+        this._current_segment++;
+        this._segment_start_time = now;
+        if (this._current_segment >= this._segment_durations.length) {
+          this._mesh_keyframes = null;
+        }
+      }
+    }
+
+    // Leg servo keyframe animation
+    for (let i = 0; i < this.legs.length; i++) {
+      if (this.legs[i].is_animating()) {
+        anyAnimating = true;
+        this.legs[i].update_animation(now, speed);
+      }
+    }
+
+    if (anyAnimating) {
+      this.mesh.updateMatrixWorld();
+      this.sync_guide_circles();
+    }
+  }
+
   laydown() {
     console.log("-- laydown fired");
 
@@ -1019,16 +1102,43 @@ export class Hexapod {
     let el = document.querySelector("#servo_values");
     if (el) el.innerHTML = cmd;
 
-    if (this.sync_cmd) {
-      if (typeof send_cmd === "undefined" || send_cmd) {
-        this.send_cmd(cmd);
+    if (this.options.physics_mode === 'servo_constraint') {
+      // Servo constraint: timing driven by servo rotation speed
+      if (this.on_servo_values) {
         this.hold_time = this.get_min_interval(servo_values, this.on_servo_values);
-        this.on_servo_values = servo_values;
       } else {
         this.hold_time = 0;
       }
+      this.on_servo_values = servo_values;
+
+      if (this.sync_cmd) {
+        if (typeof send_cmd === "undefined" || send_cmd) {
+          this.send_cmd(cmd);
+        } else {
+          this.hold_time = 0;
+        }
+      }
     } else {
-      this.hold_time = 0;
+      // None mode: original timing logic (SERVO_VALUE_TIME_UNIT for sync, 0 otherwise)
+      if (this.sync_cmd) {
+        if (typeof send_cmd === "undefined" || send_cmd) {
+          this.send_cmd(cmd);
+          if (this.on_servo_values) {
+            let maxDelta = 0;
+            for (let i = 0; i < servo_values.length; i++) {
+              maxDelta = Math.max(maxDelta, Math.abs(servo_values[i] - this.on_servo_values[i]));
+            }
+            this.hold_time = Math.max(DEFAULT_FRAMES_INTERVAL, Math.round(maxDelta * SERVO_VALUE_TIME_UNIT));
+          } else {
+            this.hold_time = 0;
+          }
+          this.on_servo_values = servo_values;
+        } else {
+          this.hold_time = 0;
+        }
+      } else {
+        this.hold_time = 0;
+      }
     }
 
     let el2 = document.querySelector("#on_servo_values");
@@ -1177,6 +1287,9 @@ export class HexapodLeg {
   _limbNames: string[];
   radial_angle: number;
   _home_servos?: number[];
+  _servo_keyframes: number[][] | null = null;
+  _current_segment: number = 0;
+  _segment_start_time: number = 0;
 
   constructor(bot: any, options: any) {
     this.bot = bot;
@@ -1275,6 +1388,7 @@ export class HexapodLeg {
     mesh.init_radius = degree_to_radians(opt.init_angle);
     mesh.init_angle = opt.init_angle;
     mesh.servo_value = opt.servo_value;
+    mesh._rendered_servo_value = opt.servo_value;
     mesh.servo_idx = opt.servo_idx;
     mesh.revert = opt.revert;
 
@@ -1318,7 +1432,8 @@ export class HexapodLeg {
     }
   }
 
-  set_servo_value(limb_idx: number, value: number) {
+  /** Apply a raw servo value to joint rotation without updating logical state. */
+  _set_joint_rotation(limb_idx: number, value: number) {
     let delta = value - (SERVO_MAX_VALUE - SERVO_MIN_VALUE) / 2 - SERVO_MIN_VALUE;
     let delta_radius = ((1.0 * delta) / (SERVO_MAX_VALUE - SERVO_MIN_VALUE)) * Math.PI;
 
@@ -1333,9 +1448,13 @@ export class HexapodLeg {
     } else {
       limb_mesh.rotation.z = this.mirror * limb_mesh.init_radius + delta_radius;
     }
+  }
 
+  set_servo_value(limb_idx: number, value: number) {
+    this._set_joint_rotation(limb_idx, value);
     let _value = Math.round(value);
     this.limbs[limb_idx].servo_value = _value;
+    this.limbs[limb_idx]._rendered_servo_value = _value;
   }
 
   get_tip_pos() {
@@ -1343,8 +1462,32 @@ export class HexapodLeg {
   }
 
   set_tip_pos(new_pos: any): PosResult {
+    const animate = !this.bot._servo_anim_disabled && (this.bot.servo_speed ?? 0) > 0;
+    let preRendered: number[] | null = null;
+    if (animate) {
+      preRendered = [];
+      for (let i = 0; i < this.joint_count; i++) {
+        preRendered.push(this.limbs[i]._rendered_servo_value);
+      }
+    }
+
     let calculator = new PosCalculator(this, new_pos, this._home_servos);
-    return calculator.run();
+    const result = calculator.run();
+
+    if (animate && preRendered && result.success) {
+      this._servo_keyframes = [preRendered, result.values];
+      this._current_segment = 0;
+      this._segment_start_time = performance.now();
+      // Restore joints to pre-IK rendered positions for smooth animation start
+      for (let i = 0; i < this.joint_count; i++) {
+        this._set_joint_rotation(i, preRendered[i]);
+        this.limbs[i]._rendered_servo_value = preRendered[i];
+      }
+    } else {
+      this._servo_keyframes = null;
+    }
+
+    return result;
   }
 
   capture_servo_home() {
@@ -1365,6 +1508,48 @@ export class HexapodLeg {
     }
     this.set_servo_values(values);
     this.bot.after_status_change();
+  }
+
+  is_animating(): boolean {
+    return this._servo_keyframes !== null;
+  }
+
+  /** Advance servo animation through keyframes. Returns true if still in progress. */
+  update_animation(now: number, speed: number): boolean {
+    const kfs = this._servo_keyframes;
+    if (!kfs || this._current_segment >= kfs.length - 1) {
+      this._servo_keyframes = null;
+      return false;
+    }
+
+    const kf0 = kfs[this._current_segment];
+    const kf1 = kfs[this._current_segment + 1];
+
+    // Duration = time needed for the joint with largest delta in this segment
+    let maxDelta = 0;
+    for (let i = 0; i < this.joint_count; i++) {
+      maxDelta = Math.max(maxDelta, Math.abs(kf1[i] - kf0[i]));
+    }
+    const durationMs = (maxDelta / speed) * 1000;
+    const elapsed = now - this._segment_start_time;
+    const t = durationMs > 0.001 ? Math.min(1, elapsed / durationMs) : 1;
+
+    for (let i = 0; i < this.joint_count; i++) {
+      const v = kf0[i] + (kf1[i] - kf0[i]) * t;
+      this._set_joint_rotation(i, v);
+      this.limbs[i]._rendered_servo_value = v;
+    }
+
+    if (t >= 1) {
+      this._current_segment++;
+      this._segment_start_time = now;
+      if (this._current_segment >= kfs.length - 1) {
+        this._servo_keyframes = null;
+        return false;
+      }
+    }
+
+    return true;
   }
 }
 

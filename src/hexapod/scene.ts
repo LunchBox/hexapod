@@ -74,6 +74,11 @@ export function initScene(container: HTMLElement) {
   }
 
   function update() {
+    // Drive servo animation from rAF loop for smooth 60fps interpolation
+    if ((appState as any).current_bot?.update_servo_animations) {
+      (appState as any).current_bot.update_servo_animations(performance.now());
+    }
+
     // Particle light animation
     let timer = Date.now() * 0.000025;
     particleLight.position.x = Math.sin(timer * 5) * 300;

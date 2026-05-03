@@ -414,6 +414,12 @@ export default function AttributesPanel() {
           title="How high leg tips lift during each gait step"
           onChange={(v) => applyConfig({ up_step: v })}
         />
+        <AttrSlider label="Servo Speed"
+          value={opts.servo_speed ?? 2000}
+          min={100} max={10000} step={100}
+          title="Servo rotation speed in units/sec. 2000 = full 180° sweep in 1 second."
+          onChange={(v) => applyConfig({ servo_speed: v })}
+        />
       </fieldset>
 
       {/* ── Body Attrs ── */}

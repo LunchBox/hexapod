@@ -38,6 +38,9 @@ interface HexapodOptions {
   fb_step: number;
   lr_step: number;
   up_step: number;
+  servo_speed: number;
+  physics_mode: 'none' | 'servo_constraint';
+  micro_steps?: number;
   first_servo_idx: number;
   leg_options: HexapodLegOptions[];
 }
@@ -58,6 +61,7 @@ interface ThreeObj {
 
 interface LimbMesh extends ThreeObj {
   servo_value: number;
+  _rendered_servo_value: number;
   servo_idx: number;
   revert: boolean;
   init_radius: number;

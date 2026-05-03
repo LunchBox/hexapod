@@ -17,6 +17,7 @@ export const SERVO_CURRENT_VALUE = 1500;
 export const MAX_ANGLE_UNIT = 60 / 120;
 export const SERVO_VALUE_TIME_UNIT = 120 / 60 * ANGLE_RANGE / (SERVO_MAX_VALUE - SERVO_MIN_VALUE);
 export const DEFAULT_MOVE_STEP = 30;
+export const DEFAULT_SERVO_SPEED = 2000; // servo units per second (full 180° sweep = 1 sec)
 
 // Body
 export const DEFAULT_BODY_WIDTH = 50;
@@ -96,6 +97,8 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   fb_step: 22,
   lr_step: 15,
   up_step: 10,
+  servo_speed: DEFAULT_SERVO_SPEED,
+  physics_mode: 'none',
 
   first_servo_idx: 0,
 

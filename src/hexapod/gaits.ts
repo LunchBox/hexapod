@@ -4,6 +4,7 @@ import {
   DEFAULT_HEXAPOD_OPTIONS, ACT_STANDBY, ACT_PUTDOWN_TIPS,
 } from './defaults.js';
 import { generateAllGaits } from './gait_generator.js';
+import { PhysicsSolver } from './physics_solver.js';
 
 // ── GaitAction (base) ──────────────────────────────────────────
 
@@ -329,6 +330,7 @@ export class GaitController {
     this.on_action = null;
     this.expected_action = null;
     this.fire_free = false;
+    this.bot._servo_anim_disabled = true;
     this.reset_steps();
   }
 
@@ -343,6 +345,11 @@ export class GaitController {
       this.actions[action_name].acting_idx = 0;
     }
     this.last_action = action_name;
+
+    // Enable servo animation only in servo_constraint mode
+    if (this.bot.options.physics_mode === 'servo_constraint') {
+      this.bot._servo_anim_disabled = false;
+    }
 
     let _send_cmd = this.actions[action_name].run();
     this.bot.after_status_change(_send_cmd);
@@ -397,6 +404,8 @@ export class GaitController {
 
   reset_tips_to_home() {
     const bot = this.bot;
+    const prevDisabled = bot._servo_anim_disabled;
+    bot._servo_anim_disabled = true; // no animation during reset
     bot.reset_guide_pos();
     bot.mesh.updateMatrixWorld();
     const localPositions = bot._guide_local_positions;
@@ -413,6 +422,7 @@ export class GaitController {
     }
     bot.adjust_gait_guidelines();
     bot.sync_guide_circles();
+    bot._servo_anim_disabled = prevDisabled;
   }
 
   legs_up(leg_idxs: number[], target_offset: number) {
@@ -472,17 +482,101 @@ export class GaitController {
     gp.position.z -= fb_offset / this.leg_groups.length * 3;
     gp.position.x -= lr_offset / this.leg_groups.length * 3;
 
-    // Body center world position from guide_pos (vertex at index N)
     let target_pos = this.bot.get_guide_pos(this.bot.legs.length);
-    this.bot.mesh.position.x = target_pos.x;
-    this.bot.mesh.position.z = target_pos.z;
+    let startPos = this.bot.mesh.position.clone();
+    let startRotY = this.bot.mesh.rotation.y;
+    let targetRotY = startRotY + rotate_offset / this.leg_groups.length * 3;
 
-    this.bot.mesh.rotation.y += rotate_offset / this.leg_groups.length * 3;
+    const useServoConstraint = this.bot.options.physics_mode === 'servo_constraint';
 
-    for (let idx = 0; idx < this.bot.legs.length; idx++) {
-      if (this.bot.legs[idx].on_floor === true) {
-        this.bot.legs[idx].set_tip_pos(current_tips_pos[idx]);
+    if (useServoConstraint) {
+      const microSteps = this.bot.options.micro_steps || 1;
+      const totalLegs = this.bot.legs.length;
+      const speed = this.bot.servo_speed || 2000;
+
+      // Pre-compute body-local tip positions (before mesh moves)
+      this.bot.mesh.updateMatrixWorld();
+      const bodyLocalTips: any[] = [];
+      for (let i = 0; i < totalLegs; i++) {
+        bodyLocalTips.push(this.bot.body_mesh.worldToLocal(current_tips_pos[i].clone()));
       }
+
+      // Save current rendered servo values (keyframe 0)
+      const servoKfs: number[][][] = []; // [legIdx][k][jointIdx]
+      for (let i = 0; i < totalLegs; i++) {
+        const kf0: number[] = [];
+        for (let j = 0; j < this.bot.legs[i].joint_count; j++) {
+          kf0.push(this.bot.legs[i].limbs[j]._rendered_servo_value);
+        }
+        servoKfs.push([kf0]);
+      }
+
+      // Build mesh keyframes
+      const dX = target_pos.x - startPos.x;
+      const dZ = target_pos.z - startPos.z;
+      const dRotY = targetRotY - startRotY;
+      const meshKfs: { pos: any; rotY: number }[] = [];
+      for (let k = 0; k <= microSteps; k++) {
+        const t = k / microSteps;
+        meshKfs.push({
+          pos: new THREE.Vector3(startPos.x + dX * t, startPos.y, startPos.z + dZ * t),
+          rotY: startRotY + dRotY * t,
+        });
+      }
+
+      // Solve IK at each intermediate keyframe
+      for (let k = 1; k <= microSteps; k++) {
+        this.bot.mesh.position.copy(meshKfs[k].pos);
+        this.bot.mesh.rotation.y = meshKfs[k].rotY;
+        this.bot.mesh.updateMatrixWorld();
+
+        const targets: any[] = [];
+        for (let i = 0; i < totalLegs; i++) {
+          if (this.bot.legs[i].on_floor) {
+            targets.push(current_tips_pos[i]);
+          } else {
+            targets.push(this.bot.body_mesh.localToWorld(bodyLocalTips[i].clone()));
+          }
+        }
+
+        const result = PhysicsSolver.solveAll(this.bot, targets);
+        for (let i = 0; i < totalLegs; i++) {
+          servoKfs[i].push(result.servoTargets[i]);
+        }
+      }
+
+      // Compute per-segment durations (max servo delta across all legs)
+      const segmentDurs: number[] = [];
+      for (let k = 0; k < microSteps; k++) {
+        let maxDelta = 0;
+        for (let i = 0; i < totalLegs; i++) {
+          const a = servoKfs[i][k];
+          const b = servoKfs[i][k + 1];
+          for (let j = 0; j < a.length; j++) {
+            maxDelta = Math.max(maxDelta, Math.abs(b[j] - a[j]));
+          }
+        }
+        segmentDurs.push((maxDelta / speed) * 1000);
+      }
+
+      // Revert mesh to start; store keyframes
+      this.bot.mesh.position.copy(startPos);
+      this.bot.mesh.rotation.y = startRotY;
+      this.bot.mesh.updateMatrixWorld();
+      this.bot.apply_physics_keyframes(meshKfs, segmentDurs, servoKfs);
+    } else {
+      // Temporarily move mesh to target so PosCalculator solves for the right servo values
+      this.bot.mesh.position.x = target_pos.x;
+      this.bot.mesh.position.z = target_pos.z;
+      this.bot.mesh.rotation.y = targetRotY;
+      this.bot.mesh.updateMatrixWorld();
+
+      for (let idx = 0; idx < this.bot.legs.length; idx++) {
+        if (this.bot.legs[idx].on_floor === true) {
+          this.bot.legs[idx].set_tip_pos(current_tips_pos[idx]);
+        }
+      }
+      // None mode: mesh stays at target, tips updated instantly (no animation)
     }
   }
 

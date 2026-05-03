@@ -197,6 +197,21 @@ export default function ControlPanel() {
   const [polyPlacement, setPolyPlacement] = useState(saved.polygon_leg_placement || 'vertex');
   const [oddOrientation, setOddOrientation] = useState(saved.polygon_odd_orientation || 'back');
   const [bodyHeightVal, setBodyHeightVal] = useState((saved.body_height || 20) / 2);
+  const [physicsMode, setPhysicsModeState] = useState<'none' | 'servo_constraint'>(
+    (saved.physics_mode as 'none' | 'servo_constraint') || 'none'
+  );
+  const [microSteps, setMicroStepsState] = useState(saved.micro_steps || 1);
+  const setMicroSteps = useCallback((v: number) => {
+    setMicroStepsState(v);
+    const b = botRef.current;
+    if (b) b.options.micro_steps = v;
+  }, [botRef]);
+
+  const setPhysicsMode = useCallback((mode: 'none' | 'servo_constraint') => {
+    setPhysicsModeState(mode);
+    const b = botRef.current;
+    if (b) b.options.physics_mode = mode;
+  }, [botRef]);
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
@@ -486,6 +501,21 @@ export default function ControlPanel() {
             {item.label}
           </a>
         ))}
+      </fieldset>
+
+      <fieldset className="btns">
+        <legend>Physics</legend>
+        <a href="#" className={`control_btn${physicsMode === 'none' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); setPhysicsMode('none'); }}>None</a>
+        <a href="#" className={`control_btn${physicsMode === 'servo_constraint' ? ' active' : ''}`}
+          onClick={(e) => { e.preventDefault(); setPhysicsMode('servo_constraint'); }}>Servo Constraint</a>
+        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+          <span>Micro Steps:</span>
+          <input type="range" min={1} max={20} step={1} value={microSteps}
+            style={{ width: 80 }}
+            onChange={(e) => setMicroSteps(parseInt(e.target.value))} />
+          <span style={{ fontFamily: 'monospace', width: 20 }}>{microSteps}</span>
+        </div>
       </fieldset>
 
       <fieldset className="btns">
