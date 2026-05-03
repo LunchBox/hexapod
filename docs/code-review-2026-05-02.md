@@ -227,3 +227,18 @@ TypeScript strict mode is disabled. Enabling it would catch many of the `any`-re
 | **P3 — Longer term** | Enable TypeScript strict mode incrementally (start with `noImplicitAny: false`, then tighten) | Ongoing | Type safety |
 | **P3 — Longer term** | Add unit tests for PosCalculator, gait generation, and utility functions | 1 week | Regression prevention |
 | **P4 — Future** | Upgrade Three.js to a modern ES module version, add `@types/three` | Major effort | Eliminates ~100 `any` casts |
+
+---
+
+## 7. Bug Fix Status (follow-up, 2026-05-03)
+
+All 4 bugs identified in this report have been fixed:
+
+| Bug | Description | Status |
+|-----|-------------|--------|
+| B1 | `clearInterval` on `setTimeout` result in `gaits.ts` | **Fixed** — replaced with `clearTimeout` |
+| B2 | Circular dependency `hexapod.ts` ↔ `history.ts` | **Fixed** — `history.ts` no longer imports from `hexapod.ts` |
+| B3 | Misspelled export `degree_to_redius` in `utils.ts` | **Fixed** — renamed to `degree_to_radians` with backward-compat alias |
+| B4 | Confusing `Array.slice()` arguments in `hexapod.ts` | **Fixed** — uses `slice(-max_number)` |
+
+Architecture recommendations (A1–A4), code quality issues (C1–C6), and accessibility concerns remain open.

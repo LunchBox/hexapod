@@ -1,4 +1,4 @@
-# JS Hexapod ver.0.9.0
+# JS Hexapod v0.8.0
 
 Three.js 3D hexapod robot simulator with optional physical bot control via Socket.IO.
 
@@ -15,7 +15,7 @@ npm run lint     # ESLint
 ## Features
 
 - **3D Preview** — OrbitControls, grid, mesh/bone/points draw modes
-- **Gait Engine** — tripod, ripple, quad, wave, dual_tripod gaits with power/efficient/body_first/fast modes
+- **Gait Engine** — tripod, ripple, quad, wave gaits with power/efficient/body_first/fast modes; systematic k-legs-lifted gait generation with balance validation and cyclic dedup
 - **Inverse Kinematics** — gradient-descent PosCalculator, no trig-based joint computation
 - **Servo Speed Simulation** — configurable servo rotation speed (units/sec), 60fps keyframe animation
 - **Physics Modes** — None (instant tip teleport) / Servo Constraint (realistic servo speed simulation)
@@ -40,7 +40,7 @@ src/
     ControlPanel.tsx          # Draw type, move mode, gaits, actions, joystick, keyboard
     AttributesPanel.tsx       # Body/leg geometry, DOF, legs, tip spread, Profile
     ServoPanel.tsx            # 18 servo sliders + end-position inputs
-    LegEditor.tsx             # 2D canvas joint editor
+    LegEditor.tsx             # 2D canvas joint editor with multi-leg editing
     StatusPanel.tsx           # Status history with play/apply
     CommandDisplay.tsx        # Current + last servo command
     TimeChart.tsx             # Command time interval chart
@@ -65,6 +65,8 @@ src/
     globals.d.ts              # Type declarations for legacy Three.js, Stats, Detector, THREEx
     hexapod.d.ts              # Core interfaces: HexapodOptions, HexapodLegOptions, LimbOptions
     css.d.ts                  # Module declaration for .css imports
+stylesheets/
+  application.css             # Original UI styles (imported by React app)
 ```
 
 ## Design Rules

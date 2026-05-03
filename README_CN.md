@@ -1,4 +1,4 @@
-# JS Hexapod ver.0.9.0
+# JS Hexapod v0.8.0
 
 基於 Three.js 的 3D 六足機器人模擬器，可通過 Socket.IO 控制實體機器人。
 
@@ -15,7 +15,7 @@ npm run lint     # ESLint
 ## 功能
 
 - **3D 預覽** — OrbitControls、網格、mesh/bone/points 繪製模式
-- **步態引擎** — tripod、ripple、quad、wave、dual_tripod 步態，支援 power/efficient/body_first/fast 模式
+- **步態引擎** — tripod、ripple、quad、wave 步態，支援 power/efficient/body_first/fast 模式；系統化的 k-legs-lifted 步態生成，具備平衡驗證和循環去重
 - **逆向運動學** — 梯度下降 PosCalculator，不使用三角函數計算關節
 - **Servo 轉速模擬** — 可配置 servo 轉速（單位/秒），60fps keyframe 動畫
 - **物理模式** — None（tip 瞬移）/ Servo Constraint（真實 servo 轉速模擬）
@@ -40,7 +40,7 @@ src/
     ControlPanel.tsx          # 繪製類型、移動模式、步態、動作、搖桿、鍵盤
     AttributesPanel.tsx       # 身體/腿部幾何、DOF、腿數、tip spread、設定檔
     ServoPanel.tsx            # 18 個 servo 滑塊 + 末端位置輸入
-    LegEditor.tsx             # 2D canvas 關節編輯器
+    LegEditor.tsx             # 2D canvas 關節編輯器，支援多腿編輯
     StatusPanel.tsx           # 狀態歷史，含播放/應用
     CommandDisplay.tsx        # 當前 + 上一個 servo 指令
     TimeChart.tsx             # 指令時間間隔圖表
@@ -65,6 +65,8 @@ src/
     globals.d.ts              # 舊 Three.js、Stats、Detector、THREEx 型別宣告
     hexapod.d.ts              # 核心介面：HexapodOptions、HexapodLegOptions、LimbOptions
     css.d.ts                  # .css 匯入模組宣告
+stylesheets/
+  application.css             # 原始 UI 樣式（由 React 匯入）
 ```
 
 ## 設計規則

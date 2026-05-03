@@ -28,6 +28,16 @@ npx tsc --noEmit # TypeScript 型別檢查
 
 尚無測試套件。
 
+## 代碼審查狀態
+
+2026-05-02 進行了全面代碼審查（`docs/code-review-2026-05-02.md`）。發現的 4 個 bug 狀態：
+- **B1**（`clearInterval` 用於 `setTimeout` 結果）— 已修復
+- **B2**（循環依賴 `hexapod.ts` ↔ `history.ts`）— 已修復（history.ts 不再從 hexapod.ts 匯入）
+- **B3**（拼寫錯誤 `degree_to_redius`）— 已修復（新增別名）
+- **B4**（令人困惑的 `slice()` 參數）— 已修復（使用 `slice(-max_number)`）
+
+架構建議仍待處理（詳見報告）。
+
 ## 專案結構
 
 ```
@@ -51,6 +61,7 @@ src/
     ServoPanel.tsx               # 18 個 servo 滑塊 + 末端位置輸入（每腿，命令式 DOM）
     AttributesPanel.tsx          # 身體/腿部幾何配置，localStorage 持久化
     LegEditor.tsx                # 2D canvas 關節編輯器，支援多腿編輯
+    LegEditor.css                # LegEditor 樣式
     StatusPanel.tsx              # 狀態歷史列表，含播放/應用
     CommandDisplay.tsx           # 當前 + 上一個 servo 指令字串
     TimeChart.tsx                # 指令時間間隔 canvas 圖表
@@ -64,6 +75,7 @@ src/
     scene.ts                     # initScene(container) — Three.js 設定
     joystick2.ts                 # JoyStick 類別（基於 canvas）
     pos_calculator.ts            # 逆向運動學：梯度下降求解器，tip→servo 值
+    pos_calculator_backup_2026-05-02.ts  # 重構前 PosCalculator 備份
     physics_solver.ts            # 多腿約束求解器 (PhysicsSolver.solveAll)
     hexapod.ts                   # Hexapod + HexapodLeg 類別、佈局計算、配置輔助
     gaits.ts                     # GaitController + GaitAction 階層
@@ -75,6 +87,7 @@ src/
     globals.d.ts                 # 舊 Three.js r72 等全域型別宣告
     hexapod.d.ts                 # 核心介面：HexapodOptions, HexapodLegOptions, LimbOptions 等
     css.d.ts                     # .css 匯入模組宣告
+js/                             # 重複的舊版函式庫（舊構建系統遺留）
 stylesheets/
   application.css                # 原始 UI 樣式
 ```
@@ -83,13 +96,13 @@ stylesheets/
 
 **核心類別（與 legacy 邏輯相同，現為 ES 模組）：**
 - `Hexapod` — 機器人主體。建立 3D 身體 mesh、6 個 `HexapodLeg` 實例、持有 `GaitController`。管理 servo 值計算、狀態快照/恢復、通過 Socket.IO 發送指令至 `localhost:8888`。`apply_attributes()` 從配置重建整個機器人。
-- `HexapodLeg` — 三個肢段（coxa → femur → tibia → tip）。每個肢段為 Three.js mesh，具有 `servo_value`、`servo_idx`、`revert` 屬性。`set_tip_pos()` 調用 `PosCalculator`。
+- `HexapodLeg` — 2–6 DOF 肢段鏈（coxa → femur → tibia → tarsus → segment5 → segment6 → tip）。每個肢段為 Three.js mesh，具有 `servo_value`、`servo_idx`、`revert` 屬性。`set_tip_pos()` 調用 `PosCalculator`。
 - `GaitController` — 擁有步態定義（腿組模式）、動作類型（power/efficient/body_first/fast）、目標模式（translate/target）。使用 `gait_configs.ts` 預設並經 `gait_generator.ts` 過濾進行平衡驗證。`fire_action()` 通過 ControlPanel 中的 setInterval 每 30ms 執行。
 - `PosCalculator` — 單腿逆向運動學，透過梯度下降最小化 tip 到目標世界位置的距離。
 - `JoyStick` — 基於 canvas 的 2D 搖桿。
 
 **React 整合模式：**
-- `appState.js` 為可變單例，持有 `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`。橋接舊全域邏輯與 React。
+- `appState.ts` 為可變單例，持有 `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`。橋接舊全域邏輯與 React。
 - `SceneCanvas` 在 useEffect 中調用 `initScene(container)` 後調用 `build_bot()`，結果同時存入 `appState` 和 React context。
 - UI 元件直接讀寫 `appState.current_bot`（核心邏輯仍通過 ID 操作 DOM 元素）。
 - 部分元件（ServoPanel、AttributesPanel）在 useEffect 中以命令式構建 DOM，保留原始邏輯。

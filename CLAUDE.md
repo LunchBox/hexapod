@@ -28,6 +28,16 @@ npx tsc --noEmit # TypeScript type-check
 
 No test suite exists yet.
 
+## Code review status
+
+A comprehensive code review was conducted on 2026-05-02 (`docs/code-review-2026-05-02.md`). Of the 4 bugs identified:
+- **B1** (`clearInterval` on `setTimeout`) — fixed
+- **B2** (circular dependency `hexapod.ts` ↔ `history.ts`) — fixed (history.ts no longer imports from hexapod.ts)
+- **B3** (misspelled `degree_to_redius`) — fixed (alias added)
+- **B4** (confusing `slice()` args) — fixed (uses `slice(-max_number)`)
+
+Architecture recommendations remain open (see report for details).
+
 ## Project structure
 
 ```
@@ -51,6 +61,7 @@ src/
     ServoPanel.tsx               # 18 servo sliders + end-position inputs (per-leg, imperative DOM)
     AttributesPanel.tsx          # Body/leg geometry config with localStorage persistence
     LegEditor.tsx                # 2D canvas joint editor with multi-leg editing
+    LegEditor.css                # LegEditor styles
     StatusPanel.tsx              # Status history list with play/apply
     CommandDisplay.tsx           # Current + last servo command strings
     TimeChart.tsx                # Command time interval canvas chart (target for imperative drawing)
@@ -64,6 +75,7 @@ src/
     scene.ts                     # initScene(container) — Three.js setup, returns {scene, camera, ...}
     joystick2.ts                 # JoyStick class (canvas-based, accepts element or selector)
     pos_calculator.ts            # Inverse kinematics: gradient-descent solver for tip→servo values
+    pos_calculator_backup_2026-05-02.ts  # Backup of pre-refactor PosCalculator
     physics_solver.ts            # Multi-leg constraint solver (PhysicsSolver.solveAll)
     hexapod.ts                   # Hexapod + HexapodLeg classes, layout computation, config helpers
     gaits.ts                     # GaitController + GaitAction hierarchy (standby, move, internal, putdown)
@@ -75,6 +87,7 @@ src/
     globals.d.ts                 # Type declarations for legacy Three.js r72, Stats, Detector, THREEx
     hexapod.d.ts                 # Core interfaces: HexapodOptions, HexapodLegOptions, LimbOptions, etc.
     css.d.ts                     # Module declaration for .css imports
+js/                             # Duplicate legacy libs (leftover from old build setup)
 stylesheets/
   application.css                # Original UI styles (imported by React app, covers legacy elements)
 ```
@@ -83,13 +96,13 @@ stylesheets/
 
 **Core classes (same logic as legacy, now ES modules):**
 - `Hexapod` — The bot. Creates 3D body mesh, 6 `HexapodLeg` instances, holds a `GaitController`. Manages servo value computation, status snapshot/restore, and Socket.IO commands to `localhost:8888`. `apply_attributes()` re-draws the entire bot from config.
-- `HexapodLeg` — Three limb segments (coxa → femur → tibia → tip). Each limb is a Three.js mesh with `servo_value`, `servo_idx`, `revert` flag. `set_tip_pos()` invokes `PosCalculator`.
+- `HexapodLeg` — 2–6 DOF limb chain (coxa → femur → tibia → tarsus → segment5 → segment6 → tip). Each limb is a Three.js mesh with `servo_value`, `servo_idx`, `revert` flag. `set_tip_pos()` invokes `PosCalculator`.
 - `GaitController` — Owns gait definitions (leg group patterns), action types (power/efficient/body_first/fast), target modes (translate/target). Uses `gait_configs.ts` presets filtered through `gait_generator.ts` for balance validation. `fire_action()` runs on a 30ms interval via setInterval in ControlPanel.
 - `PosCalculator` — Inverse kinematics via gradient descent on the three servo values for a single leg, minimizing distance to target tip world position.
 - `JoyStick` — Canvas-based 2D joystick. Accepts either a CSS selector string or a DOM element.
 
 **React integration pattern:**
-- `appState.js` is a mutable singleton holding `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`. It bridges the old global-based core logic with React.
+- `appState.ts` is a mutable singleton holding `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`. It bridges the old global-based core logic with React.
 - `SceneCanvas` calls `initScene(container)` then `build_bot()` in a useEffect, storing results in both `appState` and React context (`botRef`).
 - UI components read/write `appState.current_bot` directly (the core logic still mutates DOM by ID for `#servo_values`, `#on_servo_values`, `#status_history`, `#chart`).
 - Some components (ServoPanel, AttributesPanel) build their DOM imperatively in useEffect to preserve the original DOM-manipulation logic. These can be progressively converted to declarative React later.
