@@ -636,19 +636,13 @@ export class Hexapod {
 
     let material = new THREE.LineBasicMaterial({ color: 0xcc3300 });
     this.guideline = new THREE.Object3D();
-
-    // Pivot all lines from body ground projection so left_gl/right_gl
-    // rotate around body center, not mesh origin.
-    const pivot = this.body_mesh.position.clone();
-    pivot.y = 0;
-    this.guideline.position.copy(pivot);
-
     for (let idx = 0; idx < this.legs.length; idx++) {
       let geometry = new THREE.Geometry();
+      let body_pos = this.body_mesh.position.clone();
+      body_pos.y = 0;  // project to ground plane
       const worldTip = this.legs[idx].get_tip_pos();
       let tip_pos = this.mesh.worldToLocal(worldTip.clone());
-      // Vertices relative to guideline's position (pivot)
-      geometry.vertices.push(new THREE.Vector3(0, 0, 0), tip_pos.sub(pivot));
+      geometry.vertices.push(body_pos, tip_pos);
       let line = new THREE.Line(geometry, material);
       this.guideline.add(line);
     }
@@ -683,26 +677,35 @@ export class Hexapod {
     if (!homePositions || homePositions.length === 0) return;
 
     this.mesh.updateMatrixWorld();
-    const pivot = this.body_mesh.position.clone();
-    pivot.y = 0;  // ground projection of body center
+    const bodyPos = this.body_mesh.position.clone();
+    bodyPos.y = 0;  // project to ground plane
 
-    // All three groups share the same pivot so rotation.y pivots
-    // around body center (not mesh origin). Clones share geometry
-    // references, so updating guideline updates all three.
-    this.guideline.position.copy(pivot);
-    if (this.left_gl) { this.left_gl.position.copy(pivot); this.left_gl.rotation.y = this.rotate_step; }
-    if (this.right_gl) { this.right_gl.position.copy(pivot); this.right_gl.rotation.y = -this.rotate_step; }
-
-    // Vertices are relative to guideline's position (pivot)
+    // Update guideline lines from stable home positions (not current animated tips)
     for (let idx = 0; idx < this.legs.length; idx++) {
       const homeLocal = homePositions[idx];
       if (!homeLocal) continue;
       const line = this.guideline.children[idx] as any;
       if (line) {
-        line.geometry.vertices[1].copy(homeLocal.clone().sub(pivot));
+        line.geometry.vertices[0].copy(bodyPos);
+        line.geometry.vertices[1].copy(homeLocal);
         line.geometry.verticesNeedUpdate = true;
       }
     }
+
+    // Update rotation clones with same home positions
+    const updateClone = (clone: any) => {
+      for (let idx = 0; idx < this.legs.length; idx++) {
+        const line = clone.children[idx] as any;
+        if (!line) continue;
+        const homeLocal = homePositions[idx];
+        if (!homeLocal) continue;
+        line.geometry.vertices[0].copy(bodyPos);
+        line.geometry.vertices[1].copy(homeLocal);
+        line.geometry.verticesNeedUpdate = true;
+      }
+    };
+    if (this.left_gl) { this.left_gl.rotation.y = this.rotate_step; updateClone(this.left_gl); }
+    if (this.right_gl) { this.right_gl.rotation.y = -this.rotate_step; updateClone(this.right_gl); }
   }
 
   get_servo_values() {
