@@ -5,6 +5,7 @@ import {
 } from './defaults.js';
 import { generateAllGaits } from './gait_generator.js';
 import { PhysicsSolver } from './physics_solver.js';
+import { PosCalculator } from './pos_calculator.js';
 
 // ── GaitAction (base) ──────────────────────────────────────────
 
@@ -490,9 +491,37 @@ export class GaitController {
     const useServoConstraint = this.bot.options.physics_mode === 'servo_constraint';
 
     if (useServoConstraint) {
-      const microSteps = this.bot.options.micro_steps || 1;
       const totalLegs = this.bot.legs.length;
       const speed = this.bot.servo_speed || 2000;
+
+      // Build mesh keyframes
+      const dX = target_pos.x - startPos.x;
+      const dZ = target_pos.z - startPos.z;
+      const dRotY = targetRotY - startRotY;
+
+      // Adaptive micro_steps: ensure each segment's body delta doesn't exceed
+      // a threshold, so larger body movements get more keyframes automatically.
+      let avgReach = 0;
+      for (let i = 0; i < totalLegs; i++) {
+        avgReach += current_tips_pos[i].distanceTo(startPos);
+      }
+      avgReach = avgReach / totalLegs || 150;
+      const rotDisplacement = avgReach * Math.abs(dRotY);
+      const transDisplacement = Math.sqrt(dX * dX + dZ * dZ);
+      const maxTipDisplacement = transDisplacement + rotDisplacement;
+      const ADAPTIVE_THRESHOLD = 5;
+      const MAX_AUTO_STEPS = 10;  // cap to avoid excessive IK during rapid movement
+      const autoSteps = Math.max(1, Math.ceil(maxTipDisplacement / ADAPTIVE_THRESHOLD));
+      const cappedAuto = Math.min(autoSteps, MAX_AUTO_STEPS);
+      const microSteps = Math.max(this.bot.options.micro_steps || 1, cappedAuto);
+      const meshKfs: { pos: any; rotY: number }[] = [];
+      for (let k = 0; k <= microSteps; k++) {
+        const t = k / microSteps;
+        meshKfs.push({
+          pos: new THREE.Vector3(startPos.x + dX * t, startPos.y, startPos.z + dZ * t),
+          rotY: startRotY + dRotY * t,
+        });
+      }
 
       // Pre-compute body-local tip positions (before mesh moves)
       this.bot.mesh.updateMatrixWorld();
@@ -509,19 +538,6 @@ export class GaitController {
           kf0.push(this.bot.legs[i].limbs[j]._rendered_servo_value);
         }
         servoKfs.push([kf0]);
-      }
-
-      // Build mesh keyframes
-      const dX = target_pos.x - startPos.x;
-      const dZ = target_pos.z - startPos.z;
-      const dRotY = targetRotY - startRotY;
-      const meshKfs: { pos: any; rotY: number }[] = [];
-      for (let k = 0; k <= microSteps; k++) {
-        const t = k / microSteps;
-        meshKfs.push({
-          pos: new THREE.Vector3(startPos.x + dX * t, startPos.y, startPos.z + dZ * t),
-          rotY: startRotY + dRotY * t,
-        });
       }
 
       // Solve IK at each intermediate keyframe
@@ -549,6 +565,29 @@ export class GaitController {
         for (let i = 0; i < totalLegs; i++) {
           servoKfs[i].push(result.servoTargets[i]);
         }
+
+        // Retry failed legs with a perturbed initial state
+        if (!result.success) {
+          for (let i = 0; i < totalLegs; i++) {
+            const legResult = result.legResults[i];
+            if (legResult && !legResult.success) {
+              // Perturb kf0 servo values slightly to escape local minimum
+              const perturbed: number[] = [];
+              for (let j = 0; j < this.bot.legs[i].joint_count; j++) {
+                const sv = servoKfs[i][0][j];
+                perturbed.push(sv + (Math.random() - 0.5) * 20);
+              }
+              this.bot.legs[i].set_servo_values(perturbed);
+              const calc = new PosCalculator(this.bot.legs[i], targets[i], this.bot.legs[i]._home_servos);
+              const retryResult = calc.run();
+              if (retryResult.success) {
+                servoKfs[i][servoKfs[i].length - 1] = retryResult.values;
+              }
+              // Restore kf0 for subsequent keyframe solves
+              this.bot.legs[i].set_servo_values(servoKfs[i][0]);
+            }
+          }
+        }
       }
 
       // Compute per-segment durations (max servo delta across all legs)
@@ -570,6 +609,15 @@ export class GaitController {
       this.bot.mesh.rotation.y = startRotY;
       this.bot.mesh.updateMatrixWorld();
       this.bot.apply_physics_keyframes(meshKfs, segmentDurs, servoKfs);
+
+      // Save locked tip targets for runtime drift correction during animation
+      for (let i = 0; i < totalLegs; i++) {
+        if (this.bot.legs[i].on_floor) {
+          this.bot.legs[i]._locked_tip_target = current_tips_pos[i].clone();
+        } else {
+          this.bot.legs[i]._locked_tip_target = null;
+        }
+      }
     } else {
       // Temporarily move mesh to target so PosCalculator solves for the right servo values
       this.bot.mesh.position.x = target_pos.x;
