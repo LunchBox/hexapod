@@ -882,8 +882,6 @@ export class Hexapod {
       if (opts.ry != null) this.body_mesh.rotation.y += opts.ry;
       if (opts.rz != null) this.body_mesh.rotation.z += opts.rz;
       this.body_mesh.updateMatrixWorld();
-      this.sync_guide_circles();
-      this.rebuild_guide_references();
       this.after_status_change();
       return true;
     }
@@ -939,7 +937,6 @@ export class Hexapod {
       }
     }
     this.sync_guide_circles();
-    this.rebuild_guide_references();
     this.after_status_change();
     return true;
   }
