@@ -5,12 +5,12 @@ export default function CommandDisplay() {
 
   return (
     <>
-      <h3>Command</h3>
-      <div id="servo_values" style={{ margin: '4px 0', border: '1px solid #ccc', padding: 4, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+      <h3 className="text-sm font-medium mb-1">Command</h3>
+      <div className="my-1 border border-border rounded p-1 font-mono text-xs break-all min-h-[1.5em]">
         {servoValues}
       </div>
-      <h3>Last Servo Values</h3>
-      <div id="on_servo_values" style={{ margin: '4px 0', border: '1px solid #ccc', padding: 4, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+      <h3 className="text-sm font-medium mb-1 mt-3">Last Servo Values</h3>
+      <div className="my-1 border border-border rounded p-1 font-mono text-xs break-all min-h-[1.5em]">
         {lastServoValues}
       </div>
     </>

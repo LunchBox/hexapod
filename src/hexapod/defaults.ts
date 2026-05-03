@@ -99,6 +99,8 @@ export const DEFAULT_HEXAPOD_OPTIONS = {
   up_step: 10,
   servo_speed: DEFAULT_SERVO_SPEED,
   physics_mode: 'none',
+  ground_constraint: true,
+  servo_stall_threshold: 0,
 
   first_servo_idx: 0,
 

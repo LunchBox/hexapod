@@ -41,6 +41,8 @@ interface HexapodOptions {
   servo_speed: number;
   physics_mode: 'none' | 'servo_constraint';
   micro_steps?: number;
+  ground_constraint?: boolean;
+  servo_stall_threshold?: number;
   first_servo_idx: number;
   leg_options: HexapodLegOptions[];
 }

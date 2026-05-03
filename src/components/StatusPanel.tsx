@@ -1,5 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { useHexapod } from '../context/HexapodContext';
+import { Button } from '@/components/ui/button';
+import { Play, Square } from 'lucide-react';
 
 export default function StatusPanel() {
   const { botRef } = useHexapod();
@@ -46,10 +48,10 @@ export default function StatusPanel() {
 
   return (
     <div>
-      <div className="btns">
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handlePlay(); }}>
-          {playing ? 'Stop' : 'Play'}
-        </a>
+      <div className="mb-3">
+        <Button variant="outline" size="sm" onClick={handlePlay}>
+          {playing ? <><Square data-icon="inline-start" />Stop</> : <><Play data-icon="inline-start" />Play</>}
+        </Button>
       </div>
       <div id="status_history" style={{ maxHeight: 800, overflowY: 'scroll' }} />
     </div>

@@ -224,6 +224,7 @@ export class Hexapod {
   on_servo_values: number[];
   _guideCircles: any[];
   _guideLabels: any[];
+  guide_pivot: any;
   guide_pos: any;
   _guide_local_positions: any[];
   guideline: any;
@@ -299,6 +300,7 @@ export class Hexapod {
       }
       this._guideLabels = [];
     }
+    this.guide_pivot = null;
     this.guide_pos = null;
     this._guide_local_positions = [];
 
@@ -336,10 +338,14 @@ export class Hexapod {
       this.sync_guide_circles();
       // Rebuild guide local positions from restored state so gait targets + guidelines are correct
       this.mesh.updateMatrixWorld();
+      this.guide_pivot.position.set(
+        this.body_mesh.position.x, 0, this.body_mesh.position.z,
+      );
+      this.guide_pivot.updateMatrixWorld();
       this._guide_local_positions = [];
       for (let i = 0; i < this.legs.length; i++) {
         const worldPos = this.legs[i].get_tip_pos();
-        this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
+        this._guide_local_positions.push(this.guide_pivot.worldToLocal(worldPos.clone()));
       }
       this._guide_local_positions.push(new THREE.Vector3(0, 0, 0));
       this.adjust_gait_guidelines();
@@ -577,16 +583,26 @@ export class Hexapod {
       this._guideLabels.push(label);
     }
 
-    // Computational guide_pos — child of mesh, drives move_tips / move_body
+    // Create pivot at body ground center — rotation center for guide_pos
+    this.guide_pivot = new THREE.Object3D();
+    this.guide_pivot.position.set(
+      this.body_mesh.position.x, 0, this.body_mesh.position.z,
+    );
+    this.mesh.add(this.guide_pivot);
+
+    // guide_pos as child of pivot — its rotation/translation are relative to pivot origin
     this.guide_pos = new THREE.Object3D();
-    this.mesh.add(this.guide_pos);
+    this.guide_pivot.add(this.guide_pos);
+
+    // _guide_local_positions in pivot-local space (so body center = pivot origin = (0,0,0))
     this._guide_local_positions = [];
     this.mesh.updateMatrixWorld();
+    this.guide_pivot.updateMatrixWorld();
     for (let i = 0; i < total_legs; i++) {
       const worldPos = this.legs[i].get_tip_pos();
-      this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
+      this._guide_local_positions.push(this.guide_pivot.worldToLocal(worldPos.clone()));
     }
-    this._guide_local_positions.push(new THREE.Vector3(0, 0, 0)); // body center at index N
+    this._guide_local_positions.push(new THREE.Vector3(0, 0, 0)); // body center at index N (pivot origin)
   }
 
   sync_guide_circles() {
@@ -617,6 +633,12 @@ export class Hexapod {
 
   reset_guide_pos() {
     if (!this.guide_pos) return;
+    // Sync pivot to current body ground center (body_mesh may have moved via transform_body)
+    if (this.guide_pivot) {
+      this.guide_pivot.position.set(
+        this.body_mesh.position.x, 0, this.body_mesh.position.z,
+      );
+    }
     this.guide_pos.position.set(0, 0, 0);
     this.guide_pos.rotation.set(0, 0, 0);
     this.guide_pos.scale.set(1, 1, 1);
@@ -634,14 +656,20 @@ export class Hexapod {
   draw_gait_guidelines() {
     this.mesh.updateMatrixWorld();
 
+    const centerX = this.body_mesh.position.x;
+    const centerZ = this.body_mesh.position.z;
+
     let material = new THREE.LineBasicMaterial({ color: 0xcc3300 });
     this.guideline = new THREE.Object3D();
+    this.guideline.position.set(centerX, 0, centerZ);
     for (let idx = 0; idx < this.legs.length; idx++) {
       let geometry = new THREE.Geometry();
-      let body_pos = this.body_mesh.position.clone();
       const worldTip = this.legs[idx].get_tip_pos();
-      let tip_pos = this.mesh.worldToLocal(worldTip.clone());
-      geometry.vertices.push(body_pos, tip_pos);
+      const localTip = this.mesh.worldToLocal(worldTip.clone());
+      geometry.vertices.push(
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(localTip.x - centerX, 0, localTip.z - centerZ),
+      );
       let line = new THREE.Line(geometry, material);
       this.guideline.add(line);
     }
@@ -662,29 +690,34 @@ export class Hexapod {
     if (!homePositions || homePositions.length === 0) return;
 
     this.mesh.updateMatrixWorld();
-    const bodyPos = this.body_mesh.position.clone();
+    const centerX = this.body_mesh.position.x;
+    const centerZ = this.body_mesh.position.z;
 
-    // Update guideline lines from stable home positions (not current animated tips)
+    // Update guideline position to ground center
+    this.guideline.position.set(centerX, 0, centerZ);
+
+    // Update guideline lines from stable home positions (now in pivot-local space), projected to ground
     for (let idx = 0; idx < this.legs.length; idx++) {
       const homeLocal = homePositions[idx];
       if (!homeLocal) continue;
       const line = this.guideline.children[idx] as any;
       if (line) {
-        line.geometry.vertices[0].copy(bodyPos);
-        line.geometry.vertices[1].copy(homeLocal);
+        line.geometry.vertices[0].set(0, 0, 0);
+        line.geometry.vertices[1].set(homeLocal.x, 0, homeLocal.z);
         line.geometry.verticesNeedUpdate = true;
       }
     }
 
-    // Update rotation clones with same home positions
+    // Update rotation clones with same positions
     const updateClone = (clone: any) => {
+      clone.position.set(centerX, 0, centerZ);
       for (let idx = 0; idx < this.legs.length; idx++) {
         const line = clone.children[idx] as any;
         if (!line) continue;
         const homeLocal = homePositions[idx];
         if (!homeLocal) continue;
-        line.geometry.vertices[0].copy(bodyPos);
-        line.geometry.vertices[1].copy(homeLocal);
+        line.geometry.vertices[0].set(0, 0, 0);
+        line.geometry.vertices[1].set(homeLocal.x, 0, homeLocal.z);
         line.geometry.verticesNeedUpdate = true;
       }
     };
@@ -1056,15 +1089,15 @@ export class Hexapod {
     }
   }
 
-  putdown_tips() {
-    console.log("-- putdown tips fired");
-    let tip_pos: any;
-    let total_legs = this.legs.length;
-    for (let i = 0; i < total_legs; i++) {
-      tip_pos = this.legs[i].get_tip_pos();
+  putdown_tips(idxs?: number[]) {
+    const legIdxs = idxs || Array.from({ length: this.legs.length }, (_, i) => i);
+    for (const i of legIdxs) {
+      if (!this.legs[i]) continue;
+      const tip_pos = this.legs[i].get_tip_pos();
       tip_pos.y = 0;
       this.legs[i].set_tip_pos(tip_pos);
     }
+    this.sync_guide_circles();
     this.after_status_change();
   }
 
@@ -1083,6 +1116,46 @@ export class Hexapod {
       tips: tips.map((t: any) => this.body_mesh.worldToLocal(t.clone())),
     };
     history.save(this.options);
+  }
+
+  /** Lower body until tips reach ground, bending joints as needed */
+  squat_body() {
+    history.push(this.options);
+    const tips = this.get_tip_pos();
+    // Find the highest tip
+    let maxY = -Infinity;
+    for (const t of tips) { if (t.y > maxY) maxY = t.y; }
+    // Lower body so highest tip touches ground, then put all tips down
+    if (maxY > 0) {
+      this.body_mesh.position.y -= maxY;
+      this.body_mesh.updateMatrixWorld();
+    }
+    // Extra squat: lower further in small steps, re-IK each time
+    const steps = 5;
+    const stepSize = 2;
+    for (let s = 0; s < steps; s++) {
+      this.body_mesh.position.y -= stepSize;
+      this.body_mesh.updateMatrixWorld();
+      this.putdown_tips();
+    }
+    this.after_status_change();
+    this.save_body_home();
+  }
+
+  /** Reset body to origin (x=0, z=0) and level rotation, then re-ground */
+  reset_body_to_center() {
+    history.push(this.options);
+    this.body_mesh.position.set(0, this.body_mesh.position.y, 0);
+    this.body_mesh.rotation.set(0, 0, 0);
+    this.mesh.position.set(0, this.mesh.position.y, 0);
+    this.mesh.rotation.set(0, 0, 0);
+    this.body_mesh.updateMatrixWorld();
+    this.mesh.updateMatrixWorld();
+    this.laydown();
+    this.sync_guide_circles();
+    this.adjust_gait_guidelines();
+    this.after_status_change();
+    this.save_body_home();
   }
 
   /** Gradually pull leg servo values back toward their home positions.
@@ -1461,7 +1534,21 @@ export class HexapodLeg {
     return getWorldPosition(this.bot.mesh, this.tip);
   }
 
-  set_tip_pos(new_pos: any): PosResult {
+  set_tip_pos(new_pos: any, stallThreshold = 0): PosResult {
+    const groundConstraint = this.bot.options.ground_constraint ?? true;
+    let calculator = new PosCalculator(this, new_pos, this._home_servos, undefined, groundConstraint);
+    const result = calculator.run();
+
+    if (stallThreshold > 0 && result.distance > stallThreshold) {
+      // Stall: don't apply result, return current servo values
+      const currentServos: number[] = [];
+      for (let i = 0; i < this.joint_count; i++) {
+        currentServos.push(this.limbs[i].servo_value);
+      }
+      this._servo_keyframes = null;
+      return { success: false, distance: result.distance, iterations: result.iterations, values: currentServos };
+    }
+
     const animate = !this.bot._servo_anim_disabled && (this.bot.servo_speed ?? 0) > 0;
     let preRendered: number[] | null = null;
     if (animate) {
@@ -1470,9 +1557,6 @@ export class HexapodLeg {
         preRendered.push(this.limbs[i]._rendered_servo_value);
       }
     }
-
-    let calculator = new PosCalculator(this, new_pos, this._home_servos);
-    const result = calculator.run();
 
     if (animate && preRendered && result.success) {
       this._servo_keyframes = [preRendered, result.values];
@@ -1604,6 +1688,9 @@ export function get_bot_options() {
 
 export function set_bot_options(hexapod_options: any) {
   set_obj_to_local_storage(HEXAPOD_OPTIONS_KEY, hexapod_options);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('bot-options-saved', { detail: Date.now() }));
+  }
 }
 
 export function build_bot(bot_options: any) {

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { history, performUndo, performRedo, performSave } from '../hexapod/history';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Undo2, Redo2, Save } from 'lucide-react';
 
 export default function Toolbar() {
   const { botRef, bumpBotVersion } = useHexapod();
@@ -36,33 +39,31 @@ export default function Toolbar() {
   const canRedo = history.canRedo();
   const dirty = bot ? history.isDirty(bot.options) : false;
 
-  const btnStyle = (disabled: boolean): React.CSSProperties => ({
-    padding: '2px 10px',
-    fontSize: 13,
-    cursor: disabled ? 'default' : 'pointer',
-    opacity: disabled ? 0.35 : 1,
-    border: '1px solid #888',
-    borderRadius: 3,
-    background: '#eee',
-  });
-
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-      <button
-        style={btnStyle(!canUndo)}
+    <div className="flex items-center gap-2 flex-wrap">
+      <Button
+        variant="outline"
+        size="sm"
         disabled={!canUndo}
         onClick={() => { const b = botRef.current; if (b && performUndo(b, bumpBotVersion)) refresh(); }}
         title="Undo (Ctrl+Z)"
-      >↩ Undo</button>
+      >
+        <Undo2 data-icon="inline-start" />
+        Undo
+      </Button>
 
-      <button
-        style={btnStyle(!canRedo)}
+      <Button
+        variant="outline"
+        size="sm"
         disabled={!canRedo}
         onClick={() => { const b = botRef.current; if (b && performRedo(b, bumpBotVersion)) refresh(); }}
         title="Redo (Ctrl+Y)"
-      >↪ Redo</button>
+      >
+        <Redo2 data-icon="inline-start" />
+        Redo
+      </Button>
 
-      <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, marginLeft: 8 }}>
+      <label className="flex items-center gap-1.5 text-sm cursor-pointer ml-2">
         <input
           type="checkbox"
           checked={history.autoSave}
@@ -79,20 +80,19 @@ export default function Toolbar() {
       </label>
 
       {!history.autoSave && (
-        <button
-          style={{
-            ...btnStyle(false),
-            background: dirty ? '#e67e22' : '#eee',
-            color: dirty ? '#fff' : '#333',
-            fontWeight: dirty ? 'bold' : 'normal',
-          }}
+        <Button
+          variant={dirty ? 'default' : 'outline'}
+          size="sm"
           onClick={() => { const b = botRef.current; if (b) { performSave(b, bumpBotVersion); refresh(); } }}
           title="Save (Ctrl+S)"
-        >💾 Save</button>
+        >
+          <Save data-icon="inline-start" />
+          Save
+        </Button>
       )}
 
       {dirty && (
-        <span style={{ color: '#e67e22', fontSize: 12, fontWeight: 'bold' }}>⬤ unsaved</span>
+        <Badge variant="destructive" className="text-xs">unsaved</Badge>
       )}
     </div>
   );

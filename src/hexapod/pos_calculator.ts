@@ -9,25 +9,51 @@ export interface PosResult {
 }
 
 const REG_STRENGTH = 0.002; // tiny pull toward init per iteration
+const GROUND_PENALTY = 50;   // per-unit penalty when tip penetrates ground
 
 export class PosCalculator {
   leg: any;
   joint_count: number;
   target_tip_pos: any;
   initValues: number[] | null;
+  _tipFn: ((values: number[]) => { x: number; y: number; z: number }) | null;
+  _groundConstraint: boolean;
 
-  constructor(hexapod_leg: any, target_tip_pos: any, initValues?: number[]) {
+  constructor(
+    hexapod_leg: any,
+    target_tip_pos: any,
+    initValues?: number[],
+    tipFn?: (values: number[]) => { x: number; y: number; z: number },
+    groundConstraint?: boolean,
+  ) {
     this.leg = hexapod_leg;
-    this.joint_count = hexapod_leg.joint_count || 3;
+    this.joint_count = hexapod_leg?.joint_count || (initValues?.length ?? 3);
     this.target_tip_pos = target_tip_pos;
     this.initValues = initValues && initValues.length === this.joint_count ? initValues : null;
+    this._tipFn = tipFn || null;
+    this._groundConstraint = groundConstraint ?? true;
+  }
+
+  private _apply_ground_penalty(tipY: number, dist: number): number {
+    if (this._groundConstraint && tipY < 0) {
+      return dist + Math.abs(tipY) * GROUND_PENALTY;
+    }
+    return dist;
   }
 
   calc_distance(values: number[]) {
+    if (this._tipFn) {
+      const tip = this._tipFn(values);
+      const t = this.target_tip_pos;
+      let dist = Math.sqrt((t.x - tip.x) ** 2 + (t.y - tip.y) ** 2 + (t.z - tip.z) ** 2);
+      return this._apply_ground_penalty(tip.y, dist);
+    }
+    // Original Three.js scene-graph path
     this.leg.set_servo_values(values);
     const c = getWorldPosition(this.leg.bot.mesh, this.leg.tip);
     const t = this.target_tip_pos;
-    return Math.sqrt((t.x - c.x) ** 2 + (t.y - c.y) ** 2 + (t.z - c.z) ** 2);
+    let dist = Math.sqrt((t.x - c.x) ** 2 + (t.y - c.y) ** 2 + (t.z - c.z) ** 2);
+    return this._apply_ground_penalty(c.y, dist);
   }
 
   run(): PosResult {
@@ -38,8 +64,13 @@ export class PosCalculator {
     const MIN_STEP = 5;
 
     let values: number[] = [];
-    for (let i = 0; i < n; i++) {
-      values.push(this.leg.limbs[i].servo_value);
+    if (this._tipFn && this.initValues) {
+      // Pure FK path — start from provided init values
+      values = [...this.initValues];
+    } else {
+      for (let i = 0; i < n; i++) {
+        values.push(this.leg.limbs[i].servo_value);
+      }
     }
 
     let dist = this.calc_distance(values);

@@ -1,0 +1,48 @@
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 4px 0;
+  font-size: 12px;
+  color: #888;
+  user-select: none;
+}
+
+.sb-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.sb-label {
+  color: #bbb;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.sb-value {
+  color: #444;
+  font-weight: 600;
+}
+
+.sb-sep {
+  width: 0;
+  height: 12px;
+  border-left: 1px solid #e0e0e0;
+}
+
+.sb-spacer {
+  flex: 1;
+}
+
+.sb-save {
+  font-size: 10px;
+  color: #ccc;
+  transition: color 0.3s;
+}
+
+.sb-save.saved {
+  color: #4a9;
+}

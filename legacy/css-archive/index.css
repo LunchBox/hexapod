@@ -1,0 +1,37 @@
+body {
+  margin: 0;
+  overflow-y: scroll;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #222;
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Shared button polish ── */
+.btns a,
+.control_btn {
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btns a:hover,
+.control_btn:hover {
+  text-decoration: none;
+}
+
+/* ── Section label ── */
+.section-label {
+  color: #999;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 12px 0 4px;
+  padding-left: 2px;
+  border-bottom: 1px solid #e8e8e8;
+}

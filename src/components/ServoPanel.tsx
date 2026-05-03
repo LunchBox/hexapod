@@ -143,8 +143,8 @@ export default function ServoPanel() {
 
   return (
     <div>
-      <h3>Servo Values</h3>
-      <div id="servo_controls" ref={containerRef} style={{ marginTop: 10 }}></div>
+      <h3 className="text-sm font-medium mb-2">Servo Values</h3>
+      <div id="servo_controls" ref={containerRef}></div>
     </div>
   );
 }

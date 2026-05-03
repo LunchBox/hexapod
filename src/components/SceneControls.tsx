@@ -20,7 +20,6 @@ export default function SceneControls() {
   const rotJsRef = useRef<HTMLDivElement>(null);
   const inited = useRef(false);
 
-  // Init all 3 joysticks once
   useEffect(() => {
     if (inited.current || !moveJsRef.current || !bodyJsRef.current || !rotJsRef.current) return;
     inited.current = true;
@@ -29,115 +28,103 @@ export default function SceneControls() {
       const gc = botRef.current?.gait_controller;
       if (gc) {
         gc.stop();
-        // Reset home snapshot for next activation
         const im = gc.actions?.['internal_move'];
         if (im) im._homeSnapped = false;
       }
     };
 
-    // Move mode joystick
     makeJoystick(moveJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
       if (gc) { gc.move_mode = 'move'; gc.follow(j); }
     }, stop);
 
-    // Move body joystick
     makeJoystick(bodyJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
       if (gc) { gc.move_mode = 'move_body'; gc.follow(j); }
     }, stop);
 
-    // Rotate body joystick
     makeJoystick(rotJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
       if (gc) { gc.move_mode = 'rotate_body'; gc.follow(j); }
     }, stop);
   }, [botRef]);
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap',
-  };
-  const colStyle: React.CSSProperties = {
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    height: 150,
-  };
-
   return (
-    <div style={{ padding: '12px 10px', margin: '8px 0' }}>
+    <div className="py-3 px-2.5 my-2">
       {/* Row 1: Joysticks */}
-      <div style={rowStyle}>
-        <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+      <div className="flex items-end gap-2.5 flex-wrap">
+        <div className="flex flex-col items-center justify-end h-[150px]">
           <div ref={moveJsRef}></div>
-          <span style={{ fontSize: 10, color: '#888', height: 16, lineHeight: '16px' }}>Move</span>
+          <span className="text-[10px] text-muted-foreground h-4 leading-4">Move</span>
         </div>
-        <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+        <div className="flex flex-col items-center justify-end h-[150px]">
           <div ref={bodyJsRef}></div>
-          <span style={{ fontSize: 10, color: '#888', height: 16, lineHeight: '16px' }}>Body</span>
+          <span className="text-[10px] text-muted-foreground h-4 leading-4">Body</span>
         </div>
-        <div style={{ ...colStyle, justifyContent: 'flex-end' }}>
+        <div className="flex flex-col items-center justify-end h-[150px]">
           <div ref={rotJsRef}></div>
-          <span style={{ fontSize: 10, color: '#888', height: 16, lineHeight: '16px' }}>Rot</span>
+          <span className="text-[10px] text-muted-foreground h-4 leading-4">Rot</span>
         </div>
       </div>
 
       {/* Row 2: Sliders */}
-      <div style={rowStyle}>
-      <SliderColumn value={0} min={-40} max={40} label="X" title="Nudge body X" springBack
-        onChange={(v) => {
-          const bot = botRef.current; if (!bot) return false;
-          const ok = bot.transform_body({ dx: v });
-          bot.adjust_gait_guidelines();
-          return ok;
-        }}
-      />
-      <SliderColumn value={0} min={-24} max={24} label="Y" title="Nudge body height" springBack
-        onChange={(v) => {
-          const bot = botRef.current; if (!bot) return false;
-          const ok = bot.transform_body({ dy: v });
-          bot.adjust_gait_guidelines();
-          return ok;
-        }}
-      />
-      <SliderColumn value={0} min={-40} max={40} label="Z" title="Nudge body Z" springBack
-        onChange={(v) => {
-          const bot = botRef.current; if (!bot) return false;
-          const ok = bot.transform_body({ dz: v });
-          bot.adjust_gait_guidelines();
-          return ok;
-        }}
-      />
-      <SliderColumn value={0} min={-30} max={30} label="Rx°" title="Nudge rotate X" springBack
-        onChange={(v) => {
-          const bot = botRef.current; if (!bot) return false;
-          const rad = v * Math.PI / 180;
-          const ok = bot.transform_body({ rx: rad });
-          bot.adjust_gait_guidelines();
-          return ok;
-        }}
-      />
-      <SliderColumn value={0} min={-30} max={30} label="Ry°" title="Nudge rotate Y" springBack
-        onChange={(v) => {
-          const bot = botRef.current; if (!bot) return false;
-          const rad = v * Math.PI / 180;
-          const ok = bot.transform_body({ ry: rad });
-          bot.adjust_gait_guidelines();
-          return ok;
-        }}
-      />
-      <SliderColumn value={0} min={-30} max={30} label="Rz°" title="Nudge rotate Z" springBack
-        onChange={(v) => {
-          const bot = botRef.current; if (!bot) return false;
-          const rad = v * Math.PI / 180;
-          const ok = bot.transform_body({ rz: rad });
-          bot.adjust_gait_guidelines();
-          return ok;
-        }}
-      />
+      <div className="flex items-end gap-2.5 flex-wrap">
+        <SliderColumn value={0} min={-40} max={40} label="X" title="Nudge body X" springBack
+          onChange={(v) => {
+            const bot = botRef.current; if (!bot) return false;
+            const ok = bot.transform_body({ dx: v });
+            bot.adjust_gait_guidelines();
+            return ok;
+          }}
+        />
+        <SliderColumn value={0} min={-24} max={24} label="Y" title="Nudge body height" springBack
+          onChange={(v) => {
+            const bot = botRef.current; if (!bot) return false;
+            const ok = bot.transform_body({ dy: v });
+            bot.adjust_gait_guidelines();
+            return ok;
+          }}
+        />
+        <SliderColumn value={0} min={-40} max={40} label="Z" title="Nudge body Z" springBack
+          onChange={(v) => {
+            const bot = botRef.current; if (!bot) return false;
+            const ok = bot.transform_body({ dz: v });
+            bot.adjust_gait_guidelines();
+            return ok;
+          }}
+        />
+        <SliderColumn value={0} min={-30} max={30} label="Rx°" title="Nudge rotate X" springBack
+          onChange={(v) => {
+            const bot = botRef.current; if (!bot) return false;
+            const rad = v * Math.PI / 180;
+            const ok = bot.transform_body({ rx: rad });
+            bot.adjust_gait_guidelines();
+            return ok;
+          }}
+        />
+        <SliderColumn value={0} min={-30} max={30} label="Ry°" title="Nudge rotate Y" springBack
+          onChange={(v) => {
+            const bot = botRef.current; if (!bot) return false;
+            const rad = v * Math.PI / 180;
+            const ok = bot.transform_body({ ry: rad });
+            bot.adjust_gait_guidelines();
+            return ok;
+          }}
+        />
+        <SliderColumn value={0} min={-30} max={30} label="Rz°" title="Nudge rotate Z" springBack
+          onChange={(v) => {
+            const bot = botRef.current; if (!bot) return false;
+            const rad = v * Math.PI / 180;
+            const ok = bot.transform_body({ rz: rad });
+            bot.adjust_gait_guidelines();
+            return ok;
+          }}
+        />
       </div>
 
       {/* Row 3: tip lock toggle */}
-      <div style={{ ...rowStyle, marginTop: 4 }}>
-        <label title="Tip lock is always enabled" style={{ fontSize: 11, color: '#666', display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div className="flex items-end gap-2.5 flex-wrap mt-1">
+        <label className="text-[11px] text-muted-foreground flex items-center gap-1">
           <input type="checkbox" checked disabled /> Lock Tips
         </label>
       </div>

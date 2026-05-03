@@ -409,11 +409,12 @@ export class GaitController {
     bot.reset_guide_pos();
     bot.mesh.updateMatrixWorld();
     const localPositions = bot._guide_local_positions;
-    if (localPositions) {
+    if (localPositions && bot.guide_pivot) {
+      bot.guide_pivot.updateMatrixWorld();
       for (let i = 0; i < bot.legs.length; i++) {
         const localHome = localPositions[i];
         if (localHome) {
-          const worldHome = localHome.clone().applyMatrix4(bot.mesh.matrixWorld);
+          const worldHome = localHome.clone().applyMatrix4(bot.guide_pivot.matrixWorld);
           worldHome.y = 0;
           bot.legs[i].set_tip_pos(worldHome);
           bot.legs[i].on_floor = true;
@@ -482,12 +483,23 @@ export class GaitController {
     gp.position.z -= fb_offset / this.leg_groups.length * 3;
     gp.position.x -= lr_offset / this.leg_groups.length * 3;
 
-    let target_pos = this.bot.get_guide_pos(this.bot.legs.length);
+    // target_pos is now body ground center world position (guide_pos is inside guide_pivot)
+    let targetBodyCenter = this.bot.get_guide_pos(this.bot.legs.length);
+
+    // Current body ground center in world space
+    this.bot.mesh.updateMatrixWorld();
+    const bodyGroundLocal = new THREE.Vector3(
+      this.bot.body_mesh.position.x, 0, this.bot.body_mesh.position.z,
+    );
+    const startBodyCenter = bodyGroundLocal.clone().applyMatrix4(this.bot.mesh.matrixWorld);
+
     let startPos = this.bot.mesh.position.clone();
     let startRotY = this.bot.mesh.rotation.y;
     let targetRotY = startRotY + rotate_offset / this.leg_groups.length * 3;
 
     const useServoConstraint = this.bot.options.physics_mode === 'servo_constraint';
+    const stallThreshold = this.bot.options.servo_stall_threshold ?? 0;
+    const groundConstraint = this.bot.options.ground_constraint ?? true;
 
     if (useServoConstraint) {
       const microSteps = this.bot.options.micro_steps || 1;
@@ -511,23 +523,29 @@ export class GaitController {
         servoKfs.push([kf0]);
       }
 
-      // Build mesh keyframes
-      const dX = target_pos.x - startPos.x;
-      const dZ = target_pos.z - startPos.z;
+      // Build mesh keyframes — interpolate body ground center, then derive mesh.position
+      const dBodyX = targetBodyCenter.x - startBodyCenter.x;
+      const dBodyZ = targetBodyCenter.z - startBodyCenter.z;
       const dRotY = targetRotY - startRotY;
       const meshKfs: { pos: any; rotY: number }[] = [];
       for (let k = 0; k <= microSteps; k++) {
         const t = k / microSteps;
+        const bcX = startBodyCenter.x + dBodyX * t;
+        const bcZ = startBodyCenter.z + dBodyZ * t;
+        const rotY = startRotY + dRotY * t;
+        // Compute mesh.position so body ground center reaches (bcX, 0, bcZ)
+        const offset = bodyGroundLocal.clone().applyMatrix4(
+          new THREE.Matrix4().makeRotationY(rotY),
+        );
         meshKfs.push({
-          pos: new THREE.Vector3(startPos.x + dX * t, startPos.y, startPos.z + dZ * t),
-          rotY: startRotY + dRotY * t,
+          pos: new THREE.Vector3(bcX - offset.x, startPos.y, bcZ - offset.z),
+          rotY: rotY,
         });
       }
 
       // Solve IK at each intermediate keyframe
       for (let k = 1; k <= microSteps; k++) {
         // Reset all legs to keyframe-0 servo values before each solve
-        // so PosCalculator starts from a consistent initial state
         for (let i = 0; i < totalLegs; i++) {
           this.bot.legs[i].set_servo_values(servoKfs[i][0]);
         }
@@ -545,7 +563,7 @@ export class GaitController {
           }
         }
 
-        const result = PhysicsSolver.solveAll(this.bot, targets);
+        const result = PhysicsSolver.solveAll(this.bot, targets, stallThreshold, groundConstraint);
         for (let i = 0; i < totalLegs; i++) {
           servoKfs[i].push(result.servoTargets[i]);
         }
@@ -571,15 +589,18 @@ export class GaitController {
       this.bot.mesh.updateMatrixWorld();
       this.bot.apply_physics_keyframes(meshKfs, segmentDurs, servoKfs);
     } else {
-      // Temporarily move mesh to target so PosCalculator solves for the right servo values
-      this.bot.mesh.position.x = target_pos.x;
-      this.bot.mesh.position.z = target_pos.z;
+      // Compute final mesh position from body ground center and rotation
+      const offset = bodyGroundLocal.clone().applyMatrix4(
+        new THREE.Matrix4().makeRotationY(targetRotY),
+      );
+      this.bot.mesh.position.x = targetBodyCenter.x - offset.x;
+      this.bot.mesh.position.z = targetBodyCenter.z - offset.z;
       this.bot.mesh.rotation.y = targetRotY;
       this.bot.mesh.updateMatrixWorld();
 
       for (let idx = 0; idx < this.bot.legs.length; idx++) {
         if (this.bot.legs[idx].on_floor === true) {
-          this.bot.legs[idx].set_tip_pos(current_tips_pos[idx]);
+          this.bot.legs[idx].set_tip_pos(current_tips_pos[idx], stallThreshold);
         }
       }
       // None mode: mesh stays at target, tips updated instantly (no animation)

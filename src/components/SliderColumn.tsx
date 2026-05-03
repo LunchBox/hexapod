@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface Props {
   value: number;
@@ -9,37 +11,12 @@ interface Props {
   title?: string;
   displayValue?: string;
   onChange: (v: number) => boolean;
-  springBack?: boolean;   // snap back to homeValue on mouseup
-  homeValue?: number;      // center position when springBack=true (default 0)
-  horizontal?: boolean;    // horizontal layout (no ▲/▼ buttons)
-  onDragStart?: () => void; // called on pointerdown (springBack mode only)
-  onDragEnd?: () => void;  // called on pointerup (springBack mode only)
+  springBack?: boolean;
+  homeValue?: number;
+  horizontal?: boolean;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }
-
-const btnStyle: React.CSSProperties = {
-  width: 22, height: 22, padding: 0, lineHeight: '20px',
-  textAlign: 'center', cursor: 'pointer',
-  border: '1px solid #ccc', borderRadius: 2, background: '#fff',
-  fontSize: 12, userSelect: 'none',
-};
-
-const col: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', alignItems: 'center',
-  height: 160,
-};
-
-const sl: React.CSSProperties = {
-  writingMode: 'vertical-lr', direction: 'rtl',
-  flex: 1, cursor: 'pointer', minHeight: 60, margin: '2px 0',
-};
-
-const lab: React.CSSProperties = {
-  fontSize: 10, color: '#888', marginTop: 2,
-};
-
-const valStyle: React.CSSProperties = {
-  fontSize: 10, fontFamily: 'monospace', color: '#444',
-};
 
 export default function SliderColumn({ value, min, max, step, label, title, displayValue, onChange, springBack, homeValue, horizontal, onDragStart, onDragEnd }: Props) {
   const home = homeValue ?? 0;
@@ -49,7 +26,6 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
   const pendingRef = useRef<number | null>(null);
   const rafRef = useRef(0);
 
-  // Stable refs so effect listeners don't churn on every render
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onDragEndRef = useRef(onDragEnd);
@@ -61,7 +37,6 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     if (!springBack && !dragging.current) setCur(value);
   }, [value, ver, springBack]);
 
-  // rAF loop: apply delta from last value once per frame (springBack only)
   const lastV = useRef(home);
   useEffect(() => {
     if (!springBack) return;
@@ -86,7 +61,6 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
         running = false;
       }
     };
-    // Watch for drag start to kick off the loop
     const onDown = () => {
       if (!running) { running = true; rafRef.current = requestAnimationFrame(tick); }
     };
@@ -117,7 +91,6 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     }
   };
 
-  // Global pointerup: snap back to home, reset tracking, flush pending
   useEffect(() => {
     if (!springBack) return;
     const up = () => {
@@ -129,7 +102,7 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     };
     window.addEventListener('pointerup', up);
     return () => window.removeEventListener('pointerup', up);
-  }, [springBack, home]); // stable deps — callbacks via refs
+  }, [springBack, home]);
 
   const onPointerDown = () => {
     if (!springBack) return;
@@ -139,77 +112,57 @@ export default function SliderColumn({ value, min, max, step, label, title, disp
     onDragStartRef.current?.();
   };
 
-  const row: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', gap: 4,
-    padding: '3px 0', fontSize: 12,
-  };
-
-  const hLabel: React.CSSProperties = {
-    width: 100, textAlign: 'right', fontWeight: 'bold',
-    flexShrink: 0, marginRight: 2, overflow: 'hidden',
-    textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12,
-  };
-
-  const hSl: React.CSSProperties = {
-    flex: 1, minWidth: 60, margin: '0 2px',
-  };
-
-  const hVal: React.CSSProperties = {
-    width: 52, textAlign: 'right', fontSize: 11,
-    fontFamily: 'monospace', flexShrink: 0,
-  };
-
   if (horizontal) {
     return (
-      <div style={row}>
-        <span style={hLabel} title={title || label}>{label}</span>
-        <button style={btnStyle}
+      <div className="flex items-center gap-1 py-[3px] text-xs">
+        <span className="w-[100px] text-right font-semibold shrink-0 mr-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-xs"
+          title={title || label}>{label}</span>
+        <Button variant="outline" size="sm" className="w-[22px] h-[22px] p-0 shrink-0"
           onMouseDown={(e) => { e.preventDefault();
             if (springBack) { onChange(-(step || 1)); }
             else apply(cur - (step || 1));
-          }}>◀</button>
+          }}><ChevronLeft className="size-3.5" /></Button>
         <input type="range" min={min} max={max} step={step || 1}
-          value={cur}
-          title={title || label}
-          style={hSl}
+          value={cur} title={title || label}
+          className="flex-1 min-w-[60px] mx-0.5 h-1"
           onPointerDown={onPointerDown}
           onChange={onInput}
         />
-        <button style={btnStyle}
+        <Button variant="outline" size="sm" className="w-[22px] h-[22px] p-0 shrink-0"
           onMouseDown={(e) => { e.preventDefault();
             if (springBack) { onChange(step || 1); }
             else apply(cur + (step || 1));
-          }}>▶</button>
-        <span style={hVal}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
+          }}><ChevronRight className="size-3.5" /></Button>
+        <span className="w-[52px] text-right text-[11px] font-mono shrink-0">
+          {displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}
+        </span>
       </div>
     );
   }
 
   return (
-    <div style={col}>
-      <button style={btnStyle} title={title || label}
+    <div className="flex flex-col items-center h-[160px]">
+      <Button variant="outline" size="sm" className="w-[22px] h-[22px] p-0 shrink-0" title={title || label}
         onMouseDown={(e) => { e.preventDefault();
           if (springBack) { onChange(step || 1); }
           else apply(cur + (step || 1));
-        }}>
-        ▲
-      </button>
+        }}><ChevronUp className="size-3.5" /></Button>
       <input type="range" min={min} max={max} step={step || 1}
-        value={cur}
-        title={title || label}
-        style={sl}
+        value={cur} title={title || label}
+        className="flex-1 cursor-pointer min-h-[60px] my-0.5"
+        style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
         onPointerDown={onPointerDown}
         onChange={onInput}
       />
-      <button style={btnStyle} title={title || label}
+      <Button variant="outline" size="sm" className="w-[22px] h-[22px] p-0 shrink-0" title={title || label}
         onMouseDown={(e) => { e.preventDefault();
           if (springBack) { onChange(-(step || 1)); }
           else apply(cur - (step || 1));
-        }}>
-        ▼
-      </button>
-      <span style={lab}>{label}</span>
-      <span style={valStyle}>{displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}</span>
+        }}><ChevronDown className="size-3.5" /></Button>
+      <span className="text-[10px] text-muted-foreground mt-0.5">{label}</span>
+      <span className="text-[10px] font-mono text-foreground">
+        {displayValue ?? (Number.isInteger(cur) ? String(cur) : cur.toFixed(2))}
+      </span>
     </div>
   );
 }

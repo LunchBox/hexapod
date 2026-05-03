@@ -2,6 +2,12 @@ import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
 import { history } from '../hexapod/history';
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { CircleStop, Wand2, Footprints, Terminal, Send, RefreshCw, Zap } from 'lucide-react';
+
+// ── Gait cycle dot diagram ──────────────────────────────────────
 
 const drawTypes = [
   { value: 'mesh', label: 'Mesh' },
@@ -13,15 +19,6 @@ const moveModes = [
   { value: 'move', label: 'Move Mode' },
   { value: 'move_body', label: 'Move Body' },
   { value: 'rotate_body', label: 'Rotate Body' },
-];
-
-const stepButtons = [
-  { action: 'act_step', value: '87', label: 'Forward(w)' },
-  { action: 'act_step', value: '83', label: 'Backward(s)' },
-  { action: 'act_step', value: '90', label: 'Move Left(z)' },
-  { action: 'act_step', value: '67', label: 'Move Right(c)' },
-  { action: 'act_step', value: '65', label: 'Rotate Left(a)' },
-  { action: 'act_step', value: '68', label: 'Rotate Right(d)' },
 ];
 
 const K_LABELS: Record<string, string> = {
@@ -43,12 +40,10 @@ function getGaitGroups(bot: any): GaitGroup[] {
   const names = Object.keys(gc.gaits);
   const groups = new Map<string, { value: string; label: string }[]>();
   for (const name of names) {
-    // Extract k-prefix: "wave" or "wave-2" → "wave"
     const prefix = name.match(/^[a-z]+/)![0];
     if (!groups.has(prefix)) groups.set(prefix, []);
     groups.get(prefix)!.push({ value: name, label: name });
   }
-  // Sort each group by numeric suffix
   const result: GaitGroup[] = [];
   for (const [prefix, gaits] of groups) {
     gaits.sort((a, b) => {
@@ -62,7 +57,6 @@ function getGaitGroups(bot: any): GaitGroup[] {
       gaits,
     });
   }
-  // Sort groups by k (wave=1, ripple=2, etc.)
   const kOrder = Object.keys(K_LABELS);
   result.sort((a, b) => kOrder.indexOf(a.prefix) - kOrder.indexOf(b.prefix));
   return result;
@@ -82,10 +76,7 @@ const targetModes = [
 
 // ── Gait cycle dot diagram ──────────────────────────────────────
 
-interface LegDot {
-  x: number;
-  z: number;
-}
+interface LegDot { x: number; z: number; }
 
 function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayout: LegDot[] | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -96,8 +87,6 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
 
     const steps = groups.length;
     const n = legLayout.length;
-
-    // Compute bounding box of leg positions
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const p of legLayout) {
       if (p.x < minX) minX = p.x;
@@ -108,7 +97,6 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
     const rangeX = maxX - minX || 1;
     const rangeZ = maxZ - minZ || 1;
 
-    // Frame size per step (top-down mini view)
     const framePad = 2;
     const frameW = 28;
     const frameH = 36;
@@ -129,21 +117,17 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, totalW, totalH);
 
-    // Scale: fit leg positions into frame (preserving aspect ratio)
     const scale = Math.min(
       (frameW - framePad * 2) / rangeX,
       (frameH - framePad * 2) / rangeZ,
     );
-    const cx = frameW / 2;  // center X within frame
-    const cz = frameH / 2;  // center Z within frame
-
+    const cx = frameW / 2;
+    const cz = frameH / 2;
     const dotR = 2.5;
 
     for (let s = 0; s < steps; s++) {
       const lifted = new Set(groups[s]);
-      const fx = padX + s * (frameW + frameGap); // frame left edge
-
-      // Leg dots
+      const fx = padX + s * (frameW + frameGap);
       for (let l = 0; l < n; l++) {
         const p = legLayout[l];
         const dx = fx + cx + (p.x - (minX + maxX) / 2) * scale;
@@ -153,8 +137,6 @@ function GaitDiagram({ groups, legLayout }: { groups: number[][] | null; legLayo
         ctx.fillStyle = lifted.has(l) ? '#444' : '#ccc';
         ctx.fill();
       }
-
-      // Step label
       ctx.fillStyle = '#666';
       ctx.font = '8px monospace';
       ctx.textAlign = 'center';
@@ -176,10 +158,8 @@ export default function ControlPanel() {
   const { botRef, updateServoDisplay, bumpBotVersion } = useHexapod();
   const gaitIntervalRef = useRef(null);
 
-  // Re-read localStorage on every mount so tab re-mount picks up latest state
   const saved = useMemo(() => get_bot_options(), []);
 
-  // Active states for toggle groups
   const [drawType, setDrawType] = useState(saved.draw_type || 'mesh');
   const [moveMode, setMoveMode] = useState(saved.move_mode || 'move');
   const [gait, setGait] = useState(saved.gait || 'tripod');
@@ -187,7 +167,6 @@ export default function ControlPanel() {
   const [targetMode, setTargetMode] = useState(saved.target_mode || 'target');
   const [syncMode, setSyncMode] = useState(saved.sync_cmd ? 'sync' : 'manual');
   const [dof, setDof] = useState(saved.dof || 3);
-  // Which legs to apply DOF changes to (default all checked)
   const [dofLegs, setDofLegs] = useState<Set<number>>(() => {
     const count = saved.leg_count || 6;
     return new Set(Array.from({ length: count }, (_, i) => i));
@@ -204,13 +183,19 @@ export default function ControlPanel() {
   const setMicroSteps = useCallback((v: number) => {
     setMicroStepsState(v);
     const b = botRef.current;
-    if (b) b.options.micro_steps = v;
+    if (b) {
+      b.options.micro_steps = v;
+      set_bot_options(b.options);
+    }
   }, [botRef]);
 
   const setPhysicsMode = useCallback((mode: 'none' | 'servo_constraint') => {
     setPhysicsModeState(mode);
     const b = botRef.current;
-    if (b) b.options.physics_mode = mode;
+    if (b) {
+      b.options.physics_mode = mode;
+      set_bot_options(b.options);
+    }
   }, [botRef]);
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
@@ -315,7 +300,6 @@ export default function ControlPanel() {
         setDofLegs(new Set(Array.from({ length: newLegCount }, (_, i) => i)));
         bot.options.leg_count = newLegCount;
         bot.apply_attributes(bot.options);
-        // Reset gait if current one no longer exists in new gait set
         if (!bot.gait_controller.gaits[bot.options.gait || 'tripod']) {
           bot.options.gait = 'tripod';
           setGait('tripod');
@@ -349,25 +333,23 @@ export default function ControlPanel() {
     updateServoDisplay();
   }, [botRef, gc, updateServoDisplay, dofLegs]);
 
-  // Track pressed movement keys so combinations (e.g. W+A) work without
-  // resetting the gait cycle on every key change.
   const pressedKeys = useRef<Set<number>>(new Set());
 
   // Keyboard handler
   useEffect(() => {
-    const MOVE_KEYS = [87, 83, 65, 68, 90, 67]; // W S A D Z C
+    const MOVE_KEYS = [87, 83, 65, 68, 90, 67];
 
     const updateGaitDirections = () => {
       const ctrl = gc();
       if (!ctrl) return;
       const keys = pressedKeys.current;
       let fb = 0, lr = 0, rot = 0;
-      if (keys.has(87)) fb += 1;   // W forward
-      if (keys.has(83)) fb -= 1;   // S backward
-      if (keys.has(90)) lr += 1;   // Z move left
-      if (keys.has(67)) lr -= 1;   // C move right
-      if (keys.has(65)) rot += 1;  // A rotate left
-      if (keys.has(68)) rot -= 1;  // D rotate right
+      if (keys.has(87)) fb += 1;
+      if (keys.has(83)) fb -= 1;
+      if (keys.has(90)) lr += 1;
+      if (keys.has(67)) lr -= 1;
+      if (keys.has(65)) rot += 1;
+      if (keys.has(68)) rot -= 1;
 
       const action = ctrl.actions['follow_joystick'];
       if (action) {
@@ -402,59 +384,29 @@ export default function ControlPanel() {
         return;
       }
 
-      const mode = gc()?.move_mode;
+      if (MOVE_KEYS.includes(e.keyCode)) {
+        e.preventDefault();
+        if (!pressedKeys.current.has(e.keyCode)) {
+          pressedKeys.current.add(e.keyCode);
+          updateGaitDirections();
+        }
+      }
 
-      const handleRaise = () => {
+      if (e.keyCode === 82) {
         bot.move_body('y', 5);
         setBodyHeightVal(bot.body_mesh.position.y);
-      };
-      const handleFall = () => {
+      }
+      if (e.keyCode === 70) {
         bot.move_body('y', -5);
         setBodyHeightVal(bot.body_mesh.position.y);
-      };
-
-      if (mode === 'move') {
-        if (e.keyCode === 82) { handleRaise(); return; }
-        if (e.keyCode === 70) { handleFall(); return; }
-
-        if (MOVE_KEYS.includes(e.keyCode)) {
-          e.preventDefault();
-          if (!pressedKeys.current.has(e.keyCode)) {
-            pressedKeys.current.add(e.keyCode);
-            updateGaitDirections();
-          }
-        }
-      } else if (mode === 'move_body') {
-        e.preventDefault();
-        const fb = bot.options.fb_step || 15;
-        const lr = bot.options.lr_step || 10;
-        if (e.keyCode === 87) bot.move_body('z', -fb);        // W
-        else if (e.keyCode === 83) bot.move_body('z', fb);    // S
-        else if (e.keyCode === 65) bot.move_body('x', -lr);   // A
-        else if (e.keyCode === 68) bot.move_body('x', lr);    // D
-        else if (e.keyCode === 82) handleRaise();
-        else if (e.keyCode === 70) handleFall();
-      } else if (mode === 'rotate_body') {
-        e.preventDefault();
-        const rot = bot.options.rotate_step || Math.PI / 18;
-        if (e.keyCode === 87) bot.rotate_body('x', rot);       // W: pitch fwd
-        else if (e.keyCode === 83) bot.rotate_body('x', -rot); // S: pitch back
-        else if (e.keyCode === 65) bot.rotate_body('z', rot);  // A: roll left
-        else if (e.keyCode === 68) bot.rotate_body('z', -rot); // D: roll right
-        else if (e.keyCode === 81) bot.rotate_body('y', rot);  // Q: yaw left
-        else if (e.keyCode === 69) bot.rotate_body('y', -rot); // E: yaw right
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      const mode = gc()?.move_mode;
-      if (mode === 'move' && MOVE_KEYS.includes(e.keyCode)) {
+      if (MOVE_KEYS.includes(e.keyCode)) {
         e.preventDefault();
         pressedKeys.current.delete(e.keyCode);
         updateGaitDirections();
-      } else if (mode !== 'move') {
-        e.preventDefault();
-        if (gc()) gc().stop();
       }
     };
 
@@ -473,166 +425,166 @@ export default function ControlPanel() {
     };
   }, [botRef, gc, updateServoDisplay]);
 
+  const gaitGroups = getGaitGroups(botRef.current);
+  const activePrefix = gaitGroups.find(g => g.gaits.some(item => item.value === gait))?.prefix || gaitGroups[0]?.prefix;
+  const activeGroup = gaitGroups.find(g => g.prefix === activePrefix);
+  const handleKSwitch = (prefix: string) => {
+    if (prefix === activePrefix) return;
+    const group = gaitGroups.find(g => g.prefix === prefix);
+    if (group?.gaits[0]?.value) handleAction('gait_switch', group.gaits[0].value);
+  };
+
   return (
     <div>
-      <fieldset className="btns">
-        <legend>Draw Type</legend>
-        {drawTypes.map((item) => (
-          <a
-            key={item.value}
-            href="#"
-            className={`control_btn${drawType === item.value ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); handleAction('act_draw_type_switch', item.value); }}
-          >
-            {item.label}
-          </a>
-        ))}
-      </fieldset>
+      <Card className="mb-4">
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Mode</CardTitle></CardHeader>
+        <CardContent className="py-1 px-3 space-y-3">
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-1.5">Move Mode</div>
+            <div className="flex flex-wrap gap-0.5">
+              {moveModes.map(m => (
+                <Button key={m.value}
+                  variant={moveMode === m.value ? 'default' : 'outline'}
+                  size="sm" onClick={() => handleAction('mode_switch', m.value)}
+                >{m.label}</Button>
+              ))}
+            </div>
+          </div>
 
-      <fieldset className="btns">
-        <legend>Move Mode</legend>
-        {moveModes.map((item) => (
-          <a
-            key={item.value}
-            href="#"
-            className={`control_btn${moveMode === item.value ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); handleAction('mode_switch', item.value); }}
-          >
-            {item.label}
-          </a>
-        ))}
-      </fieldset>
-
-      <fieldset className="btns">
-        <legend>Physics</legend>
-        <a href="#" className={`control_btn${physicsMode === 'none' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); setPhysicsMode('none'); }}>None</a>
-        <a href="#" className={`control_btn${physicsMode === 'servo_constraint' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); setPhysicsMode('servo_constraint'); }}>Servo Constraint</a>
-        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-          <span>Micro Steps:</span>
-          <input type="range" min={1} max={20} step={1} value={microSteps}
-            style={{ width: 80 }}
-            onChange={(e) => setMicroSteps(parseInt(e.target.value))} />
-          <span style={{ fontFamily: 'monospace', width: 20 }}>{microSteps}</span>
-        </div>
-      </fieldset>
-
-      <fieldset className="btns">
-        <legend>...</legend>
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_stop_motion'); }}>Stop</a>
-        {' | '}
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_action', 'act_standby'); }}>Standby</a>
-        {' | '}
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_action', 'act_putdown_tips'); }}>Putdown Tips</a>
-        {' | '}
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_disable_console'); }}>Disable Console</a>
-      </fieldset>
-
-      <fieldset className="btns">
-        <legend>...</legend>
-        {stepButtons.map((btn) => (
-          <span key={btn.value}>
-            <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction(btn.action, btn.value); }}>
-              {btn.label}
-            </a>
-            {['87', '90', '65'].includes(btn.value) && ' | '}
-            {btn.value === '83' && <hr />}
-            {btn.value === '68' && <hr />}
-          </span>
-        ))}
-
-        <hr />
-
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_motion2', '82'); }}>Raise(r)</a>
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_motion2', '70'); }}>Fall(f)</a>
-      </fieldset>
-
-      <fieldset className="btns">
-        <legend>Gaits</legend>
-        {(() => {
-          const groups = getGaitGroups(botRef.current);
-          const activePrefix = groups.find(g => g.gaits.some(item => item.value === gait))?.prefix || groups[0]?.prefix;
-          const activeGroup = groups.find(g => g.prefix === activePrefix);
-          const handleKSwitch = (prefix: string) => {
-            if (prefix === activePrefix) return;
-            const group = groups.find(g => g.prefix === prefix);
-            if (group?.gaits[0]?.value) handleAction('gait_switch', group.gaits[0].value);
-          };
-          return (
-            <>
-              <div style={{ marginBottom: 4 }}>
-                {groups.map(g => (
-                  <a key={g.prefix} href="#" className={`control_btn${activePrefix === g.prefix ? ' active' : ''}`}
-                    style={{ fontSize: 11, padding: '2px 6px' }}
-                    onClick={(e) => { e.preventDefault(); handleKSwitch(g.prefix); }}
-                  >{g.label}</a>
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-1.5">Gaits</div>
+            <div className="flex flex-wrap gap-0.5 mb-1">
+              {gaitGroups.map(g => (
+                <Button key={g.prefix}
+                  variant={activePrefix === g.prefix ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleKSwitch(g.prefix)}
+                >{g.label}</Button>
+              ))}
+            </div>
+            {activeGroup && (
+              <div className="flex flex-wrap gap-0.5 max-h-[180px] overflow-y-auto mt-1">
+                {activeGroup.gaits.map(item => (
+                  <Button key={item.value}
+                    variant={gait === item.value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => handleAction('gait_switch', item.value)}
+                  >{item.label}</Button>
                 ))}
               </div>
-              {activeGroup && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, maxHeight: 180, overflowY: 'auto' }}>
-                  {activeGroup.gaits.map(item => (
-                    <a key={item.value} href="#" className={`control_btn${gait === item.value ? ' active' : ''}`}
-                      style={{ fontSize: 11, padding: '2px 6px' }}
-                      onClick={(e) => { e.preventDefault(); handleAction('gait_switch', item.value); }}
-                    >{item.label}</a>
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        })()}
-      </fieldset>
+            )}
+          </div>
 
-      <GaitDiagram
-        groups={botRef.current?.gait_controller?.gaits[gait] ?? null}
-        legLayout={botRef.current?.leg_layout?.map((l: any) => ({ x: l.x, z: l.z })) ?? null}
-      />
+          <GaitDiagram
+            groups={botRef.current?.gait_controller?.gaits[gait] ?? null}
+            legLayout={botRef.current?.leg_layout?.map((l: any) => ({ x: l.x, z: l.z })) ?? null}
+          />
+        </CardContent>
+      </Card>
 
-      <fieldset className="btns">
-        <legend>...</legend>
-        {actionTypes.map((item) => (
-          <a
-            key={item.value}
-            href="#"
-            className={`control_btn${actionType === item.value ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); handleAction('action_switch', item.value); }}
-          >
-            {item.value === 'fast' ? <>{item.label}<sub>beta</sub></> : item.label}
-          </a>
-        ))}
-        {' | '}
-        {targetModes.map((item) => (
-          <a
-            key={item.value}
-            href="#"
-            className={`control_btn${targetMode === item.value ? ' active' : ''}`}
-            onClick={(e) => { e.preventDefault(); handleAction('target_mode_switch', item.value); }}
-          >
-            {item.label}
-          </a>
-        ))}
-      </fieldset>
+      <Card className="mb-4">
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Step</CardTitle></CardHeader>
+        <CardContent className="py-1 px-3 space-y-3">
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-1.5">Action Type</div>
+            <div className="flex flex-wrap gap-0.5">
+              {actionTypes.map(a => (
+                <Button key={a.value}
+                  variant={actionType === a.value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleAction('action_switch', a.value)}
+                >{a.value === 'fast' ? <>{a.label}<sub className="text-[9px]">beta</sub></> : a.label}</Button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-1.5">Target</div>
+            <div className="flex flex-wrap gap-0.5">
+              {targetModes.map(t => (
+                <Button key={t.value}
+                  variant={targetMode === t.value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleAction('target_mode_switch', t.value)}
+                >{t.label}</Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div style={{ height: 10 }}></div>
+      <Card className="mb-4">
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Physics &amp; Render</CardTitle></CardHeader>
+        <CardContent className="py-1 px-3 space-y-3">
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-1.5">Physics</div>
+            <div className="flex flex-wrap gap-0.5">
+              <Button variant={physicsMode === 'none' ? 'default' : 'outline'} size="sm" onClick={() => setPhysicsMode('none')}>None</Button>
+              <Button variant={physicsMode === 'servo_constraint' ? 'default' : 'outline'} size="sm" onClick={() => setPhysicsMode('servo_constraint')}>Servo Constraint</Button>
+            </div>
+            <div className="flex items-center gap-2 mt-2 text-xs">
+              <span>Micro Steps:</span>
+              <Slider value={[microSteps]} min={1} max={20} step={1}
+                className="w-20"
+                onValueChange={(v) => setMicroSteps(Array.isArray(v) ? v[0] : v)} />
+              <span className="font-mono w-5">{microSteps}</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-1.5">Draw Type</div>
+            <div className="flex flex-wrap gap-0.5">
+              {drawTypes.map(d => (
+                <Button key={d.value}
+                  variant={drawType === d.value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleAction('act_draw_type_switch', d.value)}
+                >{d.label}</Button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div style={{ marginTop: 10 }}>
-        <a href="#" className="control_btn" onClick={(e) => { e.preventDefault(); handleAction('act_send_cmd'); }}>Send</a>
-        {' | '}
-        <a
-          href="#"
-          className={`control_btn${syncMode === 'sync' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_sync_cmd', 'sync'); }}
-        >
-          Sync
-        </a>
-        <a
-          href="#"
-          className={`control_btn${syncMode === 'manual' ? ' active' : ''}`}
-          onClick={(e) => { e.preventDefault(); handleAction('act_sync_cmd', ''); }}
-        >
-          Manually
-        </a>
+      <Card className="mb-4">
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Actions</CardTitle></CardHeader>
+        <CardContent className="py-1 px-3 space-y-3">
+          <div className="flex flex-wrap gap-1">
+            <Button variant="outline" size="sm" onClick={() => handleAction('act_stop_motion')}><CircleStop data-icon="inline-start" />Stop</Button>
+            <Button variant="outline" size="sm" onClick={() => handleAction('act_action', 'act_standby')}><Wand2 data-icon="inline-start" />Standby</Button>
+            <Button variant="outline" size="sm" onClick={() => handleAction('act_action', 'act_putdown_tips')}><Footprints data-icon="inline-start" />Putdown Tips</Button>
+            <Button variant="outline" size="sm" onClick={() => handleAction('act_disable_console')}><Terminal data-icon="inline-start" />Disable Console</Button>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted-foreground mb-1.5">Keyboard</div>
+            <div className="grid grid-cols-[auto_auto] gap-x-2 gap-y-0.5 text-[11px]">
+              {[
+                ['W', 'forward'], ['S', 'backward'], ['A', 'rotate L'], ['D', 'rotate R'],
+                ['Z', 'move L'], ['C', 'move R'], ['R', 'raise'], ['F', 'fall'],
+              ].map(([key, label]) => (
+                <span key={key}>
+                  <Button variant="outline" size="sm"
+                    className="text-[10px] font-mono px-1 py-0.5 h-auto min-w-[20px]"
+                    onClick={() => {
+                      const codes: Record<string, [string, string]> = {
+                        W: ['act_step', '87'], S: ['act_step', '83'], A: ['act_step', '65'],
+                        D: ['act_step', '68'], Z: ['act_step', '90'], C: ['act_step', '67'],
+                        R: ['act_motion2', '82'], F: ['act_motion2', '70'],
+                      };
+                      handleAction(codes[key][0], codes[key][1]);
+                    }}
+                  >{key}</Button>{' '}{label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => handleAction('act_send_cmd')}><Send data-icon="inline-start" />Send</Button>
+        <Button variant={syncMode === 'sync' ? 'default' : 'outline'} size="sm"
+          onClick={() => handleAction('act_sync_cmd', 'sync')}><RefreshCw data-icon="inline-start" />Sync</Button>
+        <Button variant={syncMode === 'manual' ? 'default' : 'outline'} size="sm"
+          onClick={() => handleAction('act_sync_cmd', '')}><Zap data-icon="inline-start" />Manual</Button>
       </div>
     </div>
   );
