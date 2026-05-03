@@ -969,7 +969,6 @@ export class Hexapod {
       leg._servo_keyframes = servoKfs[i];
       leg._current_segment = 0;
       leg._segment_start_time = now;
-      leg._segment_durations = segmentDurs;
 
       // Revert joints to keyframe[0] visual state for smooth animation start
       const kf0 = servoKfs[i][0];
@@ -984,7 +983,6 @@ export class Hexapod {
   update_servo_animations(now: number) {
     const speed = this.servo_speed || 2000;
     let anyAnimating = false;
-    let meshJustCompleted = false;
 
     // Mesh keyframe animation (shared timing for body movement)
     if (this._mesh_keyframes && this._current_segment < this._segment_durations.length) {
@@ -1004,7 +1002,6 @@ export class Hexapod {
         this._segment_start_time = now;
         if (this._current_segment >= this._segment_durations.length) {
           this._mesh_keyframes = null;
-          meshJustCompleted = true;  // fire correction once below
         }
       }
     }
@@ -1019,32 +1016,6 @@ export class Hexapod {
 
     if (anyAnimating) {
       this.mesh.updateMatrixWorld();
-
-      // Only run drift correction at animation completion (not mid-segment),
-      // so it doesn't fight the keyframe interpolation during continuous movement.
-      if (meshJustCompleted) {
-        const DRIFT_THRESHOLD = 3.0;
-        for (let i = 0; i < this.legs.length; i++) {
-          const leg = this.legs[i];
-          if (!leg._locked_tip_target || !leg.on_floor) continue;
-          const currentTip = leg.get_tip_pos();
-          const drift = currentTip.distanceTo(leg._locked_tip_target);
-          if (drift > DRIFT_THRESHOLD) {
-            // Sync logical servo_value with rendered state so IK starts from
-            // current animated joint positions, not stale pre-animation values
-            for (let j = 0; j < leg.joint_count; j++) {
-              leg.limbs[j].servo_value = Math.round(leg.limbs[j]._rendered_servo_value);
-            }
-            const calc = new PosCalculator(leg, leg._locked_tip_target, leg._home_servos);
-            const result = calc.run();
-            for (let j = 0; j < leg.joint_count; j++) {
-              leg._set_joint_rotation(j, result.values[j]);
-              leg.limbs[j]._rendered_servo_value = result.values[j];
-            }
-          }
-        }
-      }
-
       this.sync_guide_circles();
     }
   }
@@ -1319,8 +1290,6 @@ export class HexapodLeg {
   _servo_keyframes: number[][] | null = null;
   _current_segment: number = 0;
   _segment_start_time: number = 0;
-  _segment_durations: number[] = [];
-  _locked_tip_target: THREE.Vector3 | null = null;
 
   constructor(bot: any, options: any) {
     this.bot = bot;
@@ -1556,9 +1525,13 @@ export class HexapodLeg {
     const kf0 = kfs[this._current_segment];
     const kf1 = kfs[this._current_segment + 1];
 
-    // Use shared segment duration (global max across all legs) so mesh
-    // and all legs advance segments in lockstep, reducing tip drift.
-    const durationMs = this._segment_durations[this._current_segment] || 0;
+    // Each joint moves at constant servo_speed; joints with larger deltas take longer.
+    // Duration = time needed for the joint with the largest delta in this segment.
+    let maxDelta = 0;
+    for (let i = 0; i < this.joint_count; i++) {
+      maxDelta = Math.max(maxDelta, Math.abs(kf1[i] - kf0[i]));
+    }
+    const durationMs = (maxDelta / speed) * 1000;
     const elapsed = now - this._segment_start_time;
     const t = durationMs > 0.001 ? Math.min(1, elapsed / durationMs) : 1;
 
