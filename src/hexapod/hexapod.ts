@@ -639,6 +639,7 @@ export class Hexapod {
     for (let idx = 0; idx < this.legs.length; idx++) {
       let geometry = new THREE.Geometry();
       let body_pos = this.body_mesh.position.clone();
+      body_pos.y = 0;  // project to ground plane
       const worldTip = this.legs[idx].get_tip_pos();
       let tip_pos = this.mesh.worldToLocal(worldTip.clone());
       geometry.vertices.push(body_pos, tip_pos);
@@ -663,6 +664,7 @@ export class Hexapod {
 
     this.mesh.updateMatrixWorld();
     const bodyPos = this.body_mesh.position.clone();
+    bodyPos.y = 0;  // project to ground plane
 
     // Update guideline lines from stable home positions (not current animated tips)
     for (let idx = 0; idx < this.legs.length; idx++) {
