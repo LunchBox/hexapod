@@ -336,11 +336,10 @@ export class Hexapod {
       this.sync_guide_circles();
       // Rebuild guide local positions from restored state so gait targets + guidelines are correct
       this.mesh.updateMatrixWorld();
-      const origin = this.body_mesh.position.clone(); origin.y = 0;
       this._guide_local_positions = [];
       for (let i = 0; i < this.legs.length; i++) {
         const worldPos = this.legs[i].get_tip_pos();
-        this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()).sub(origin));
+        this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
       }
       this._guide_local_positions.push(new THREE.Vector3(0, 0, 0));
       this.adjust_gait_guidelines();
@@ -583,10 +582,9 @@ export class Hexapod {
     this.mesh.add(this.guide_pos);
     this._guide_local_positions = [];
     this.mesh.updateMatrixWorld();
-    const origin = this.body_mesh.position.clone(); origin.y = 0;
     for (let i = 0; i < total_legs; i++) {
       const worldPos = this.legs[i].get_tip_pos();
-      this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()).sub(origin));
+      this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
     }
     this._guide_local_positions.push(new THREE.Vector3(0, 0, 0)); // body center at index N
   }
@@ -619,11 +617,7 @@ export class Hexapod {
 
   reset_guide_pos() {
     if (!this.guide_pos) return;
-    // Position at body center ground projection so rotation pivots
-    // around body center, not arbitrary mesh origin.
-    const bodyPos = this.body_mesh.position.clone();
-    bodyPos.y = 0;
-    this.guide_pos.position.copy(bodyPos);
+    this.guide_pos.position.set(0, 0, 0);
     this.guide_pos.rotation.set(0, 0, 0);
     this.guide_pos.scale.set(1, 1, 1);
   }
@@ -674,11 +668,10 @@ export class Hexapod {
    *  movement animation completes or after tips are placed on ground. */
   rebuild_guide_references() {
     this.mesh.updateMatrixWorld();
-    const origin = this.body_mesh.position.clone(); origin.y = 0;
     this._guide_local_positions = [];
     for (let i = 0; i < this.legs.length; i++) {
       const worldPos = this.legs[i].get_tip_pos();
-      this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()).sub(origin));
+      this._guide_local_positions.push(this.mesh.worldToLocal(worldPos.clone()));
     }
     this._guide_local_positions.push(new THREE.Vector3(0, 0, 0));
     this.adjust_gait_guidelines();
@@ -700,14 +693,13 @@ export class Hexapod {
     if (this.left_gl) { this.left_gl.position.copy(pivot); this.left_gl.rotation.y = this.rotate_step; }
     if (this.right_gl) { this.right_gl.position.copy(pivot); this.right_gl.rotation.y = -this.rotate_step; }
 
-    // _guide_local_positions is stored relative to body center,
-    // and guideline.position = pivot, so vertices[1] = homeLocal directly.
+    // Vertices are relative to guideline's position (pivot)
     for (let idx = 0; idx < this.legs.length; idx++) {
       const homeLocal = homePositions[idx];
       if (!homeLocal) continue;
       const line = this.guideline.children[idx] as any;
       if (line) {
-        line.geometry.vertices[1].copy(homeLocal);
+        line.geometry.vertices[1].copy(homeLocal.clone().sub(pivot));
         line.geometry.verticesNeedUpdate = true;
       }
     }
