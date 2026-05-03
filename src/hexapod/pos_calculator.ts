@@ -8,7 +8,7 @@ export interface PosResult {
   values: number[];
 }
 
-const REG_STRENGTH = 0.015; // pull toward init per iteration
+const REG_STRENGTH = 0.002; // tiny pull toward init per iteration
 
 export class PosCalculator {
   leg: any;
