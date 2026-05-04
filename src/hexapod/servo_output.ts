@@ -16,9 +16,10 @@ export interface ServoOutput {
   /** Apply new servo targets. capturedRendered optionally freezes
    *  the visual state at the moment before IK ran. */
   setTargets(targets: number[], capturedRendered?: number[]): void;
-  /** Advance animation by one frame. Returns interpolated values to apply,
-   *  or null when idle. */
-  update(now: number, speed: number, applyJoint: (idx: number, val: number) => void): boolean;
+  /** Advance animation by one frame. If durationMs is provided it
+   *  overrides the per-leg delta computation — used to synchronise
+   *  leg timing with body_mesh / mesh segment timing. */
+  update(now: number, speed: number, applyJoint: (idx: number, val: number) => void, durationMs?: number): boolean;
   /** Pre-load multi-segment keyframes for body movement animation.
    *  keyframes.length must be >= 2. renderedValues is reset to keyframes[0].
    *  startTime optionally sets the segment timer start (for mesh/leg sync). */
@@ -46,7 +47,7 @@ export class DirectOutput implements ServoOutput {
 
   setKeyframes(_keyframes: number[][], _startTime?: number): void {}
 
-  update(_now: number, _speed: number, _applyJoint: (idx: number, val: number) => void): boolean {
+  update(_now: number, _speed: number, _applyJoint: (idx: number, val: number) => void, _durationMs?: number): boolean {
     return false;
   }
 
@@ -90,7 +91,7 @@ export class AnimatedOutput implements ServoOutput {
     }
   }
 
-  update(now: number, speed: number, applyJoint: (idx: number, val: number) => void): boolean {
+  update(now: number, speed: number, applyJoint: (idx: number, val: number) => void, durationMs?: number): boolean {
     const kfs = this._keyframes;
     if (!kfs || this._currentSegment >= kfs.length - 1) {
       this._keyframes = null;
@@ -105,14 +106,17 @@ export class AnimatedOutput implements ServoOutput {
     const kf0 = kfs[this._currentSegment];
     const kf1 = kfs[this._currentSegment + 1];
 
-    let maxDelta = 0;
-    for (let i = 0; i < kf0.length; i++) {
-      maxDelta = Math.max(maxDelta, Math.abs(kf1[i] - kf0[i]));
-    }
-
-    const durationMs = (maxDelta / speed) * 1000;
+    // Use override duration when provided (body_mesh sync), otherwise
+    // compute from per-leg delta (independent servo speeds).
+    const dur = durationMs ?? (() => {
+      let maxDelta = 0;
+      for (let i = 0; i < kf0.length; i++) {
+        maxDelta = Math.max(maxDelta, Math.abs(kf1[i] - kf0[i]));
+      }
+      return (maxDelta / speed) * 1000;
+    })();
     const elapsed = now - this._segmentStartTime;
-    const t = durationMs > 0.001 ? Math.min(1, elapsed / durationMs) : 1;
+    const t = dur > 0.001 ? Math.min(1, elapsed / dur) : 1;
 
     for (let i = 0; i < kf0.length; i++) {
       const v = kf0[i] + (kf1[i] - kf0[i]) * t;

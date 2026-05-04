@@ -1259,11 +1259,16 @@ export class Hexapod {
       }
     }
 
-    // Leg servo keyframe animation
+    // Leg servo keyframe animation.
+    // When body_mesh is animating, synchronise leg timing with
+    // body_mesh segment duration so locked tips don't slide.
+    const bodyDur = (this._body_mesh_keyframes && this._current_body_mesh_segment < this._body_mesh_segment_durations.length)
+      ? this._body_mesh_segment_durations[this._current_body_mesh_segment] : undefined;
+
     for (let i = 0; i < this.legs.length; i++) {
       if (this.legs[i].is_animating()) {
         anyAnimating = true;
-        this.legs[i].update_animation(now, speed);
+        this.legs[i].update_animation(now, speed, bodyDur);
       }
     }
 
@@ -1854,11 +1859,11 @@ export class HexapodLeg {
   }
 
   /** Advance servo animation. Returns true if still in progress. */
-  update_animation(now: number, speed: number): boolean {
+  update_animation(now: number, speed: number, durationMs?: number): boolean {
     return this._output.update(now, speed, (idx, val) => {
       this._set_joint_rotation(idx, val);
       this.limbs[idx]._rendered_servo_value = val;
-    });
+    }, durationMs);
   }
 }
 
