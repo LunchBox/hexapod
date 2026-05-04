@@ -26,7 +26,7 @@ npm run lint     # ESLint
 npx tsc --noEmit # TypeScript type-check
 ```
 
-No test suite exists yet.
+Test suite: 55 tests across 4 files (`src/hexapod/__tests__/`), run with `npx vitest run`.
 
 ## Code review status
 
@@ -77,6 +77,7 @@ src/
     pos_calculator.ts            # Inverse kinematics: gradient-descent solver for tip→servo values
     pos_calculator_backup_2026-05-02.ts  # Backup of pre-refactor PosCalculator
     physics_solver.ts            # Multi-leg constraint solver (PhysicsSolver.solveAll)
+    servo_output.ts              # ServoOutput interface + DirectOutput / AnimatedOutput strategy
     hexapod.ts                   # Hexapod + HexapodLeg classes, layout computation, config helpers
     gaits.ts                     # GaitController + GaitAction hierarchy (standby, move, internal, putdown)
     gait_configs.ts              # Preset gait definitions by leg count (wave, ripple, tripod, quad)
@@ -95,10 +96,11 @@ stylesheets/
 ## Architecture
 
 **Core classes (same logic as legacy, now ES modules):**
-- `Hexapod` — The bot. Creates 3D body mesh, 6 `HexapodLeg` instances, holds a `GaitController`. Manages servo value computation, status snapshot/restore, and Socket.IO commands to `localhost:8888`. `apply_attributes()` re-draws the entire bot from config.
-- `HexapodLeg` — 2–6 DOF limb chain (coxa → femur → tibia → tarsus → segment5 → segment6 → tip). Each limb is a Three.js mesh with `servo_value`, `servo_idx`, `revert` flag. `set_tip_pos()` invokes `PosCalculator`.
-- `GaitController` — Owns gait definitions (leg group patterns), action types (power/efficient/body_first/fast), target modes (translate/target). Uses `gait_configs.ts` presets filtered through `gait_generator.ts` for balance validation. `fire_action()` runs on a 30ms interval via setInterval in ControlPanel.
-- `PosCalculator` — Inverse kinematics via gradient descent on the three servo values for a single leg, minimizing distance to target tip world position.
+- `Hexapod` — The bot. Creates 3D body mesh, 6 `HexapodLeg` instances, holds a `GaitController`. Manages servo value computation, status snapshot/restore, and Socket.IO commands to `localhost:8888`. `apply_attributes()` re-draws the entire bot from config. Holds keyframe animation state for both `mesh` (gait path) and `body_mesh` (body control path). The `_servo_anim_disabled` flag prevents new animations during rebuilds and transform_body sub-steps; `is_animating()` gates `act()` during active animation.
+- `HexapodLeg` — 2–6 DOF limb chain (coxa → femur → tibia → tarsus → segment5 → segment6 → tip). Each limb is a Three.js mesh with `servo_value`, `servo_idx`, `revert` flag. `set_tip_pos()` invokes `PosCalculator`. Uses a `ServoOutput` strategy (`DirectOutput` or `AnimatedOutput`) to control whether servo values are applied instantly or animated through keyframes.
+- `GaitController` — Owns gait definitions (leg group patterns), action types (power/efficient/body_first/fast), target modes (translate/target). Uses `gait_configs.ts` presets filtered through `gait_generator.ts` for balance validation. `fire_action()` runs on a 30ms interval via setInterval in ControlPanel. `act()` is gated by `bot.is_animating()` — new commands are skipped while a previous animation plays.
+- `PosCalculator` — Inverse kinematics via gradient descent on the servo values for a single leg, minimizing distance to target tip world position. Contains **zero** trigonometric functions. Uses `REG_STRENGTH` (0.012) to pull redundant DOFs toward home servos during iteration. **Calls `set_servo_values()` during IK iterations, which must apply values immediately** (bypass animation) so the Three.js scene-graph FK reads current joint angles.
+- `ServoOutput` — Strategy pattern (`src/hexapod/servo_output.ts`). `DirectOutput` applies servo values instantly (`none` mode). `AnimatedOutput` animates through keyframes at `servo_speed` (`servo_constraint` mode). `Hexapod._setLegOutputs(mode)` switches all legs between strategies.
 - `JoyStick` — Canvas-based 2D joystick. Accepts either a CSS selector string or a DOM element.
 
 **React integration pattern:**
@@ -180,45 +182,75 @@ There are two physics modes (toggled in ControlPanel, stored as `options.physics
 
 **NEVER artificially synchronize servo timing to make animation "look better."** The animation is a simulation output, not a visual effect. Adding fake uniform timing (e.g., forcing all joints to finish together) violates the servo constraint principle.
 
-### Keyframe animation system (replaced single-target fields)
+### ServoOutput strategy pattern
 
-The animation system was refactored to use **keyframe arrays** instead of individual start/target fields. Old fields that NO LONGER EXIST:
+`src/hexapod/servo_output.ts` — isolates ALL animation state and timing from HexapodLeg.
+
+**Interface (`ServoOutput`):**
+- `renderedValues: number[]` — current visual servo values
+- `isAnimating(): boolean` — whether keyframe animation is in progress
+- `setTargets(targets, capturedRendered?)` — apply targets, optionally anchoring visual state
+- `update(now, speed, applyJoint, durationMs?)` — advance one frame; optional `durationMs` overrides per-leg delta timing (used for body_mesh sync)
+- `setKeyframes(keyframes, startTime?)` — load multi-segment keyframes; optional `startTime` syncs leg/mesh timers
+- `reset()` — discard animation state
+
+**`DirectOutput`** (`none` physics mode): Values snap instantly. `isAnimating()` always false.
+
+**`AnimatedOutput`** (`servo_constraint` mode): Linearly interpolates each joint between consecutive keyframes at constant `servo_speed`. Each leg advances independently by default. `_segmentStartTime = -1` sentinel defers timer init to the first `update()` frame.
+
+**HexapodLeg delegation:**
+- `set_servo_values(values)` — applies DIRECTLY to joints (bypasses animation). **PosCalculator calls this during IK iterations and then reads the Three.js scene for FK — joints MUST be at the test values immediately.**
+- `set_tip_pos()` — captures `preRendered` BEFORE `PosCalculator.run()`, then calls `_output.setTargets()` to create a 2-keyframe animation from pre-IK to post-IK state. On stall, restores preRendered.
+- `is_animating()` / `update_animation()` — delegate to `_output`.
+
+### Keyframe animation system (two independent paths)
+
+**Old fields that NO LONGER EXIST:**
 - `leg._anim_targets`, `leg._anim_starts`, `leg._anim_start_time`
 - `bot._mesh_start_pos`, `bot._mesh_target_pos`, `bot._mesh_start_rotY`, `bot._mesh_target_rotY`, `bot._mesh_anim_start`, `bot._mesh_anim_duration`
+- `bot._servo_anim_disabled` on Hexapod (replaced by `_servo_anim_disabled` flag + `_setLegOutputs()`)
 
-**Current fields:**
-- `Hexapod._mesh_keyframes: {pos, rotY}[]` — N+1 mesh poses (N = micro_steps)
-- `Hexapod._segment_durations: number[]` — N durations in ms, one per segment
-- `Hexapod._current_segment: number` — which segment is playing
-- `Hexapod._segment_start_time: number` — when current segment began (performance.now)
-- `HexapodLeg._servo_keyframes: number[][]` — N+1 servo value arrays per leg
-- `HexapodLeg._current_segment: number` — segment index (independent per leg)
-- `HexapodLeg._segment_start_time: number` — when current segment began
+**Path A — Gait walking (`mesh` keyframes):**
 
-**Animation flow:**
-- `move_body()` → computes keyframes → calls `apply_physics_keyframes()` to store them
-- `set_tip_pos()` (standalone, no body movement) → creates 2 keyframes `[start, target]`
-- `update_servo_animations()` (rAF, 60fps): interpolates mesh + legs between adjacent keyframes
-- `update_animation()` (per leg): each leg independently advances its own `_current_segment` based on per-segment servo deltas
+Fields:
+- `Hexapod._mesh_keyframes: {pos, rotY}[]` — N+1 mesh poses
+- `Hexapod._segment_durations: number[]` — N segment durations (ms)
+- `Hexapod._current_segment: number`, `_segment_start_time: number`
 
-**Key rule**: Each leg's `_current_segment` advances independently. The mesh has its own `_current_segment`. They are NOT synchronized — legs can finish a segment before or after the mesh. This is correct for servo constraint (independent servo speeds).
+Flow:
+- `GaitController.move_body()` → builds mesh + servo keyframes → `apply_physics_keyframes()`
+- Servo keyframes stored per leg via `AnimatedOutput.setKeyframes(kfs, now)` (shared timer)
+- `update_servo_animations()` (rAF): interpolates `mesh.position/rotation.y` + calls `leg.update_animation()`
+- Each leg advances independently (own delta-based duration) — **tip drift is expected and physically real**
 
-### Micro steps — subdividing body movement
+**Path B — Body control (`body_mesh` keyframes):**
 
-`options.micro_steps` (default 1, range 1–20, session-only, slider in ControlPanel > Physics).
+Fields:
+- `Hexapod._body_mesh_keyframes: {pos, rot}[]` — N+1 body_mesh poses
+- `Hexapod._body_mesh_segment_durations: number[]`, `_current_body_mesh_segment: number`, `_body_mesh_segment_start_time: number`
+- `Hexapod._body_targets: THREE.Vector3[]` — world-space tip targets for per-frame IK
 
-When `micro_steps > 1`, body movement is subdivided into N evenly-spaced keyframes. At each keyframe, IK is solved for ALL legs at the intermediate body pose. This reduces per-segment linear interpolation error (nonlinear kinematics cause tip drift during linear interpolation; smaller segments = less error).
+Flow:
+- `GaitInternal.move()` → `transform_body_servo()` → builds body_mesh keyframes + world targets → stores on bot
+- Leg servo keyframes are NOT pre-computed for this path
+- `update_servo_animations()` (rAF): interpolates `body_mesh.position/rotation` → runs `PhysicsSolver.solveAll()` at each frame with exact body_mesh pose → applies via `set_servo_values()` directly
+- **Tip locking is exact** (per-frame IK eliminates interpolation error). Body slides at `servo_speed` pace.
+- `_servo_anim_disabled` toggled during solves to prevent per-leg animations.
 
-- `micro_steps = 1`: one segment, same as original behavior
-- `micro_steps = 5`: five segments, each 1/5 the body delta, smoother tip tracking
+**Path B key difference:** Leg servos snap per frame rather than animating through pre-computed keyframes. This trades servo animation smoothness for perfect tip locking — critical for body control where tips must stay planted while the body shifts.
 
-**Computation** in `move_body()` servo constraint path:
-1. Build N+1 mesh keyframes (evenly spaced from start to target)
+**Computation** in `GaitController.move_body()` servo constraint path:
+1. Build N+1 mesh keyframes
 2. Keyframe 0 = current rendered servo values
-3. For each keyframe k ≥ 1: reset all legs to kf0 servos, move mesh to kf[k], run `PhysicsSolver.solveAll()` → servo keyframe k
-4. Compute `_segment_durations[k] = max(|servoKf[k+1] - servoKf[k]|) / servo_speed * 1000`
+3. For each keyframe k ≥ 1: reset all legs to kf0, move mesh to kf[k], `PhysicsSolver.solveAll()` → servo keyframe k
+4. Floating legs: apply homeward bias (0.20) to all keyframes k ≥ 1 to preserve natural leg shape
+5. `_segment_durations[k] = max(|servoKf[k+1] - servoKf[k]|) / servo_speed * 1000`
 
-**Resetting to kf0 before each solve is CRITICAL.** PosCalculator starts from current `limb.servo_value`. If we don't reset, each keyframe's solve drifts from the previous result toward different local minima, causing locked tips to slide.
+**Resetting to kf0 before each solve is CRITICAL.** PosCalculator starts from `limb.servo_value`. Without reset, each keyframe's solve drifts into different local minima → locked tips slide.
+
+### Input gating
+
+`GaitController.act()` checks `bot.is_animating()` at entry and returns early if true. Real servos execute one command at a time — during active animation, new inputs are skipped (keyboard) or accumulated via `GaitInternal.position/rotation` (joystick).
 
 ### PhysicsSolver — multi-leg constraint solver
 
