@@ -8,7 +8,7 @@ export interface PosResult {
   values: number[];
 }
 
-const REG_STRENGTH = 0.002; // tiny pull toward init per iteration
+const REG_STRENGTH = 0.012; // pull toward init per iteration
 const GROUND_PENALTY = 50;   // per-unit penalty when tip penetrates ground
 
 export class PosCalculator {

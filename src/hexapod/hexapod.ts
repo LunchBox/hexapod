@@ -996,14 +996,16 @@ export class Hexapod {
     const startRot = this.body_mesh.rotation.clone();
     const current_tips = this.get_tip_pos();
 
-    const microSteps = this.options.micro_steps || 1;
+    const microSteps = Math.max(3, this.options.micro_steps || 1);
     const totalLegs = this.legs.length;
     const speed = this.servo_speed || 2000;
     const stallThreshold = this.options.servo_stall_threshold ?? 0;
     const groundConstraint = this.options.ground_constraint ?? true;
 
-    // Save body-local tip positions before body moves
-    this.body_mesh.updateMatrixWorld();
+    // Save body-local tip positions before body moves.
+    // Must update mesh first — body_mesh is its child, and
+    // worldToLocal needs the full chain current.
+    this.mesh.updateMatrixWorld();
     const bodyLocalTips = current_tips.map((t: any) =>
       this.body_mesh.worldToLocal(t.clone()));
 
