@@ -362,6 +362,15 @@ export class Hexapod {
 
     this.gait_controller = new GaitController(this);
 
+    // Re-capture home servos from the actual standing configuration.
+    // During construction home was captured at all-1500 (design pose),
+    // but laydown() / body_home restoration have placed the legs in their
+    // real standing pose.  Home servos must reflect this so that IK
+    // regularization preserves the natural leg shape during movement.
+    for (let i = 0; i < this.legs.length; i++) {
+      this.legs[i].capture_servo_home();
+    }
+
     this.on_servo_values = this.get_servo_values();
 
     // Persist so AttributesPanel and page reload see latest state
@@ -1291,6 +1300,11 @@ export class Hexapod {
       tips: tips.map((t: any) => this.body_mesh.worldToLocal(t.clone())),
     };
     history.save(this.options);
+    // Re-capture home servos from the saved standing pose so subsequent
+    // IK regularization targets the correct leg shape.
+    for (let i = 0; i < this.legs.length; i++) {
+      this.legs[i].capture_servo_home();
+    }
   }
 
   /** Lower body until tips reach ground, bending joints as needed */

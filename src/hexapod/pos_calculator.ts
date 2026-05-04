@@ -8,7 +8,7 @@ export interface PosResult {
   values: number[];
 }
 
-const REG_STRENGTH = 0.012; // pull toward init per iteration
+const REG_STRENGTH = 0.05; // pull toward init per iteration
 const GROUND_PENALTY = 50;   // per-unit penalty when tip penetrates ground
 
 export class PosCalculator {
@@ -62,10 +62,12 @@ export class PosCalculator {
     const MAX_LOOPS = 300;
     const STEP_DECAY = 0.85;
     const MIN_STEP = 5;
+    const MAIN_REG   = 0.05;  // main loop: strong enough to resist drift, weak enough to converge
+    const CLEANUP_REG = 0.20;  // cleanup: aggressive snap to home
+    const REDUNDANT_GRAD_THRESHOLD = 2.5;  // |gradient| below this in cleanup → redundant
 
     let values: number[] = [];
-    if (this._tipFn && this.initValues) {
-      // Pure FK path — start from provided init values
+    if (this.initValues) {
       values = [...this.initValues];
     } else {
       for (let i = 0; i < n; i++) {
@@ -81,8 +83,8 @@ export class PosCalculator {
     const lastGradients: number[] = new Array(n).fill(0);
     let count = 0;
 
+    // ── Main loop: gradient descent with constant moderate regularization ──
     while (dist > DIST_ERROR && count < MAX_LOOPS) {
-      // Central finite differences — no trig, purely numerical
       const gradients: number[] = [];
       for (let i = 0; i < n; i++) {
         const plus = [...values];
@@ -92,7 +94,6 @@ export class PosCalculator {
         gradients.push(this.calc_distance(plus) - this.calc_distance(minus));
       }
 
-      // Update each joint — gradient descent + regularization pull toward init
       for (let i = 0; i < n; i++) {
         if (Math.sign(lastGradients[i]) !== Math.sign(gradients[i])) {
           speeds[i] = 0;
@@ -102,11 +103,8 @@ export class PosCalculator {
         }
         lastGradients[i] = gradients[i];
         values[i] -= speeds[i];
-        // Regularization: tiny pull toward initial servo value
-        // Redundant DOFs (weak position gradient) drift back to init;
-        // primary DOFs are dominated by the much stronger position signal
         if (this.initValues) {
-          values[i] -= REG_STRENGTH * (values[i] - this.initValues[i]);
+          values[i] -= MAIN_REG * (values[i] - this.initValues[i]);
         }
         values[i] = Math.max(SERVO_MIN_VALUE, Math.min(SERVO_MAX_VALUE, values[i]));
       }
@@ -121,7 +119,56 @@ export class PosCalculator {
       count++;
     }
 
-    // Apply best solution with final rounding
+    // ── Cleanup: gradient-based null-space projection ──
+    // After the tip reaches the target, snap redundant DOFs to home.
+    // Use the gradient magnitude to decide: joints with |gradient| below
+    // threshold barely affect the tip → safe to pull hard toward home.
+    // Primary DOFs get only weak reg + gradient correction to micro-adjust.
+    if (this.initValues && bestDist < 5.0) {
+      values = [...bestValues];
+      dist = bestDist;
+      const cStep = Math.max(3, step);
+      const cSpeeds: number[] = new Array(n).fill(0);
+      const cLastGrad: number[] = new Array(n).fill(0);
+
+      for (let c = 0; c < 20 && count < MAX_LOOPS; c++) {
+        const gradients: number[] = [];
+        for (let i = 0; i < n; i++) {
+          const plus = [...values];
+          plus[i] = Math.min(SERVO_MAX_VALUE, plus[i] + cStep);
+          const minus = [...values];
+          minus[i] = Math.max(SERVO_MIN_VALUE, minus[i] - cStep);
+          gradients.push(this.calc_distance(plus) - this.calc_distance(minus));
+        }
+
+        for (let i = 0; i < n; i++) {
+          if (Math.sign(cLastGrad[i]) !== Math.sign(gradients[i])) {
+            cSpeeds[i] = 0;
+          } else {
+            cSpeeds[i] += gradients[i];
+          }
+          cLastGrad[i] = gradients[i];
+          values[i] -= cSpeeds[i];
+          if (this.initValues) {
+            const reg = Math.abs(gradients[i]) < REDUNDANT_GRAD_THRESHOLD
+              ? CLEANUP_REG        // redundant — snap to home
+              : CLEANUP_REG * 0.12; // primary — gentle pull, let gradient correct
+            values[i] -= reg * (values[i] - this.initValues[i]);
+          }
+          values[i] = Math.max(SERVO_MIN_VALUE, Math.min(SERVO_MAX_VALUE, values[i]));
+        }
+
+        dist = this.calc_distance(values);
+
+        if (dist < bestDist * 1.3 && dist < 3.0) {
+          bestDist = dist;
+          bestValues = [...values];
+        }
+
+        count++;
+      }
+    }
+
     const rounded = bestValues.map(v => Math.round(v));
     const finalDist = this.calc_distance(rounded);
 
