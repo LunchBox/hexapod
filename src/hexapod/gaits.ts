@@ -168,7 +168,17 @@ export class GaitInternal extends GaitAction {
     let dRotX = (this.homeRot.x + this.rotation.x) - bot.body_mesh.rotation.x;
     let dPosX = (this.homePos.x + this.position.x) - bot.body_mesh.position.x;
     let dPosZ = (this.homePos.z + this.position.z) - bot.body_mesh.position.z;
-    bot.transform_body({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
+
+    if (Math.abs(dPosX) < 0.01 && Math.abs(dPosZ) < 0.01 &&
+        Math.abs(dRotX) < 0.01 && Math.abs(dRotZ) < 0.01) {
+      return;
+    }
+
+    if (bot.options.physics_mode === 'servo_constraint') {
+      bot.transform_body_servo({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
+    } else {
+      bot.transform_body({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
+    }
   }
 }
 
@@ -326,15 +336,25 @@ export class GaitController {
     this.on_action = null;
     this.expected_action = null;
     this.fire_free = false;
-    // Stop mesh animation and disable new leg animations so the
-    // body doesn't drift, but let current leg keyframe animations
-    // play to completion so tips reach the ground before freezing.
+    // Disable new animations but let current mesh + leg keyframe
+    // animation finish together.  Stopping the mesh while legs
+    // continue causes desync —  locked-leg servo values are
+    // computed for a moving mesh, so freezing the mesh makes tips
+    // slide.  Both must stop together or play out together.
     this.bot._servo_anim_disabled = true;
-    this.bot._mesh_keyframes = null;
     this.reset_steps();
   }
 
   act(action_name: any) {
+    // Real servos execute one command at a time — skip while a previous
+    // animation (mesh, body_mesh, or legs) is still playing.  Keyboard
+    // (WASD) inputs are dropped; joystick (move_body / rotate_body)
+    // targets accumulate via GaitInternal.position/rotation and the
+    // next un-gated act() picks up the latest.
+    if (this.bot.is_animating && this.bot.is_animating()) {
+      return;
+    }
+
     let time = new Date().getTime();
     if (this.last_act_time) {
       // console.log("delta act time: " + (time - this.last_act_time));
@@ -577,6 +597,24 @@ export class GaitController {
           }
         }
         segmentDurs.push((maxDelta / speed) * 1000);
+      }
+
+      // Apply homeward bias to floating-leg keyframes.
+      // During the swing phase their tips are unconstrained, so a pull
+      // toward home preserves natural leg shape. Locked legs are excluded —
+      // their tip lock constraint takes priority; they are restored via
+      // snap_legs_to_init() on touchdown.
+      const HOME_BIAS = 0.20;
+      for (let i = 0; i < totalLegs; i++) {
+        if (this.bot.legs[i].on_floor) continue;
+        const home = this.bot.legs[i]._home_servos;
+        if (!home) continue;
+        const kfs = servoKfs[i];
+        for (let k = 1; k < kfs.length; k++) {
+          for (let j = 0; j < kfs[k].length; j++) {
+            kfs[k][j] += HOME_BIAS * ((home[j] || 1500) - kfs[k][j]);
+          }
+        }
       }
 
       // Revert mesh to start; store keyframes
