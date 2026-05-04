@@ -67,7 +67,7 @@ export class GaitAction {
 
   run() {
     let step = this.steps[this.acting_idx];
-    console.log(step);
+    // console.log(step);
 
     let _send_cmd = false;
     if (typeof step === "string") {
@@ -164,7 +164,6 @@ export class GaitInternal extends GaitAction {
 
   move() {
     let bot = this.controller.bot;
-    // Compute delta from current to target (home + joystick offset)
     let dRotZ = (this.homeRot.z + this.rotation.z) - bot.body_mesh.rotation.z;
     let dRotX = (this.homeRot.x + this.rotation.x) - bot.body_mesh.rotation.x;
     let dPosX = (this.homePos.x + this.position.x) - bot.body_mesh.position.x;
@@ -295,9 +294,6 @@ export class GaitController {
     }
 
     let time = new Date().getTime();
-    if (this.last_fire_time) {
-      console.log("delta fire time: " + (time - this.last_fire_time));
-    }
     this.last_fire_time = time;
 
     if (!this.has_action(this.expected_action)) {
@@ -330,14 +326,18 @@ export class GaitController {
     this.on_action = null;
     this.expected_action = null;
     this.fire_free = false;
+    // Stop mesh animation and disable new leg animations so the
+    // body doesn't drift, but let current leg keyframe animations
+    // play to completion so tips reach the ground before freezing.
     this.bot._servo_anim_disabled = true;
+    this.bot._mesh_keyframes = null;
     this.reset_steps();
   }
 
   act(action_name: any) {
     let time = new Date().getTime();
     if (this.last_act_time) {
-      console.log("delta act time: " + (time - this.last_act_time));
+      // console.log("delta act time: " + (time - this.last_act_time));
     }
     this.last_act_time = time;
 
@@ -346,17 +346,15 @@ export class GaitController {
     }
     this.last_action = action_name;
 
-    // Enable servo animation only in servo_constraint mode
-    if (this.bot.options.physics_mode === 'servo_constraint') {
-      this.bot._servo_anim_disabled = false;
-    }
+    this.bot._setLegOutputs(this.bot.options.physics_mode === 'servo_constraint' ? 'servo_constraint' : 'none');
+    this.bot._servo_anim_disabled = this.bot.options.physics_mode !== 'servo_constraint';
 
     let _send_cmd = this.actions[action_name].run();
     this.bot.after_status_change(_send_cmd);
     this.bot.sync_guide_circles();
 
-    console.log("-- calc time: " + (new Date().getTime() - time));
-    console.log("-- cmd time required: " + this.bot.hold_time);
+    // console.log("-- calc time: " + (new Date().getTime() - time));
+    // console.log("-- cmd time required: " + this.bot.hold_time);
 
     this.last_act_completed_time = new Date().getTime();
   }
@@ -404,8 +402,7 @@ export class GaitController {
 
   reset_tips_to_home() {
     const bot = this.bot;
-    const prevDisabled = bot._servo_anim_disabled;
-    bot._servo_anim_disabled = true; // no animation during reset
+    bot._setLegOutputs('none'); // no animation during reset
     bot.reset_guide_pos();
     bot.mesh.updateMatrixWorld();
     const localPositions = bot._guide_local_positions;
@@ -423,7 +420,7 @@ export class GaitController {
     }
     bot.adjust_gait_guidelines();
     bot.sync_guide_circles();
-    bot._servo_anim_disabled = prevDisabled;
+    bot._setLegOutputs(bot.options.physics_mode === 'servo_constraint' ? 'servo_constraint' : 'none');
   }
 
   legs_up(leg_idxs: number[], target_offset: number) {
@@ -446,7 +443,6 @@ export class GaitController {
         this.bot.legs[idx].on_floor = true;
       }
     }
-    // Light snap-back after touchdown — pulls redundant DOFs toward home
     this.bot.snap_legs_to_init(0.15, leg_idxs);
   }
 
@@ -619,7 +615,7 @@ export class GaitController {
               this.target_with_joystick(joystick);
               break;
             default:
-              console.log("-- just no idea of the move mode of the gait controller");
+              // console.log("-- just no idea of the move mode");
           }
           this.expected_action = "follow_joystick";
           break;
@@ -648,7 +644,7 @@ export class GaitController {
           this.expected_action = "internal_move";
           break;
         default:
-          console.log("-- just no idea of the move mode of the gait controller");
+          // console.log("-- just no idea of the move mode");
       }
     }
   }

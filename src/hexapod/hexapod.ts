@@ -8,6 +8,7 @@ import {
 import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage, degree_to_radians, remove_class, add_class, clearSelection } from './utils.js';
 import { GaitController } from './gaits.js';
 import { PosCalculator, PosResult } from './pos_calculator.js';
+import { DirectOutput, AnimatedOutput, type ServoOutput } from './servo_output.js';
 import { history } from './history.js';
 
 // ── Leg layout computation ─────────────────────────────────────
@@ -276,11 +277,11 @@ export class Hexapod {
       options._prev_leg_count = cur;
     }
 
-    this._servo_anim_disabled = true; // no animation during full rebuild
     this.rotate_step = this.options.rotate_step;
     this.fb_step = this.options.fb_step;
     this.lr_step = this.options.lr_step;
     this.servo_speed = this.options.servo_speed ?? 2000;
+    this._servo_anim_disabled = true; // no animation during full rebuild
 
     const isInitialBuild = !this.mesh;
 
@@ -999,9 +1000,7 @@ export class Hexapod {
 
     for (let i = 0; i < this.legs.length; i++) {
       const leg = this.legs[i];
-      leg._servo_keyframes = servoKfs[i];
-      leg._current_segment = 0;
-      leg._segment_start_time = now;
+      leg._output.setKeyframes(servoKfs[i], now); // sync with mesh segment timer
 
       // Revert joints to keyframe[0] visual state for smooth animation start
       const kf0 = servoKfs[i][0];
@@ -1009,6 +1008,25 @@ export class Hexapod {
         leg._set_joint_rotation(j, kf0[j]);
         leg.limbs[j]._rendered_servo_value = kf0[j];
       }
+    }
+  }
+
+  private _legOutputMode: string = 'none';
+
+  /** Switch all legs between DirectOutput and AnimatedOutput. */
+  _setLegOutputs(mode: 'none' | 'servo_constraint') {
+    // Only switch when mode actually changes, to avoid destroying
+    // in-progress keyframe animations.
+    if (this._legOutputMode === mode) return;
+    this._legOutputMode = mode;
+    for (const leg of this.legs) {
+      leg.switchOutput(mode);
+    }
+    // When switching away from servo_constraint, also stop mesh
+    // animation so the body doesn't keep drifting after the legs
+    // have stopped.
+    if (mode === 'none') {
+      this._mesh_keyframes = null;
     }
   }
 
@@ -1360,9 +1378,7 @@ export class HexapodLeg {
   _limbNames: string[];
   radial_angle: number;
   _home_servos?: number[];
-  _servo_keyframes: number[][] | null = null;
-  _current_segment: number = 0;
-  _segment_start_time: number = 0;
+  _output!: ServoOutput;
 
   constructor(bot: any, options: any) {
     this.bot = bot;
@@ -1412,6 +1428,21 @@ export class HexapodLeg {
     prevMesh.add(tip);
     this.tip = tip;
     this.limbs.push(tip);
+
+    // All legs start in DirectOutput; Hexapod switches to AnimatedOutput
+    // when physics_mode changes to servo_constraint.
+    const initRendered = this.limbs
+      .filter((_: any, i: number) => i < this.joint_count)
+      .map((l: any) => l._rendered_servo_value);
+    this._output = new DirectOutput(this.joint_count, initRendered);
+  }
+
+  /** Switch output strategy (called by Hexapod when physics_mode changes). */
+  switchOutput(mode: 'none' | 'servo_constraint') {
+    const rendered = this._output.renderedValues;
+    this._output = mode === 'servo_constraint'
+      ? new AnimatedOutput(this.joint_count, rendered)
+      : new DirectOutput(this.joint_count, rendered);
   }
 
   draw_segment(name: string, prevName: string | null) {
@@ -1499,9 +1530,16 @@ export class HexapodLeg {
   }
 
   set_servo_values(values: number[]) {
-    let total_values = values.length;
-    for (let i = 0; i < total_values; i++) {
-      this.set_servo_value(i, values[i]);
+    // Apply directly to joints — bypass animation entirely.
+    // PosCalculator.calc_distance() calls this then reads the Three.js
+    // scene for forward kinematics; if joints aren't set immediately the
+    // FK distances are computed from stale joint angles.
+    for (let i = 0; i < values.length; i++) {
+      const v = Math.round(values[i]);
+      this._set_joint_rotation(i, v);
+      this.limbs[i].servo_value = v;
+      this.limbs[i]._rendered_servo_value = v;
+      this._output.renderedValues[i] = v;
     }
   }
 
@@ -1524,10 +1562,11 @@ export class HexapodLeg {
   }
 
   set_servo_value(limb_idx: number, value: number) {
-    this._set_joint_rotation(limb_idx, value);
-    let _value = Math.round(value);
-    this.limbs[limb_idx].servo_value = _value;
-    this.limbs[limb_idx]._rendered_servo_value = _value;
+    const v = Math.round(value);
+    this._set_joint_rotation(limb_idx, v);
+    this.limbs[limb_idx].servo_value = v;
+    this.limbs[limb_idx]._rendered_servo_value = v;
+    this._output.renderedValues[limb_idx] = v;
   }
 
   get_tip_pos() {
@@ -1535,40 +1574,43 @@ export class HexapodLeg {
   }
 
   set_tip_pos(new_pos: any, stallThreshold = 0): PosResult {
+    // Snapshot pre-IK rendered values.  PosCalculator.run() calls
+    // set_servo_values() which mutates _output.renderedValues directly,
+    // so we must capture before the solve.
+    const preRendered = this._output.renderedValues.slice();
+
     const groundConstraint = this.bot.options.ground_constraint ?? true;
     let calculator = new PosCalculator(this, new_pos, this._home_servos, undefined, groundConstraint);
     const result = calculator.run();
 
     if (stallThreshold > 0 && result.distance > stallThreshold) {
-      // Stall: don't apply result, return current servo values
       const currentServos: number[] = [];
       for (let i = 0; i < this.joint_count; i++) {
         currentServos.push(this.limbs[i].servo_value);
       }
-      this._servo_keyframes = null;
+      this._output.reset();
+      // Restore pre-IK joint state (PosCalculator overwrote it)
+      for (let j = 0; j < this.joint_count; j++) {
+        this._set_joint_rotation(j, preRendered[j]);
+        this.limbs[j]._rendered_servo_value = preRendered[j];
+        this._output.renderedValues[j] = preRendered[j];
+      }
       return { success: false, distance: result.distance, iterations: result.iterations, values: currentServos };
     }
 
-    const animate = !this.bot._servo_anim_disabled && (this.bot.servo_speed ?? 0) > 0;
-    let preRendered: number[] | null = null;
-    if (animate) {
-      preRendered = [];
-      for (let i = 0; i < this.joint_count; i++) {
-        preRendered.push(this.limbs[i]._rendered_servo_value);
+    if (result.success) {
+      if (this.bot._servo_anim_disabled) {
+        // PosCalculator already applied values directly via set_servo_values.
+        // Don't create an animation — just leave joints at the result.
+      } else {
+        this._output.setTargets(result.values, preRendered);
+        const rv = this._output.renderedValues; // = preRendered (start of animation)
+        for (let j = 0; j < this.joint_count; j++) {
+          this._set_joint_rotation(j, rv[j]);
+          this.limbs[j].servo_value = Math.round(result.values[j]);
+          this.limbs[j]._rendered_servo_value = rv[j];
+        }
       }
-    }
-
-    if (animate && preRendered && result.success) {
-      this._servo_keyframes = [preRendered, result.values];
-      this._current_segment = 0;
-      this._segment_start_time = performance.now();
-      // Restore joints to pre-IK rendered positions for smooth animation start
-      for (let i = 0; i < this.joint_count; i++) {
-        this._set_joint_rotation(i, preRendered[i]);
-        this.limbs[i]._rendered_servo_value = preRendered[i];
-      }
-    } else {
-      this._servo_keyframes = null;
     }
 
     return result;
@@ -1583,6 +1625,17 @@ export class HexapodLeg {
 
   snap_to_home(strength: number) {
     if (!this._home_servos) return;
+    // Don't interrupt an in-progress keyframe animation.
+    // Just nudge logical servo values for the next cycle.
+    if (this._output.isAnimating()) {
+      for (let i = 0; i < this.limbs.length; i++) {
+        const target = this._home_servos[i];
+        const cur = this.limbs[i].servo_value;
+        const v = Math.round(cur + (target - cur) * strength);
+        this.limbs[i].servo_value = Math.max(SERVO_MIN_VALUE, Math.min(SERVO_MAX_VALUE, v));
+      }
+      return;
+    }
     const values: number[] = [];
     for (let i = 0; i < this.limbs.length; i++) {
       const target = this._home_servos[i];
@@ -1595,46 +1648,15 @@ export class HexapodLeg {
   }
 
   is_animating(): boolean {
-    return this._servo_keyframes !== null;
+    return this._output.isAnimating();
   }
 
-  /** Advance servo animation through keyframes. Returns true if still in progress. */
+  /** Advance servo animation. Returns true if still in progress. */
   update_animation(now: number, speed: number): boolean {
-    const kfs = this._servo_keyframes;
-    if (!kfs || this._current_segment >= kfs.length - 1) {
-      this._servo_keyframes = null;
-      return false;
-    }
-
-    const kf0 = kfs[this._current_segment];
-    const kf1 = kfs[this._current_segment + 1];
-
-    // Each joint moves at constant servo_speed; joints with larger deltas take longer.
-    // Duration = time needed for the joint with the largest delta in this segment.
-    let maxDelta = 0;
-    for (let i = 0; i < this.joint_count; i++) {
-      maxDelta = Math.max(maxDelta, Math.abs(kf1[i] - kf0[i]));
-    }
-    const durationMs = (maxDelta / speed) * 1000;
-    const elapsed = now - this._segment_start_time;
-    const t = durationMs > 0.001 ? Math.min(1, elapsed / durationMs) : 1;
-
-    for (let i = 0; i < this.joint_count; i++) {
-      const v = kf0[i] + (kf1[i] - kf0[i]) * t;
-      this._set_joint_rotation(i, v);
-      this.limbs[i]._rendered_servo_value = v;
-    }
-
-    if (t >= 1) {
-      this._current_segment++;
-      this._segment_start_time = now;
-      if (this._current_segment >= kfs.length - 1) {
-        this._servo_keyframes = null;
-        return false;
-      }
-    }
-
-    return true;
+    return this._output.update(now, speed, (idx, val) => {
+      this._set_joint_rotation(idx, val);
+      this.limbs[idx]._rendered_servo_value = val;
+    });
   }
 }
 
