@@ -26,7 +26,7 @@ npm run lint     # ESLint
 npx tsc --noEmit # TypeScript 型別檢查
 ```
 
-尚無測試套件。
+測試套件：55 個測試，4 個檔案（`src/hexapod/__tests__/`），執行 `npx vitest run`。
 
 ## 代碼審查狀態
 
@@ -95,11 +95,11 @@ stylesheets/
 ## 架構
 
 **核心類別（與 legacy 邏輯相同，現為 ES 模組）：**
-- `Hexapod` — 機器人主體。建立 3D 身體 mesh、6 個 `HexapodLeg` 實例、持有 `GaitController`。管理 servo 值計算、狀態快照/恢復、通過 Socket.IO 發送指令至 `localhost:8888`。`apply_attributes()` 從配置重建整個機器人。
-- `HexapodLeg` — 2–6 DOF 肢段鏈（coxa → femur → tibia → tarsus → segment5 → segment6 → tip）。每個肢段為 Three.js mesh，具有 `servo_value`、`servo_idx`、`revert` 屬性。`set_tip_pos()` 調用 `PosCalculator`。
-- `GaitController` — 擁有步態定義（腿組模式）、動作類型（power/efficient/body_first/fast）、目標模式（translate/target）。使用 `gait_configs.ts` 預設並經 `gait_generator.ts` 過濾進行平衡驗證。`fire_action()` 通過 ControlPanel 中的 setInterval 每 30ms 執行。
-- `PosCalculator` — 單腿逆向運動學，透過梯度下降最小化 tip 到目標世界位置的距離。
-- `JoyStick` — 基於 canvas 的 2D 搖桿。
+- `Hexapod` — 機器人主體。建立 3D 身體 mesh、6 個 `HexapodLeg` 實例、持有 `GaitController`。管理 servo 值計算、狀態快照/恢復。持有 `mesh`（步態路徑）和 `body_mesh`（身體控制路徑）的 keyframe 動畫狀態。`_servo_anim_disabled` 標誌在重建和 transform_body 子步驟期間防止新動畫；`is_animating()` 在動畫進行期間阻擋 `act()`。
+- `HexapodLeg` — 2–6 DOF 肢段鏈。每個肢段為 Three.js mesh，具有 `servo_value`、`servo_idx`、`revert`。使用 `ServoOutput` 策略（`DirectOutput` 或 `AnimatedOutput`）控制 servo 值是立即套用還是透過 keyframes 動畫。`set_servo_values()` **必須立即套用**——PosCalculator 在 IK 迭代期間呼叫它後立即讀取 Three.js 場景。
+- `GaitController` — 步態控制器。`act()` 由 `bot.is_animating()` 阻擋——動畫進行期間跳過新指令。
+- `PosCalculator` — 梯度下降 IK 求解器。使用 `REG_STRENGTH`（0.012）將多餘 DOF 拉回 home servos。
+- `ServoOutput` — 策略模式（`src/hexapod/servo_output.ts`）。`DirectOutput` 立即套用；`AnimatedOutput` 透過 keyframes 以 `servo_speed` 速度動畫。
 
 **React 整合模式：**
 - `appState.ts` 為可變單例，持有 `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`。橋接舊全域邏輯與 React。
@@ -180,45 +180,45 @@ leg.set_tip_pos(worldPosition) → PosCalculator.run() → servo values
 
 **絕對不可為了讓動畫「看起來更好」而人為同步 servo 計時。**動畫是模擬輸出，不是視覺效果。添加虛假的統一計時（例如強制所有關節同時完成）違反 servo constraint 原則。
 
-### Keyframe 動畫系統（已取代單一目標欄位）
+### ServoOutput 策略模式
 
-動畫系統已重構為使用 **keyframe 陣列**，取代個別的 start/target 欄位。**已不存在的舊欄位：**
-- `leg._anim_targets`、`leg._anim_starts`、`leg._anim_start_time`
-- `bot._mesh_start_pos`、`bot._mesh_target_pos`、`bot._mesh_start_rotY`、`bot._mesh_target_rotY`、`bot._mesh_anim_start`、`bot._mesh_anim_duration`
+`src/hexapod/servo_output.ts` — 將所有動畫狀態和時序從 HexapodLeg 中隔離。
 
-**當前欄位：**
-- `Hexapod._mesh_keyframes: {pos, rotY}[]` — N+1 個 mesh 姿態（N = micro_steps）
-- `Hexapod._segment_durations: number[]` — N 個持續時間（毫秒），每 segment 一個
-- `Hexapod._current_segment: number` — 正在播放哪個 segment
-- `Hexapod._segment_start_time: number` — 當前 segment 開始時間（performance.now）
-- `HexapodLeg._servo_keyframes: number[][]` — 每腿 N+1 個 servo 值陣列
-- `HexapodLeg._current_segment: number` — segment 索引（每腿獨立）
-- `HexapodLeg._segment_start_time: number` — 當前 segment 開始時間
+**介面 (`ServoOutput`)：**
+- `renderedValues: number[]` — 當前視覺 servo 值
+- `isAnimating(): boolean`
+- `setTargets(targets, capturedRendered?)` — 套用目標，可選鎖定視覺狀態
+- `update(now, speed, applyJoint, durationMs?)` — 推進一幀；可選 `durationMs` 覆寫每腿 delta 時序
+- `setKeyframes(keyframes, startTime?)` — 載入多 segment keyframes
+- `reset()` — 丟棄動畫狀態
 
-**動畫流程：**
-- `move_body()` → 計算 keyframes → 調用 `apply_physics_keyframes()` 儲存
-- `set_tip_pos()`（獨立，無身體移動）→ 建立 2 個 keyframes `[start, target]`
-- `update_servo_animations()`（rAF，60fps）：在相鄰 keyframes 之間插值 mesh + 腿
-- `update_animation()`（每腿）：每條腿根據自身 segment servo 差值獨立推進 `_current_segment`
+**`DirectOutput`**（`none` 模式）：值立即跳變。
 
-**關鍵規則**：每條腿的 `_current_segment` 獨立推進。Mesh 有自己的 `_current_segment`。它們**不同步** — 腿可以比 mesh 更早或更晚完成一個 segment。這對 servo constraint 是正確的（獨立 servo 速度）。
+**`AnimatedOutput`**（`servo_constraint` 模式）：在相鄰 keyframes 之間以恆定 `servo_speed` 線性插值每個關節。預設每條腿獨立推進。
 
-### Micro steps — 細分身體移動
+**HexapodLeg 委派：**
+- `set_servo_values(values)` — **直接**套用到關節（繞過動畫）。PosCalculator 在 IK 迭代期間呼叫它然後讀取 Three.js 場景——關節必須在測試值上。
+- `set_tip_pos()` — 在 `PosCalculator.run()` **之前**擷取 `preRendered`，然後調用 `_output.setTargets()` 建立 2-keyframe 動畫。Stall 時恢復 preRendered。
 
-`options.micro_steps`（預設 1，範圍 1–20，僅會話期間有效，滑塊在 ControlPanel > Physics）。
+### Keyframe 動畫系統（兩條獨立路徑）
 
-當 `micro_steps > 1` 時，身體移動被細分為 N 個均勻間隔的 keyframes。在每個 keyframe 處，對**所有**腿在中間身體姿態下求解 IK。這減少了每個 segment 內的線性插值誤差（非線性運動學在線性插值期間導致 tip 漂移；更小的 segment = 更少誤差）。
+**Path A — 步態行走（`mesh` keyframes）：**
+- 欄位：`_mesh_keyframes`、`_segment_durations`、`_current_segment`、`_segment_start_time`
+- `GaitController.move_body()` → 構建 mesh + servo keyframes → `apply_physics_keyframes()`
+- `update_servo_animations()`：插值 `mesh.position/rotation.y` + 調用 `leg.update_animation()`
+- 浮空腿施加 homeward bias（0.20）至所有 keyframes k ≥ 1
+- 每腿獨立推進 — **tip 漂移是預期的物理行為**
 
-- `micro_steps = 1`：一個 segment，與原始行為相同
-- `micro_steps = 5`：五個 segment，每個為身體增量的 1/5，tip 追蹤更平滑
+**Path B — 身體控制（`body_mesh` keyframes）：**
+- 欄位：`_body_mesh_keyframes`、`_body_mesh_segment_durations`、`_body_targets` 等
+- `GaitInternal.move()` → `transform_body_servo()` → 構建 body_mesh keyframes + 世界目標
+- **不預計算腿部 servo keyframes**
+- `update_servo_animations()`：插值 `body_mesh.position/rotation` → **每幀執行 `PhysicsSolver.solveAll()`** → 直接套用
+- **Tip 鎖定完全精確**（每幀 IK 消除插值誤差）。犧牲腿部 servo 動畫平滑度換取完美的 tip 鎖定。
 
-**計算流程**（在 `move_body()` servo constraint 路徑中）：
-1. 構建 N+1 個 mesh keyframes（從起點到目標均勻分佈）
-2. Keyframe 0 = 當前渲染 servo 值
-3. 對於每個 keyframe k ≥ 1：將所有腿重置為 kf0 servo 值，移動 mesh 至 kf[k]，執行 `PhysicsSolver.solveAll()` → servo keyframe k
-4. 計算 `_segment_durations[k] = max(|servoKf[k+1] - servoKf[k]|) / servo_speed * 1000`
+### 輸入門控
 
-**每次求解前重置為 kf0 至關重要。**PosCalculator 從當前 `limb.servo_value` 開始搜尋。如果不重置，每個 keyframe 的求解會從上一個結果漂移到不同的局部最小值，導致鎖定的 tips 滑動。
+`GaitController.act()` 在進入時檢查 `bot.is_animating()`，若為 true 則跳過。真實 servo 一次執行一個指令——動畫期間新輸入被忽略（鍵盤）或透過 `GaitInternal.position/rotation` 累積（搖桿）。
 
 ### PhysicsSolver — 多腿約束求解器
 
