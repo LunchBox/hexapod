@@ -10,97 +10,139 @@ export interface Preset {
 
 const L = DEFAULT_HEXAPOD_OPTIONS;
 
+/** Build a leg_options array for `count` legs with alternating mirror. */
+function legOptsForPolygon(count: number, dof: number): any[] {
+  const base = L.leg_options[0];
+  const legs: any[] = [];
+  for (let i = 0; i < count; i++) {
+    const mirror = i % 2 === 0 ? -1 : 1;
+    const opt: any = {
+      ...base,
+      mirror,
+      dof,
+    };
+    // Ensure segment entries exist for requested DOF
+    const segs = ['coxa', 'femur', 'tibia', 'tarsus', 'segment5', 'segment6'];
+    for (let s = 0; s < dof; s++) {
+      const name = segs[s];
+      opt[name] = { ...(base[name] || {}), ...(opt[name] || {}) };
+    }
+    legs.push(opt);
+  }
+  return legs;
+}
+
 export const PRESETS: Preset[] = [
   {
     name: 'default',
     label: 'Default',
-    description: 'Standard 6-leg 3-DOF hexapod',
+    description: 'Standard 6-leg 3-DOF rectangle hexapod',
     options: { ...L },
   },
   {
-    name: 'spider',
-    label: 'Spider',
-    description: 'Wide body, long thin legs, 4-DOF',
+    name: 'tri3',
+    label: 'Triangle 3DOF',
+    description: '3 legs, polygon body, 3-DOF',
     options: {
       ...L,
-      body_width: 70,
-      body_length: 80,
-      body_height: 16,
-      dof: 4,
-      leg_count: 6,
-      coxa_length: 40,
-      femur_length: 55,
-      tibia_length: 75,
-      tarsus_length: 40,
-      rotate_step: Math.PI / 12,
-      fb_step: 35,
-      lr_step: 25,
-      up_step: 15,
-      leg_options: [
-        { ...L.leg_options[0], x: 35, z: -40, coxa: { ...L.leg_options[0].coxa, length: 40, init_angle: 35 }, femur: { ...L.leg_options[0].femur, length: 55, init_angle: 35 }, tibia: { ...L.leg_options[0].tibia, length: 75, init_angle: -110 }, tarsus: { ...L.leg_options[0].tarsus, length: 40, init_angle: -65 }, dof: 4 },
-        { ...L.leg_options[1], x: 35, z: -40, coxa: { ...L.leg_options[1].coxa, length: 40, init_angle: 35 }, femur: { ...L.leg_options[1].femur, length: 55, init_angle: 35 }, tibia: { ...L.leg_options[1].tibia, length: 75, init_angle: -110 }, tarsus: { ...L.leg_options[1].tarsus, length: 40, init_angle: -65 }, dof: 4 },
-        { ...L.leg_options[2], x: 35, z: 0, coxa: { ...L.leg_options[2].coxa, length: 40, init_angle: 5 }, femur: { ...L.leg_options[2].femur, length: 55, init_angle: 35 }, tibia: { ...L.leg_options[2].tibia, length: 75, init_angle: -110 }, tarsus: { ...L.leg_options[2].tarsus, length: 40, init_angle: -65 }, dof: 4 },
-        { ...L.leg_options[3], x: 35, z: 0, coxa: { ...L.leg_options[3].coxa, length: 40, init_angle: 5 }, femur: { ...L.leg_options[3].femur, length: 55, init_angle: 35 }, tibia: { ...L.leg_options[3].tibia, length: 75, init_angle: -110 }, tarsus: { ...L.leg_options[3].tarsus, length: 40, init_angle: -65 }, dof: 4 },
-        { ...L.leg_options[4], x: 35, z: 40, coxa: { ...L.leg_options[4].coxa, length: 40, init_angle: -35 }, femur: { ...L.leg_options[4].femur, length: 55, init_angle: 35 }, tibia: { ...L.leg_options[4].tibia, length: 75, init_angle: -110 }, tarsus: { ...L.leg_options[4].tarsus, length: 40, init_angle: -65 }, dof: 4 },
-        { ...L.leg_options[5], x: 35, z: 40, coxa: { ...L.leg_options[5].coxa, length: 40, init_angle: -35 }, femur: { ...L.leg_options[5].femur, length: 55, init_angle: 35 }, tibia: { ...L.leg_options[5].tibia, length: 75, init_angle: -110 }, tarsus: { ...L.leg_options[5].tarsus, length: 40, init_angle: -65 }, dof: 4 },
-      ],
-    },
-  },
-  {
-    name: 'compact',
-    label: 'Compact',
-    description: 'Small body, short legs, 3-DOF',
-    options: {
-      ...L,
-      body_width: 35,
-      body_length: 60,
-      body_height: 14,
+      body_shape: 'polygon',
+      leg_count: 3,
       dof: 3,
-      leg_count: 6,
-      coxa_length: 24,
-      femur_length: 30,
-      tibia_length: 42,
-      fb_step: 14,
+      body_radius: 70,
+      polygon_leg_placement: 'vertex',
+      fb_step: 15,
       lr_step: 10,
-      up_step: 6,
-      leg_options: [
-        { ...L.leg_options[0], x: 17, z: -30, coxa: { ...L.leg_options[0].coxa, length: 24, init_angle: 25 }, femur: { ...L.leg_options[0].femur, length: 30 }, tibia: { ...L.leg_options[0].tibia, length: 42, init_angle: -100 }, dof: 3 },
-        { ...L.leg_options[1], x: 17, z: -30, coxa: { ...L.leg_options[1].coxa, length: 24, init_angle: 25 }, femur: { ...L.leg_options[1].femur, length: 30 }, tibia: { ...L.leg_options[1].tibia, length: 42, init_angle: -100 }, dof: 3 },
-        { ...L.leg_options[2], x: 17, z: 0, coxa: { ...L.leg_options[2].coxa, length: 24 }, femur: { ...L.leg_options[2].femur, length: 30 }, tibia: { ...L.leg_options[2].tibia, length: 42, init_angle: -100 }, dof: 3 },
-        { ...L.leg_options[3], x: 17, z: 0, coxa: { ...L.leg_options[3].coxa, length: 24 }, femur: { ...L.leg_options[3].femur, length: 30 }, tibia: { ...L.leg_options[3].tibia, length: 42, init_angle: -100 }, dof: 3 },
-        { ...L.leg_options[4], x: 17, z: 30, coxa: { ...L.leg_options[4].coxa, length: 24, init_angle: -25 }, femur: { ...L.leg_options[4].femur, length: 30 }, tibia: { ...L.leg_options[4].tibia, length: 42, init_angle: -100 }, dof: 3 },
-        { ...L.leg_options[5], x: 17, z: 30, coxa: { ...L.leg_options[5].coxa, length: 24, init_angle: -25 }, femur: { ...L.leg_options[5].femur, length: 30 }, tibia: { ...L.leg_options[5].tibia, length: 42, init_angle: -100 }, dof: 3 },
-      ],
+      up_step: 8,
+      leg_options: legOptsForPolygon(3, 3),
     },
   },
   {
-    name: 'xl',
-    label: 'XL',
-    description: 'Large hexapod, 6-DOF, long legs',
+    name: 'quad4-3',
+    label: 'Square 3DOF',
+    description: '4 legs, polygon body, 3-DOF',
     options: {
       ...L,
-      body_width: 80,
-      body_length: 140,
-      body_height: 28,
-      dof: 6,
+      body_shape: 'polygon',
+      leg_count: 4,
+      dof: 3,
+      body_radius: 65,
+      polygon_leg_placement: 'vertex',
+      fb_step: 18,
+      lr_step: 12,
+      up_step: 8,
+      leg_options: legOptsForPolygon(4, 3),
+    },
+  },
+  {
+    name: 'penta4-3',
+    label: 'Pentagon 3DOF',
+    description: '5 legs, polygon body, 3-DOF',
+    options: {
+      ...L,
+      body_shape: 'polygon',
+      leg_count: 5,
+      dof: 3,
+      body_radius: 70,
+      polygon_leg_placement: 'vertex',
+      fb_step: 18,
+      lr_step: 12,
+      up_step: 9,
+      leg_options: legOptsForPolygon(5, 3),
+    },
+  },
+  {
+    name: 'hexa6-3',
+    label: 'Hexagon 3DOF',
+    description: '6 legs, polygon body, 3-DOF',
+    options: {
+      ...L,
+      body_shape: 'polygon',
       leg_count: 6,
-      coxa_length: 40,
-      femur_length: 55,
-      tibia_length: 75,
-      tarsus_length: 40,
-      rotate_step: Math.PI / 18,
-      fb_step: 30,
-      lr_step: 22,
-      up_step: 14,
-      servo_speed: 1500,
-      leg_options: [
-        { ...L.leg_options[0], x: 40, z: -70, coxa: { ...L.leg_options[0].coxa, length: 40, init_angle: 30 }, femur: { ...L.leg_options[0].femur, length: 55, init_angle: 25 }, tibia: { ...L.leg_options[0].tibia, length: 75, init_angle: -105 }, tarsus: { ...L.leg_options[0].tarsus, length: 40, init_angle: -60 }, dof: 6, segment5: { length: 25, radius: 4, init_angle: -30, servo_value: 1500, revert: false }, segment6: { length: 20, radius: 3, init_angle: 0, servo_value: 1500, revert: false } },
-        { ...L.leg_options[1], x: 40, z: -70, coxa: { ...L.leg_options[1].coxa, length: 40, init_angle: 30 }, femur: { ...L.leg_options[1].femur, length: 55, init_angle: 25 }, tibia: { ...L.leg_options[1].tibia, length: 75, init_angle: -105 }, tarsus: { ...L.leg_options[1].tarsus, length: 40, init_angle: -60 }, dof: 6, segment5: { length: 25, radius: 4, init_angle: -30, servo_value: 1500, revert: false }, segment6: { length: 20, radius: 3, init_angle: 0, servo_value: 1500, revert: false } },
-        { ...L.leg_options[2], x: 40, z: 0, coxa: { ...L.leg_options[2].coxa, length: 40 }, femur: { ...L.leg_options[2].femur, length: 55, init_angle: 25 }, tibia: { ...L.leg_options[2].tibia, length: 75, init_angle: -105 }, tarsus: { ...L.leg_options[2].tarsus, length: 40, init_angle: -60 }, dof: 6, segment5: { length: 25, radius: 4, init_angle: -30, servo_value: 1500, revert: false }, segment6: { length: 20, radius: 3, init_angle: 0, servo_value: 1500, revert: false } },
-        { ...L.leg_options[3], x: 40, z: 0, coxa: { ...L.leg_options[3].coxa, length: 40 }, femur: { ...L.leg_options[3].femur, length: 55, init_angle: 25 }, tibia: { ...L.leg_options[3].tibia, length: 75, init_angle: -105 }, tarsus: { ...L.leg_options[3].tarsus, length: 40, init_angle: -60 }, dof: 6, segment5: { length: 25, radius: 4, init_angle: -30, servo_value: 1500, revert: false }, segment6: { length: 20, radius: 3, init_angle: 0, servo_value: 1500, revert: false } },
-        { ...L.leg_options[4], x: 40, z: 70, coxa: { ...L.leg_options[4].coxa, length: 40, init_angle: -30 }, femur: { ...L.leg_options[4].femur, length: 55, init_angle: 25 }, tibia: { ...L.leg_options[4].tibia, length: 75, init_angle: -105 }, tarsus: { ...L.leg_options[4].tarsus, length: 40, init_angle: -60 }, dof: 6, segment5: { length: 25, radius: 4, init_angle: -30, servo_value: 1500, revert: false }, segment6: { length: 20, radius: 3, init_angle: 0, servo_value: 1500, revert: false } },
-        { ...L.leg_options[5], x: 40, z: 70, coxa: { ...L.leg_options[5].coxa, length: 40, init_angle: -30 }, femur: { ...L.leg_options[5].femur, length: 55, init_angle: 25 }, tibia: { ...L.leg_options[5].tibia, length: 75, init_angle: -105 }, tarsus: { ...L.leg_options[5].tarsus, length: 40, init_angle: -60 }, dof: 6, segment5: { length: 25, radius: 4, init_angle: -30, servo_value: 1500, revert: false }, segment6: { length: 20, radius: 3, init_angle: 0, servo_value: 1500, revert: false } },
-      ],
+      dof: 3,
+      body_radius: 60,
+      polygon_leg_placement: 'vertex',
+      fb_step: 20,
+      lr_step: 14,
+      up_step: 10,
+      leg_options: legOptsForPolygon(6, 3),
+    },
+  },
+  {
+    name: 'hexa6-4',
+    label: 'Hexagon 4DOF',
+    description: '6 legs, polygon body, 4-DOF',
+    options: {
+      ...L,
+      body_shape: 'polygon',
+      leg_count: 6,
+      dof: 4,
+      body_radius: 65,
+      polygon_leg_placement: 'vertex',
+      tarsus_length: 28,
+      fb_step: 24,
+      lr_step: 16,
+      up_step: 12,
+      servo_speed: 1800,
+      leg_options: legOptsForPolygon(6, 4),
+    },
+  },
+  {
+    name: 'octa8-4',
+    label: 'Octagon 4DOF',
+    description: '8 legs, polygon body, 4-DOF',
+    options: {
+      ...L,
+      body_shape: 'polygon',
+      leg_count: 8,
+      dof: 4,
+      body_radius: 75,
+      polygon_leg_placement: 'vertex',
+      tarsus_length: 28,
+      fb_step: 22,
+      lr_step: 14,
+      up_step: 12,
+      servo_speed: 1800,
+      leg_options: legOptsForPolygon(8, 4),
     },
   },
 ];
