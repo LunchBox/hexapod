@@ -455,15 +455,38 @@ export class GaitController {
   }
 
   legs_down(leg_idxs: number[]) {
+    const now = performance.now();
     for (let i = 0; i < leg_idxs.length; i++) {
       let idx = leg_idxs[i];
-      let ori_pos = this.bot.legs[idx].get_tip_pos();
+      let leg = this.bot.legs[idx];
+      let ori_pos = leg.get_tip_pos();
       ori_pos.y = 0;
-      if (this.bot.legs[idx].set_tip_pos(ori_pos).success) {
-        this.bot.legs[idx].on_floor = true;
+
+      const preRendered = leg._output.renderedValues.slice();
+      const phase1Values = leg.solve_only(ori_pos);
+
+      if (!phase1Values) {
+        // IK failed — fall back to original behavior
+        leg.set_tip_pos(ori_pos);
+        leg.on_floor = true;
+        continue;
       }
+
+      const phase2Values = leg.solve_from_home(ori_pos);
+
+      if (phase2Values) {
+        leg._output.setKeyframes([preRendered, phase1Values, phase2Values], now);
+      } else {
+        leg._output.setKeyframes([preRendered, phase1Values], now);
+      }
+
+      // DirectOutput.setKeyframes() is a no-op — apply values directly
+      if (!leg.is_animating()) {
+        leg.set_servo_values(phase2Values || phase1Values);
+      }
+
+      leg.on_floor = true;
     }
-    this.bot.snap_legs_to_init(0.15, leg_idxs);
   }
 
   move_tips(leg_idxs: number[], fb_direction: number, lr_direction: number, rotate_direction: number) {

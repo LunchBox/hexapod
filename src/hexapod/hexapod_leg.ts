@@ -213,6 +213,72 @@ export class HexapodLeg {
     return getWorldPosition(this.bot.mesh, this.tip);
   }
 
+  /** Pure IK computation from current servo values.
+   *  Runs PosCalculator, then restores all joint state to pre-solve values
+   *  so the animation output layer remains authoritative.
+   *  Returns servo targets on success, null on failure. */
+  solve_only(targetPos: any): number[] | null {
+    const savedServos: number[] = [];
+    const savedRendered: number[] = [];
+    const savedOutputRendered = this._output.renderedValues.slice();
+    for (let i = 0; i < this.joint_count; i++) {
+      savedServos.push(this.limbs[i].servo_value);
+      savedRendered.push(this.limbs[i]._rendered_servo_value);
+    }
+
+    const groundConstraint = this.bot.options.ground_constraint ?? true;
+    const calculator = new PosCalculator(this, targetPos, this._home_servos, undefined, groundConstraint);
+    const result = calculator.run();
+
+    // Restore pre-solve state — PosCalculator.run() mutates limb.servo_value
+    // via set_servo_values() inside calc_distance().
+    for (let i = 0; i < this.joint_count; i++) {
+      this._set_joint_rotation(i, savedServos[i]);
+      this.limbs[i].servo_value = savedServos[i];
+      this.limbs[i]._rendered_servo_value = savedRendered[i];
+      this._output.renderedValues[i] = savedOutputRendered[i];
+    }
+
+    return result.success ? result.values : null;
+  }
+
+  /** IK computation starting explicitly from _home_servos.
+   *  Sets all joints to home before running PosCalculator so the solver
+   *  finds the closest home-shaped configuration for the given target.
+   *  Returns servo targets on success, null on failure or if _home_servos
+   *  is not initialized. */
+  solve_from_home(targetPos: any): number[] | null {
+    if (!this._home_servos) return null;
+
+    const savedServos: number[] = [];
+    const savedRendered: number[] = [];
+    const savedOutputRendered = this._output.renderedValues.slice();
+    for (let i = 0; i < this.joint_count; i++) {
+      savedServos.push(this.limbs[i].servo_value);
+      savedRendered.push(this.limbs[i]._rendered_servo_value);
+    }
+
+    // Apply home servos to joints so PosCalculator's scene-graph FK
+    // reads from a home-shaped starting configuration.
+    for (let i = 0; i < this.joint_count; i++) {
+      this.set_servo_value(i, this._home_servos[i]);
+    }
+
+    const groundConstraint = this.bot.options.ground_constraint ?? true;
+    const calculator = new PosCalculator(this, targetPos, this._home_servos, undefined, groundConstraint);
+    const result = calculator.run();
+
+    // Restore pre-solve state
+    for (let i = 0; i < this.joint_count; i++) {
+      this._set_joint_rotation(i, savedServos[i]);
+      this.limbs[i].servo_value = savedServos[i];
+      this.limbs[i]._rendered_servo_value = savedRendered[i];
+      this._output.renderedValues[i] = savedOutputRendered[i];
+    }
+
+    return result.success ? result.values : null;
+  }
+
   set_tip_pos(new_pos: any, stallThreshold = 0): PosResult {
     const preRendered = this._output.renderedValues.slice();
 
