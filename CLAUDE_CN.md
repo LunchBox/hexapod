@@ -56,12 +56,13 @@ src/
     HexapodContext.tsx           # React context：botRef, sceneRef, servo displays, botVersion
   components/
     SceneCanvas.tsx              # 掛載 Three.js 場景，掛載時構建 Hexapod
-    SceneControls.tsx            # 身體/旋轉搖桿、XYZ/RxRyRz 滑塊、姿態儲存/調用
-    ControlPanel.tsx             # 繪製類型、移動模式、步態、動作按鈕、搖桿、鍵盤
+    SceneControls.tsx            # 3 個搖桿 (Move/Body/Rot)、XYZ/RxRyRz 滑塊，持久化 move_mode
+    ControlPanel.tsx             # 繪製類型、步態、動作/步態/物理、鍵盤、send/sync
     ServoPanel.tsx               # 18 個 servo 滑塊 + 末端位置輸入（每腿，命令式 DOM）
-    AttributesPanel.tsx          # 身體/腿部幾何配置，localStorage 持久化
+    AttributesPanel.tsx          # Profile (presets + body shape 按鈕)、Adjust、Motions、Body Attrs
     LegEditor.tsx                # 2D canvas 關節編輯器，支援多腿編輯
     LegEditor.css                # LegEditor 樣式
+    StatusBar.tsx                # 狀態列：步態、模式、物理、腿數
     StatusPanel.tsx              # 狀態歷史列表，含播放/應用
     CommandDisplay.tsx           # 當前 + 上一個 servo 指令字串
     TimeChart.tsx                # 指令時間間隔 canvas 圖表
