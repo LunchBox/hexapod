@@ -51,9 +51,6 @@ export class Hexapod {
   _body_mesh_segment_durations: number[] = [];
   _current_body_mesh_segment: number = 0;
   _body_mesh_segment_start_time: number = 0;
-  _body_targets: any[] | null = null; // world-space targets for per-frame IK
-  _body_stall_threshold: number = 0;
-  _body_ground_constraint: boolean = true;
   _onBodyAnimComplete: (() => void) | null = null;
   time_interval_stack: number[];
   onServoUpdate: (() => void) | null;
@@ -797,9 +794,9 @@ export class Hexapod {
   }
 
   /** Servo-constraint version of transform_body.
-   *  Builds body_mesh keyframes with accurate per-segment durations
-   *  measured from actual servo deltas via a one-shot PhysicsSolver pre-pass.
-   *  Leg IK is solved per-frame in the rAF loop for zero interpolation error. */
+   *  Pre-computes leg servo keyframes at each intermediate body pose
+   *  (same pattern as GaitController.move_body) so the rAF loop only
+   *  interpolates — zero per-frame IK overhead. */
   transform_body_servo(opts: {
     dx?: number; dy?: number; dz?: number;
     rx?: number; ry?: number; rz?: number;
@@ -820,61 +817,17 @@ export class Hexapod {
     const stallThreshold = this.options.servo_stall_threshold ?? 0;
     const groundConstraint = this.options.ground_constraint ?? true;
 
-    // Save pre-solve servo values so we can measure the delta after IK
-    const prevServos: number[][] = [];
+    // Save keyframe 0: current rendered servo values
+    const servoKfs: number[][][] = [];
     for (let i = 0; i < totalLegs; i++) {
-      const sv: number[] = [];
+      const kf0: number[] = [];
       for (let j = 0; j < this.legs[i].joint_count; j++) {
-        sv.push(this.legs[i].limbs[j].servo_value);
+        kf0.push(this.legs[i].limbs[j]._rendered_servo_value);
       }
-      prevServos.push(sv);
+      servoKfs.push([kf0]);
     }
 
-    // Move body_mesh to target pose and run IK to measure actual servo deltas
-    this.body_mesh.position.x += dx;
-    this.body_mesh.position.y += dy;
-    this.body_mesh.position.z += dz;
-    this.body_mesh.rotation.x += rx;
-    this.body_mesh.rotation.y += ry;
-    this.body_mesh.rotation.z += rz;
-    this.body_mesh.updateMatrixWorld();
-    this.mesh.updateMatrixWorld();
-
-    const bodyLocalTips = current_tips.map((t: any) =>
-      this.body_mesh.worldToLocal(t.clone()));
-    const targets: any[] = [];
-    for (let i = 0; i < totalLegs; i++) {
-      if (this.legs[i].on_floor) {
-        targets.push(current_tips[i]);
-      } else {
-        targets.push(this.body_mesh.localToWorld(bodyLocalTips[i].clone()));
-      }
-    }
-
-    // One-shot solve to measure actual servo deltas for accurate timing
-    const prevDisabled = this._servo_anim_disabled;
-    this._servo_anim_disabled = true;
-    const result = PhysicsSolver.solveAll(this, targets, stallThreshold, groundConstraint);
-    this._servo_anim_disabled = prevDisabled;
-
-    // Measure max servo delta → accurate segment duration
-    let maxDelta = 0;
-    for (let i = 0; i < totalLegs; i++) {
-      for (let j = 0; j < prevServos[i].length; j++) {
-        maxDelta = Math.max(maxDelta, Math.abs(result.servoTargets[i][j] - prevServos[i][j]));
-      }
-    }
-    const perSegmentDur = Math.max(10, (maxDelta / microSteps / speed) * 1000);
-
-    // Revert body_mesh and leg servos to pre-solve state
-    this.body_mesh.position.copy(startPos);
-    this.body_mesh.rotation.copy(startRot);
-    this.body_mesh.updateMatrixWorld();
-    for (let i = 0; i < totalLegs; i++) {
-      this.legs[i].set_servo_values(prevServos[i]);
-    }
-
-    // Build body_mesh keyframes for smooth body animation
+    // Build body_mesh keyframes (N+1 poses)
     const bodyKfs: { pos: any; rot: any }[] = [];
     for (let k = 0; k <= microSteps; k++) {
       const t = k / microSteps;
@@ -885,16 +838,87 @@ export class Hexapod {
       });
     }
 
-    const segmentDurs: number[] = [];
-    for (let k = 0; k < microSteps; k++) {
-      segmentDurs.push(perSegmentDur);
+    // Body-local tip positions (before body moves)
+    this.mesh.updateMatrixWorld();
+    const bodyLocalTips = current_tips.map((t: any) =>
+      this.body_mesh.worldToLocal(t.clone()));
+
+    // Solve IK at each intermediate keyframe (k ≥ 1)
+    const prevDisabled = this._servo_anim_disabled;
+    this._servo_anim_disabled = true;
+    for (let k = 1; k <= microSteps; k++) {
+      // Reset all legs to keyframe-0 before each solve (stability)
+      for (let i = 0; i < totalLegs; i++) {
+        this.legs[i].set_servo_values(servoKfs[i][0]);
+      }
+
+      this.body_mesh.position.copy(bodyKfs[k].pos);
+      this.body_mesh.rotation.set(bodyKfs[k].rot.x, bodyKfs[k].rot.y, bodyKfs[k].rot.z);
+      this.body_mesh.updateMatrixWorld();
+      this.mesh.updateMatrixWorld();
+
+      const targets: any[] = [];
+      for (let i = 0; i < totalLegs; i++) {
+        if (this.legs[i].on_floor) {
+          targets.push(current_tips[i]);               // locked in world
+        } else {
+          targets.push(this.body_mesh.localToWorld(    // follow body
+            bodyLocalTips[i].clone()));
+        }
+      }
+
+      const result = PhysicsSolver.solveAll(this, targets, stallThreshold, groundConstraint);
+      for (let i = 0; i < totalLegs; i++) {
+        servoKfs[i].push(result.servoTargets[i]);
+      }
+    }
+    this._servo_anim_disabled = prevDisabled;
+
+    // Homeward bias for floating legs
+    const HOME_BIAS = 0.20;
+    for (let i = 0; i < totalLegs; i++) {
+      if (this.legs[i].on_floor) continue;
+      const home = this.legs[i]._home_servos;
+      if (!home) continue;
+      const kfs = servoKfs[i];
+      for (let k = 1; k < kfs.length; k++) {
+        for (let j = 0; j < kfs[k].length; j++) {
+          kfs[k][j] += HOME_BIAS * ((home[j] || 1500) - kfs[k][j]);
+        }
+      }
     }
 
-    this._body_stall_threshold = stallThreshold;
-    this._body_ground_constraint = groundConstraint;
-    this._body_targets = targets;
+    // Compute per-segment durations from actual max servo delta
+    const segmentDurs: number[] = [];
+    for (let k = 0; k < microSteps; k++) {
+      let maxDelta = 0;
+      for (let i = 0; i < totalLegs; i++) {
+        const a = servoKfs[i][k];
+        const b = servoKfs[i][k + 1];
+        for (let j = 0; j < a.length; j++) {
+          maxDelta = Math.max(maxDelta, Math.abs(b[j] - a[j]));
+        }
+      }
+      segmentDurs.push((maxDelta / speed) * 1000);
+    }
 
+    // Revert body_mesh to start
+    this.body_mesh.position.copy(startPos);
+    this.body_mesh.rotation.copy(startRot);
+    this.body_mesh.updateMatrixWorld();
+
+    // Pre-load leg keyframes and revert joints to kf0 visual state
     const now = performance.now();
+    for (let i = 0; i < totalLegs; i++) {
+      const leg = this.legs[i];
+      leg._output.setKeyframes(servoKfs[i], now);
+      const kf0 = servoKfs[i][0];
+      for (let j = 0; j < leg.joint_count; j++) {
+        leg._set_joint_rotation(j, kf0[j]);
+        leg.limbs[j]._rendered_servo_value = kf0[j];
+      }
+    }
+
     this._body_mesh_keyframes = bodyKfs;
     this._body_mesh_segment_durations = segmentDurs;
     this._current_body_mesh_segment = 0;
@@ -970,7 +994,6 @@ export class Hexapod {
     if (mode === 'none') {
       this._mesh_keyframes = null;
       this._body_mesh_keyframes = null;
-      this._body_targets = null;
     }
   }
 
@@ -1011,9 +1034,9 @@ export class Hexapod {
       }
     }
 
-    // Body mesh keyframe animation (for move_body / rotate_body joystick modes).
-    // IK is solved on-the-fly at the exact interpolated body_mesh position
-    // so that locked-leg tips stay perfectly planted — no interpolation error.
+    // Body mesh keyframe animation (for move_body / rotate_body / sliders).
+    // Leg servos animate independently through pre-computed keyframes loaded
+    // by transform_body_servo — no per-frame IK needed here.
     if (this._body_mesh_keyframes && this._current_body_mesh_segment < this._body_mesh_segment_durations.length) {
       anyAnimating = true;
       const dur = this._body_mesh_segment_durations[this._current_body_mesh_segment];
@@ -1031,23 +1054,11 @@ export class Hexapod {
       this.body_mesh.updateMatrixWorld();
       this.mesh.updateMatrixWorld();
 
-      // Solve IK for all legs at this exact body pose — zero interpolation error
-      if (this._body_targets) {
-        const prevDisabled = this._servo_anim_disabled;
-        this._servo_anim_disabled = true;
-        const result = PhysicsSolver.solveAll(this, this._body_targets, this._body_stall_threshold, this._body_ground_constraint);
-        for (let i = 0; i < this.legs.length; i++) {
-          this.legs[i].set_servo_values(result.servoTargets[i]);
-        }
-        this._servo_anim_disabled = prevDisabled;
-      }
-
       if (t >= 1) {
         this._current_body_mesh_segment++;
         this._body_mesh_segment_start_time = now;
         if (this._current_body_mesh_segment >= this._body_mesh_segment_durations.length) {
           this._body_mesh_keyframes = null;
-          this._body_targets = null;
           if (this._onBodyAnimComplete) {
             const cb = this._onBodyAnimComplete;
             this._onBodyAnimComplete = null;
