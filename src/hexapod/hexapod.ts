@@ -54,6 +54,7 @@ export class Hexapod {
   _body_targets: any[] | null = null; // world-space targets for per-frame IK
   _body_stall_threshold: number = 0;
   _body_ground_constraint: boolean = true;
+  _onBodyAnimComplete: (() => void) | null = null;
   time_interval_stack: number[];
   onServoUpdate: (() => void) | null;
   leg_layout: LegLayout[];
@@ -1047,6 +1048,11 @@ export class Hexapod {
         if (this._current_body_mesh_segment >= this._body_mesh_segment_durations.length) {
           this._body_mesh_keyframes = null;
           this._body_targets = null;
+          if (this._onBodyAnimComplete) {
+            const cb = this._onBodyAnimComplete;
+            this._onBodyAnimComplete = null;
+            cb();
+          }
         }
       }
     }
@@ -1182,6 +1188,24 @@ export class Hexapod {
     for (const i of idxs) {
       this.legs[i]?.snap_to_home(strength);
     }
+  }
+
+  /** Run solve_from_home on every leg to restore home-biased joint shape
+   *  at the current tip positions.  Uses the same home-start IK pattern as
+   *  the gait touchdown recalibration (leg-shape-preservation design). */
+  recalibrate_legs_to_home() {
+    const prevAnim = this._servo_anim_disabled;
+    this._servo_anim_disabled = true;
+    for (let i = 0; i < this.legs.length; i++) {
+      const leg = this.legs[i];
+      const tipPos = leg.get_tip_pos();
+      const homeValues = leg.solve_from_home(tipPos);
+      if (homeValues) {
+        leg.set_servo_values(homeValues);
+      }
+    }
+    this._servo_anim_disabled = prevAnim;
+    this.after_status_change();
   }
 
   after_status_change(send_cmd?: boolean) {

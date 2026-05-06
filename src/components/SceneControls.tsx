@@ -38,9 +38,11 @@ export default function SceneControls() {
     else if (axis === 'ry') opts.ry = -total;
     else if (axis === 'rz') opts.rz = -total;
     if (useServo) {
+      bot._onBodyAnimComplete = () => bot.recalibrate_legs_to_home();
       bot.transform_body_servo(opts);
     } else {
       bot.transform_body(opts);
+      bot.recalibrate_legs_to_home();
     }
     bot.adjust_gait_guidelines();
   };
@@ -63,8 +65,13 @@ export default function SceneControls() {
         if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001 || Math.abs(dz) > 0.001 ||
             Math.abs(rx) > 0.001 || Math.abs(ry) > 0.001 || Math.abs(rz) > 0.001) {
           const useServo = bot.options.physics_mode === 'servo_constraint';
-          if (useServo) bot.transform_body_servo({ dx, dy, dz, rx, ry, rz });
-          else bot.transform_body({ dx, dy, dz, rx, ry, rz });
+          if (useServo) {
+            bot._onBodyAnimComplete = () => bot.recalibrate_legs_to_home();
+            bot.transform_body_servo({ dx, dy, dz, rx, ry, rz });
+          } else {
+            bot.transform_body({ dx, dy, dz, rx, ry, rz });
+            bot.recalibrate_legs_to_home();
+          }
           bot.adjust_gait_guidelines();
         }
       }
