@@ -367,8 +367,11 @@ export class GaitController {
     this.bot.after_status_change(_send_cmd);
     this.bot.sync_guide_circles();
 
-    // console.log("-- calc time: " + (new Date().getTime() - time));
-    // console.log("-- cmd time required: " + this.bot.hold_time);
+    // Body-control actions (joystick) should not be throttled by servo
+    // hold_time — they run at the fixed 30ms interval for responsiveness.
+    if (action_name === 'internal_move') {
+      this.bot.hold_time = 0;
+    }
 
     this.last_act_completed_time = new Date().getTime();
   }
