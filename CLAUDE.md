@@ -56,12 +56,13 @@ src/
     HexapodContext.tsx           # React context: botRef, sceneRef, servo displays, botVersion
   components/
     SceneCanvas.tsx              # Mounts Three.js scene, builds Hexapod on mount
-    SceneControls.tsx            # Body/rot joysticks, XYZ/RxRyRz sliders, pose save/recall
-    ControlPanel.tsx             # Draw type, move mode, gaits, action buttons, joystick, keyboard
+    SceneControls.tsx            # 3 joysticks (Move/Body/Rot), XYZ/RxRyRz sliders, persists move_mode
+    ControlPanel.tsx             # Draw type, gaits, action/step/physics, keyboard, send/sync
     ServoPanel.tsx               # 18 servo sliders + end-position inputs (per-leg, imperative DOM)
-    AttributesPanel.tsx          # Body/leg geometry config with localStorage persistence
+    AttributesPanel.tsx          # Profile (presets + body shape buttons), Adjust, Motions, Body Attrs
     LegEditor.tsx                # 2D canvas joint editor with multi-leg editing
     LegEditor.css                # LegEditor styles
+    StatusBar.tsx                # Status bar: gait, mode, physics, leg count
     StatusPanel.tsx              # Status history list with play/apply
     CommandDisplay.tsx           # Current + last servo command strings
     TimeChart.tsx                # Command time interval canvas chart (target for imperative drawing)
