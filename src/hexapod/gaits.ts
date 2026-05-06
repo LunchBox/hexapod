@@ -684,6 +684,8 @@ export class GaitController {
           let gait = this.actions["internal_move"];
           let pos = joystick.pos;
           gait.snapshotHome();
+          // Clear rotation from any prior rotate_body session
+          gait.rotation.x = 0; gait.rotation.y = 0; gait.rotation.z = 0;
           let max_fb_distance = 40;
           let max_lr_distance = 40;
           let fb_rate = max_fb_distance / joystick.radius;
@@ -696,6 +698,8 @@ export class GaitController {
           let gait2 = this.actions["internal_move"];
           let pos2 = joystick.pos;
           gait2.snapshotHome();
+          // Clear position from any prior move_body session
+          gait2.position.x = 0; gait2.position.y = 0; gait2.position.z = 0;
           let max_fb_radius = Math.PI / 12;
           let max_lr_radius = Math.PI / 12;
           let fb_rate2 = max_fb_radius / joystick.radius;
