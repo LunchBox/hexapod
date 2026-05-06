@@ -346,14 +346,11 @@ export class GaitController {
   }
 
   act(action_name: any) {
-    // Real servos execute one command at a time — skip while a previous
-    // animation (mesh, body_mesh, or legs) is still playing.  Keyboard
-    // (WASD) inputs are dropped; joystick (move_body / rotate_body)
-    // targets accumulate via GaitInternal.position/rotation and the
-    // next un-gated act() picks up the latest.
-    if (this.bot.is_animating && this.bot.is_animating()) {
-      return;
-    }
+    // Gate on gait walking animations (mesh keyframes or isolated leg steps).
+    // Body-control animations (body_mesh keyframes from joystick/sliders) can
+    // be safely overwritten — pre-computed keyframes replace atomically.
+    if (this.bot._mesh_keyframes !== null) return;
+    if (this.bot._body_mesh_keyframes === null && this.bot.is_animating()) return;
 
     let time = new Date().getTime();
     if (this.last_act_time) {
