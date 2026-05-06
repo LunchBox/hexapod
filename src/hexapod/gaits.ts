@@ -174,11 +174,10 @@ export class GaitInternal extends GaitAction {
       return;
     }
 
-    if (bot.options.physics_mode === 'servo_constraint') {
-      bot.transform_body_servo({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
-    } else {
-      bot.transform_body({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
-    }
+    // Instant body movement for live joystick tracking — responsive.
+    // Servo-constraint animation is deferred to the spring-back on release
+    // (see SceneControls.stop / restoreHome).
+    bot.transform_body({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
   }
 }
 
@@ -346,11 +345,9 @@ export class GaitController {
   }
 
   act(action_name: any) {
-    // Gate on gait walking animations (mesh keyframes or isolated leg steps).
-    // Body-control animations (body_mesh keyframes from joystick/sliders) can
-    // be safely overwritten — pre-computed keyframes replace atomically.
-    if (this.bot._mesh_keyframes !== null) return;
-    if (this.bot._body_mesh_keyframes === null && this.bot.is_animating()) return;
+    if (this.bot.is_animating && this.bot.is_animating()) {
+      return;
+    }
 
     let time = new Date().getTime();
     if (this.last_act_time) {

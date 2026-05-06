@@ -117,8 +117,7 @@ export default function SceneControls() {
           onChange={(v) => {
             const bot = botRef.current; if (!bot) return false;
             accRef.current.x += v;
-            const useServo = bot.options.physics_mode === 'servo_constraint';
-            const ok = useServo ? bot.transform_body_servo({ dx: v }) : bot.transform_body({ dx: v });
+            const ok = bot.transform_body({ dx: v });
             bot.adjust_gait_guidelines();
             return ok;
           }}
@@ -128,8 +127,7 @@ export default function SceneControls() {
           onChange={(v) => {
             const bot = botRef.current; if (!bot) return false;
             accRef.current.y += v;
-            const useServo = bot.options.physics_mode === 'servo_constraint';
-            const ok = useServo ? bot.transform_body_servo({ dy: v }) : bot.transform_body({ dy: v });
+            const ok = bot.transform_body({ dy: v });
             bot.adjust_gait_guidelines();
             return ok;
           }}
@@ -139,8 +137,7 @@ export default function SceneControls() {
           onChange={(v) => {
             const bot = botRef.current; if (!bot) return false;
             accRef.current.z += v;
-            const useServo = bot.options.physics_mode === 'servo_constraint';
-            const ok = useServo ? bot.transform_body_servo({ dz: v }) : bot.transform_body({ dz: v });
+            const ok = bot.transform_body({ dz: v });
             bot.adjust_gait_guidelines();
             return ok;
           }}
@@ -151,8 +148,7 @@ export default function SceneControls() {
             const bot = botRef.current; if (!bot) return false;
             const rad = v * Math.PI / 180;
             accRef.current.rx += rad;
-            const useServo = bot.options.physics_mode === 'servo_constraint';
-            const ok = useServo ? bot.transform_body_servo({ rx: rad }) : bot.transform_body({ rx: rad });
+            const ok = bot.transform_body({ rx: rad });
             bot.adjust_gait_guidelines();
             return ok;
           }}
@@ -163,8 +159,7 @@ export default function SceneControls() {
             const bot = botRef.current; if (!bot) return false;
             const rad = v * Math.PI / 180;
             accRef.current.ry += rad;
-            const useServo = bot.options.physics_mode === 'servo_constraint';
-            const ok = useServo ? bot.transform_body_servo({ ry: rad }) : bot.transform_body({ ry: rad });
+            const ok = bot.transform_body({ ry: rad });
             bot.adjust_gait_guidelines();
             return ok;
           }}
@@ -175,8 +170,7 @@ export default function SceneControls() {
             const bot = botRef.current; if (!bot) return false;
             const rad = v * Math.PI / 180;
             accRef.current.rz += rad;
-            const useServo = bot.options.physics_mode === 'servo_constraint';
-            const ok = useServo ? bot.transform_body_servo({ rz: rad }) : bot.transform_body({ rz: rad });
+            const ok = bot.transform_body({ rz: rad });
             bot.adjust_gait_guidelines();
             return ok;
           }}
