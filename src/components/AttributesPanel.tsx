@@ -116,44 +116,36 @@ export default function AttributesPanel() {
           </div>
           <div>
             <div className="text-[11px] text-muted-foreground mb-1.5">Presets</div>
-            <PresetRow presets={PRESETS.filter(p => p.name === 'default')} {...presetHandlers} />
+            <div className="flex flex-wrap items-center gap-1">
+              <PresetRow presets={PRESETS.filter(p => p.name === 'default')} {...presetHandlers} />
+              <span className="text-border mx-0.5">|</span>
+              <Button variant={bodyShape === 'rectangle' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ body_shape: 'rectangle' })}>Rect</Button>
+              <Button variant={bodyShape === 'polygon' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ body_shape: 'polygon' })}>Poly</Button>
+              {bodyShape === 'polygon' && (
+                <>
+                  <span className="text-border mx-0.5">|</span>
+                  <Button variant={placement === 'vertex' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_leg_placement: 'vertex' })}>Vertex</Button>
+                  <Button variant={placement === 'edge' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_leg_placement: 'edge' })}>Edge</Button>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const w = opts.body_width || 50;
+                    const l = opts.body_length || 100;
+                    const avg = Math.round((w + l) / 2);
+                    applyConfig({ body_width: avg, body_length: avg });
+                  }}>Regular</Button>
+                </>
+              )}
+              {legCount % 2 !== 0 && (
+                <>
+                  <span className="text-border mx-0.5">|</span>
+                  <Button variant={firstLegDirection === 'back' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_odd_orientation: 'back' })}>1-Back</Button>
+                  <Button variant={firstLegDirection === 'front' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_odd_orientation: 'front' })}>1-Front</Button>
+                </>
+              )}
+            </div>
             <div className="text-[11px] text-muted-foreground mt-1.5 mb-0.5">3-DOF</div>
             <PresetRow presets={PRESETS.filter(p => p.name.endsWith('-3'))} {...presetHandlers} />
             <div className="text-[11px] text-muted-foreground mt-1.5 mb-0.5">4-DOF</div>
             <PresetRow presets={PRESETS.filter(p => p.name.endsWith('-4'))} {...presetHandlers} />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="mb-4">
-        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Body</CardTitle></CardHeader>
-        <CardContent className="py-1 px-3">
-          <div className="flex flex-wrap items-center gap-1">
-            <div className="flex gap-0.5">
-              <Button variant={bodyShape === 'rectangle' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ body_shape: 'rectangle' })}>Rect</Button>
-              <Button variant={bodyShape === 'polygon' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ body_shape: 'polygon' })}>Poly</Button>
-            </div>
-            {bodyShape === 'polygon' && (
-              <>
-                <span className="text-border mx-1">|</span>
-                <div className="flex gap-0.5">
-                  <Button variant={placement === 'vertex' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_leg_placement: 'vertex' })}>Vertex</Button>
-                  <Button variant={placement === 'edge' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_leg_placement: 'edge' })}>Edge</Button>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const w = opts.body_width || 50;
-                  const l = opts.body_length || 100;
-                  const avg = Math.round((w + l) / 2);
-                  applyConfig({ body_width: avg, body_length: avg });
-                }}>Regular</Button>
-              </>
-            )}
-            {legCount % 2 !== 0 && (
-              <div className="flex gap-0.5">
-                <Button variant={firstLegDirection === 'back' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_odd_orientation: 'back' })}>1-Back</Button>
-                <Button variant={firstLegDirection === 'front' ? 'default' : 'outline'} size="sm" onClick={() => applyConfig({ polygon_odd_orientation: 'front' })}>1-Front</Button>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
