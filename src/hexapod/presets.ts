@@ -32,6 +32,37 @@ function legOptsForPolygon(count: number, dof: number): any[] {
   return legs;
 }
 
+/** Step parameters roughly scale with leg count. */
+function stepsFor(count: number, dof: number) {
+  const baseFb = 13 + count;
+  const baseLr = 8 + Math.round(count * 0.7);
+  const baseUp = 7 + Math.round(count * 0.5);
+  if (dof === 3) return { fb_step: baseFb, lr_step: baseLr, up_step: baseUp };
+  return { fb_step: baseFb + 4, lr_step: baseLr + 2, up_step: baseUp + 2, servo_speed: 1800, tarsus_length: 28 };
+}
+
+function makePolyPreset(name: string, label: string, desc: string, count: number, dof: number): Preset {
+  return {
+    name,
+    label,
+    description: desc,
+    options: {
+      ...L,
+      body_shape: 'polygon',
+      leg_count: count,
+      dof,
+      body_width: 80,
+      body_length: 80,
+      polygon_leg_placement: 'vertex',
+      ...stepsFor(count, dof),
+      leg_options: legOptsForPolygon(count, dof),
+    },
+  };
+}
+
+const SIDE_LABELS = ['Tri', 'Quad', 'Pent', 'Hex', 'Hept', 'Oct', 'Non'];
+const SIDE_NAMES = ['triangle', 'square', 'pentagon', 'hexagon', 'heptagon', 'octagon', 'nonagon'];
+
 export const PRESETS: Preset[] = [
   {
     name: 'default',
@@ -39,116 +70,24 @@ export const PRESETS: Preset[] = [
     description: 'Standard 6-leg 3-DOF rectangle hexapod',
     options: { ...L },
   },
-  {
-    name: 'tri3',
-    label: 'Triangle 3DOF',
-    description: '正三角形，3 legs, 3-DOF',
-    options: {
-      ...L,
-      body_shape: 'polygon',
-      leg_count: 3,
-      dof: 3,
-      body_width: 80,
-      body_length: 80,
-      polygon_leg_placement: 'vertex',
-      fb_step: 15,
-      lr_step: 10,
-      up_step: 8,
-      leg_options: legOptsForPolygon(3, 3),
-    },
-  },
-  {
-    name: 'quad4-3',
-    label: 'Square 3DOF',
-    description: '正四方形，4 legs, 3-DOF',
-    options: {
-      ...L,
-      body_shape: 'polygon',
-      leg_count: 4,
-      dof: 3,
-      body_width: 80,
-      body_length: 80,
-      polygon_leg_placement: 'vertex',
-      fb_step: 18,
-      lr_step: 12,
-      up_step: 8,
-      leg_options: legOptsForPolygon(4, 3),
-    },
-  },
-  {
-    name: 'penta5-3',
-    label: 'Pentagon 3DOF',
-    description: '正五邊形，5 legs, 3-DOF',
-    options: {
-      ...L,
-      body_shape: 'polygon',
-      leg_count: 5,
-      dof: 3,
-      body_width: 80,
-      body_length: 80,
-      polygon_leg_placement: 'vertex',
-      fb_step: 18,
-      lr_step: 12,
-      up_step: 9,
-      leg_options: legOptsForPolygon(5, 3),
-    },
-  },
-  {
-    name: 'hexa6-3',
-    label: 'Hexagon 3DOF',
-    description: '正六邊形，6 legs, 3-DOF',
-    options: {
-      ...L,
-      body_shape: 'polygon',
-      leg_count: 6,
-      dof: 3,
-      body_width: 80,
-      body_length: 80,
-      polygon_leg_placement: 'vertex',
-      fb_step: 20,
-      lr_step: 14,
-      up_step: 10,
-      leg_options: legOptsForPolygon(6, 3),
-    },
-  },
-  {
-    name: 'hexa6-4',
-    label: 'Hexagon 4DOF',
-    description: '正六邊形，6 legs, 4-DOF',
-    options: {
-      ...L,
-      body_shape: 'polygon',
-      leg_count: 6,
-      dof: 4,
-      body_width: 80,
-      body_length: 80,
-      polygon_leg_placement: 'vertex',
-      tarsus_length: 28,
-      fb_step: 24,
-      lr_step: 16,
-      up_step: 12,
-      servo_speed: 1800,
-      leg_options: legOptsForPolygon(6, 4),
-    },
-  },
-  {
-    name: 'octa8-4',
-    label: 'Octagon 4DOF',
-    description: '正八邊形，8 legs, 4-DOF',
-    options: {
-      ...L,
-      body_shape: 'polygon',
-      leg_count: 8,
-      dof: 4,
-      body_width: 80,
-      body_length: 80,
-      polygon_leg_placement: 'vertex',
-      tarsus_length: 28,
-      fb_step: 22,
-      lr_step: 14,
-      up_step: 12,
-      servo_speed: 1800,
-      leg_options: legOptsForPolygon(8, 4),
-    },
-  },
+  // 3-DOF row: 3–9 sides
+  ...Array.from({ length: 7 }, (_, i) => {
+    const n = i + 3;
+    return makePolyPreset(
+      `${SIDE_LABELS[i].toLowerCase()}${n}-3`,
+      `${SIDE_LABELS[i]} 3DOF`,
+      `${SIDE_NAMES[i]}, ${n} legs, 3-DOF`,
+      n, 3,
+    );
+  }),
+  // 4-DOF row: 3–9 sides
+  ...Array.from({ length: 7 }, (_, i) => {
+    const n = i + 3;
+    return makePolyPreset(
+      `${SIDE_LABELS[i].toLowerCase()}${n}-4`,
+      `${SIDE_LABELS[i]} 4DOF`,
+      `${SIDE_NAMES[i]}, ${n} legs, 4-DOF`,
+      n, 4,
+    );
+  }),
 ];

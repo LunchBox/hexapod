@@ -87,6 +87,22 @@ export default function AttributesPanel() {
     bumpBotVersion();
   };
 
+  const presetHandlers = {
+    setWlLocked,
+    setHwlLocked,
+    handlePresetClick: (p: typeof PRESETS[number]) => {
+      const b = botRef.current;
+      if (!b) return;
+      history.push(b.options);
+      const opts = JSON.parse(JSON.stringify(p.options));
+      set_bot_options(opts);
+      b.apply_attributes(opts);
+      setWlLocked(false);
+      setHwlLocked(false);
+      bumpBotVersion();
+    },
+  };
+
   return (
     <div id="attrs_control">
       <Card className="mb-4">
@@ -100,25 +116,11 @@ export default function AttributesPanel() {
           </div>
           <div>
             <div className="text-[11px] text-muted-foreground mb-1.5">Presets</div>
-            <div className="flex flex-wrap gap-1">
-              {PRESETS.map(p => (
-                <Button key={p.name} variant="outline" size="sm"
-                  title={p.description}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const b = botRef.current;
-                    if (!b) return;
-                    history.push(b.options);
-                    const opts = JSON.parse(JSON.stringify(p.options));
-                    set_bot_options(opts);
-                    b.apply_attributes(opts);
-                    setWlLocked(false);
-                    setHwlLocked(false);
-                    bumpBotVersion();
-                  }}
-                >{p.label}</Button>
-              ))}
-            </div>
+            <PresetRow presets={PRESETS.filter(p => p.name === 'default')} {...presetHandlers} />
+            <div className="text-[11px] text-muted-foreground mt-1.5 mb-0.5">3-DOF</div>
+            <PresetRow presets={PRESETS.filter(p => p.name.endsWith('-3'))} {...presetHandlers} />
+            <div className="text-[11px] text-muted-foreground mt-1.5 mb-0.5">4-DOF</div>
+            <PresetRow presets={PRESETS.filter(p => p.name.endsWith('-4'))} {...presetHandlers} />
           </div>
         </CardContent>
       </Card>
@@ -342,6 +344,24 @@ export default function AttributesPanel() {
           />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function PresetRow({ presets, setWlLocked: _s, setHwlLocked: _h, handlePresetClick }: {
+  presets: typeof PRESETS;
+  setWlLocked: (v: boolean) => void;
+  setHwlLocked: (v: boolean) => void;
+  handlePresetClick: (p: typeof PRESETS[number]) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {presets.map(p => (
+        <Button key={p.name} variant="outline" size="sm"
+          title={p.description}
+          onClick={(e) => { e.preventDefault(); handlePresetClick(p); }}
+        >{p.label}</Button>
+      ))}
     </div>
   );
 }

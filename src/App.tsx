@@ -20,6 +20,7 @@ const TABS = [
   { id: 'attrs_control', label: 'Body' },
   { id: 'leg_control', label: 'Leg' },
   { id: 'status_control', label: 'Status' },
+  { id: 'about', label: 'About' },
 ];
 
 function ago(ms: number): string {
@@ -69,7 +70,8 @@ function App() {
 
         <div className="grid-scene">
           <SceneCanvas />
-          <SceneControls />
+          <CommandDisplay />
+          <TimeChart />
         </div>
 
         <div className="grid-controls">
@@ -83,6 +85,7 @@ function App() {
             </TabsList>
 
             <TabsContent value="move_control" className="mt-3">
+              <SceneControls />
               <ControlPanel />
             </TabsContent>
             <TabsContent value="servo_control" className="mt-3">
@@ -97,38 +100,31 @@ function App() {
             <TabsContent value="status_control" className="mt-3">
               <StatusPanel />
             </TabsContent>
+            <TabsContent value="about" className="mt-3">
+              <div className="text-xs text-muted-foreground space-y-3">
+                <div>
+                  Old version video: <a href="https://www.youtube.com/watch?v=2jqCGz36oH4" className="underline">Youtube</a>
+                </div>
+                <div>
+                  <p>For connecting to your physical bot:</p>
+                  <ul className="list-disc pl-4">
+                    <li>Install <a href="http://nodejs.org/" className="underline">Node.js</a></li>
+                    <li>Download the <a href="node_server/server.js" className="underline">server.js</a> (it is a nodejs module)</li>
+                    <li>Connect your bot to some COM port</li>
+                    <li>run the server.js by typing "node PATH/TO/YOUR/server.js" and follow the instruction</li>
+                    <li>no guarantee it works...</li>
+                  </ul>
+                </div>
+                <p>
+                  Thanks to the author:
+                  <a href="http://freespace.virgin.net/hugo.elias/models/m_ik2.htm" className="underline">
+                    http://freespace.virgin.net/hugo.elias/models/m_ik2.htm
+                  </a>
+                </p>
+                <div>By Daniel Cheang @ 2015</div>
+              </div>
+            </TabsContent>
           </Tabs>
-        </div>
-
-        <div className="grid-info">
-          <TimeChart />
-          <CommandDisplay />
-
-          <div className="mt-6 pt-4 border-t border-border text-xs text-muted-foreground space-y-3">
-            <div>
-              Old version video: <a href="https://www.youtube.com/watch?v=2jqCGz36oH4" className="underline">Youtube</a>
-            </div>
-
-            <div>
-              <p>For connecting to your physical bot:</p>
-              <ul className="list-disc pl-4">
-                <li>Install <a href="http://nodejs.org/" className="underline">Node.js</a></li>
-                <li>Download the <a href="node_server/server.js" className="underline">server.js</a> (it is a nodejs module)</li>
-                <li>Connect your bot to some COM port</li>
-                <li>run the server.js by typing "node PATH/TO/YOUR/server.js" and follow the instruction</li>
-                <li>no guarantee it works...</li>
-              </ul>
-            </div>
-
-            <p>
-              Thanks to the author:
-              <a href="http://freespace.virgin.net/hugo.elias/models/m_ik2.htm" className="underline">
-                http://freespace.virgin.net/hugo.elias/models/m_ik2.htm
-              </a>
-            </p>
-
-            <div>By Daniel Cheang @ 2015</div>
-          </div>
         </div>
       </div>
     </HexapodProvider>

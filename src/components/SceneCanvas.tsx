@@ -61,8 +61,8 @@ export default function SceneCanvas() {
     <div
       ref={containerRef}
       style={{
-        width: 480,
-        height: 320,
+        width: '100%',
+        height: '100%',
         overflow: 'hidden',
         position: 'relative',
         display: 'inline-block',

@@ -18,7 +18,7 @@ export function initScene(container: HTMLElement) {
     FAR = 10000;
   appState.camera = new (THREE.PerspectiveCamera as any)(VIEW_ANGLE, ASPECT, NEAR, FAR);
   appState.scene!.add(appState.camera!);
-  appState.camera!.position.set(-300, 300, -300);
+  appState.camera!.position.set(-600, 500, -600);
 
   // Renderer
   if (Detector.webgl) {
@@ -64,7 +64,7 @@ export function initScene(container: HTMLElement) {
   particleLight.position.set(1, 500, 0);
 
   // Grid
-  let gridHelper = new (THREE.GridHelper as any)(500, 100);
+  let gridHelper = new (THREE.GridHelper as any)(1000, 100);
   gridHelper.position.set(0, 0, 0);
   gridHelper.rotation.set(0, 0, 0);
   appState.scene!.add(gridHelper);
