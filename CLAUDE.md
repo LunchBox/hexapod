@@ -61,8 +61,9 @@ src/
     ServoPanel.tsx               # 18 servo sliders + end-position inputs (per-leg, imperative DOM)
     AttributesPanel.tsx          # Profile (presets + body shape buttons), Adjust, Motions, Body Attrs
     LegEditor.tsx                # 2D canvas joint editor with multi-leg editing
-    LegEditor.css                # LegEditor styles
-    StatusBar.tsx                # Status bar: gait, mode, physics, leg count
+    LegAttributesPanel.tsx       # Per-leg attributes: DOF, leg count, segment length/radius/angle sliders
+    BodyPreview.tsx              # Canvas mini preview of body shape with leg dot positions
+    StatusBar.tsx                # Status bar: gait, mode, physics, leg count × DOF
     StatusPanel.tsx              # Status history list with play/apply
     CommandDisplay.tsx           # Current + last servo command strings
     TimeChart.tsx                # Command time interval canvas chart (target for imperative drawing)
@@ -77,9 +78,13 @@ src/
     joystick2.ts                 # JoyStick class (canvas-based, accepts element or selector)
     pos_calculator.ts            # Inverse kinematics: gradient-descent solver for tip→servo values
     pos_calculator_backup_2026-05-02.ts  # Backup of pre-refactor PosCalculator
+    forward_kinematics.ts        # Pure forward kinematics (zero Three.js), used by tests
     physics_solver.ts            # Multi-leg constraint solver (PhysicsSolver.solveAll)
     servo_output.ts              # ServoOutput interface + DirectOutput / AnimatedOutput strategy
-    hexapod.ts                   # Hexapod + HexapodLeg classes, layout computation, config helpers
+    hexapod.ts                   # Hexapod class, layout computation, config helpers
+    hexapod_leg.ts               # HexapodLeg class (imported by hexapod.ts)
+    leg_layout.ts                # computeLegLayout, computeJointPositions, getSegNamesForLeg
+    presets.ts                   # PRESETS array: 15 preset configs (default + 3-DOF + 4-DOF)
     gaits.ts                     # GaitController + GaitAction hierarchy (standby, move, internal, putdown)
     gait_configs.ts              # Preset gait definitions by leg count (wave, ripple, tripod, quad)
     gait_generator.ts            # Runtime gait filtering: balance validation, dedup, cyclic rotation
@@ -97,10 +102,10 @@ stylesheets/
 ## Architecture
 
 **Core classes (same logic as legacy, now ES modules):**
-- `Hexapod` — The bot. Creates 3D body mesh, 6 `HexapodLeg` instances, holds a `GaitController`. Manages servo value computation, status snapshot/restore, and Socket.IO commands to `localhost:8888`. `apply_attributes()` re-draws the entire bot from config. Holds keyframe animation state for both `mesh` (gait path) and `body_mesh` (body control path). The `_servo_anim_disabled` flag prevents new animations during rebuilds and transform_body sub-steps; `is_animating()` gates `act()` during active animation.
+- `Hexapod` — The bot. Creates 3D body mesh, N `HexapodLeg` instances (3–9 legs), holds a `GaitController`. Manages servo value computation, status snapshot/restore, and Socket.IO commands to `localhost:8888`. `apply_attributes()` re-draws the entire bot from config. Holds keyframe animation state for both `mesh` (gait path) and `body_mesh` (body control path). The `_servo_anim_disabled` flag prevents new animations during rebuilds and transform_body sub-steps; `is_animating()` gates `act()` during active animation.
 - `HexapodLeg` — 2–6 DOF limb chain (coxa → femur → tibia → tarsus → segment5 → segment6 → tip). Each limb is a Three.js mesh with `servo_value`, `servo_idx`, `revert` flag. `set_tip_pos()` invokes `PosCalculator`. Uses a `ServoOutput` strategy (`DirectOutput` or `AnimatedOutput`) to control whether servo values are applied instantly or animated through keyframes.
 - `GaitController` — Owns gait definitions (leg group patterns), action types (power/efficient/body_first/fast), target modes (translate/target). Uses `gait_configs.ts` presets filtered through `gait_generator.ts` for balance validation. `fire_action()` runs on a 30ms interval via setInterval in ControlPanel. `act()` is gated by `bot.is_animating()` — new commands are skipped while a previous animation plays.
-- `PosCalculator` — Inverse kinematics via gradient descent on the servo values for a single leg, minimizing distance to target tip world position. Contains **zero** trigonometric functions. Uses `REG_STRENGTH` (0.012) to pull redundant DOFs toward home servos during iteration. **Calls `set_servo_values()` during IK iterations, which must apply values immediately** (bypass animation) so the Three.js scene-graph FK reads current joint angles.
+- `PosCalculator` — Inverse kinematics via gradient descent on the servo values for a single leg, minimizing distance to target tip world position. Contains **zero** trigonometric functions. Uses `REG_STRENGTH` (0.05) to pull redundant DOFs toward home servos during iteration. **Calls `set_servo_values()` during IK iterations, which must apply values immediately** (bypass animation) so the Three.js scene-graph FK reads current joint angles.
 - `ServoOutput` — Strategy pattern (`src/hexapod/servo_output.ts`). `DirectOutput` applies servo values instantly (`none` mode). `AnimatedOutput` animates through keyframes at `servo_speed` (`servo_constraint` mode). `Hexapod._setLegOutputs(mode)` switches all legs between strategies.
 - `JoyStick` — Canvas-based 2D joystick. Accepts either a CSS selector string or a DOM element.
 
@@ -113,7 +118,7 @@ stylesheets/
 **Data flow:**
 1. Config loaded from `localStorage` key `"hexapod_options"` (fallback: `DEFAULT_HEXAPOD_OPTIONS`)
 2. `initScene(container)` → Three.js scene, camera, renderer, animation loop
-3. `build_bot()` → `new Hexapod(scene, options)` draws body + 6 legs
+3. `build_bot()` → `new Hexapod(scene, options)` draws body + N legs (3–9)
 4. `laydown()` + `putdown_tips()` places feet on ground plane (y=0)
 5. Each movement step calls `after_status_change()` which updates DOM, optionally sends servo command via WebSocket, and records status history
 6. Servo command format: `#0 P1500 #1 P1500 ... T500` (servo index, pulse width, time interval)
@@ -207,9 +212,8 @@ There are two physics modes (toggled in ControlPanel, stored as `options.physics
 ### Keyframe animation system (two independent paths)
 
 **Old fields that NO LONGER EXIST:**
-- `leg._anim_targets`, `leg._anim_starts`, `leg._anim_start_time`
-- `bot._mesh_start_pos`, `bot._mesh_target_pos`, `bot._mesh_start_rotY`, `bot._mesh_target_rotY`, `bot._mesh_anim_start`, `bot._mesh_anim_duration`
-- `bot._servo_anim_disabled` on Hexapod (replaced by `_servo_anim_disabled` flag + `_setLegOutputs()`)
+- `leg._anim_targets`, `leg._anim_starts`, `leg._anim_start_time` (replaced by `AnimatedOutput` strategy)
+- `bot._mesh_start_pos`, `bot._mesh_target_pos`, `bot._mesh_start_rotY`, `bot._mesh_target_rotY`, `bot._mesh_anim_start`, `bot._mesh_anim_duration` (replaced by `_mesh_keyframes` arrays)
 
 **Path A — Gait walking (`mesh` keyframes):**
 

@@ -49,14 +49,19 @@ src/
     AttrSlider.tsx            # Reusable labeled range slider
     SliderColumn.tsx          # Reusable slider column (vertical/horizontal, spring-back)
   hexapod/
-    hexapod.ts                # Hexapod, HexapodLeg, config helpers
+    hexapod.ts                # Hexapod class, config helpers
+    hexapod_leg.ts            # HexapodLeg class
     gaits.ts                  # GaitController, gait actions
     gait_configs.ts           # Preset gait definitions (wave, ripple, tripod, quad)
     gait_generator.ts         # Runtime gait filtering and validation
     pos_calculator.ts         # Gradient-descent IK solver
+    forward_kinematics.ts     # Pure forward kinematics (zero Three.js), for tests
     physics_solver.ts         # Multi-leg constraint solver
+    servo_output.ts           # ServoOutput interface + DirectOutput/AnimatedOutput
     scene.ts                  # initScene — Three.js setup
     joystick2.ts              # Canvas-based 2D joystick
+    leg_layout.ts             # Leg layout computation, joint positions
+    presets.ts                # 15 preset configurations
     defaults.ts               # Constants, DEFAULT_HEXAPOD_OPTIONS
     utils.ts                  # DOM/vector/math/localStorage helpers
     appState.ts               # Mutable singleton state
@@ -76,7 +81,7 @@ stylesheets/
 - **guide_pos** is the unified reference frame for all gait tip/body movement
 - **Gait step factors**: tips move by full step, body by `step / leg_groups.length * 3`
 - **Servo Constraint principle**: animation reflects physical reality — servos rotate at constant speed independently, different arrival times are correct, never fake synchronization
-- **Keyframe animation**: unified `_servo_keyframes` / `_mesh_keyframes` arrays replace old single-target fields; per-leg segment advancement is independent
+- **Keyframe animation**: mesh keyframes for gait walking; body_mesh keyframes for body control; per-leg keyframes managed by AnimatedOutput strategy
 
 See `CLAUDE.md` for full non-negotiable design rules. See `CLAUDE_CN.md` for Chinese version.
 

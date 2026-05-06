@@ -61,8 +61,9 @@ src/
     ServoPanel.tsx               # 18 個 servo 滑塊 + 末端位置輸入（每腿，命令式 DOM）
     AttributesPanel.tsx          # Profile (presets + body shape 按鈕)、Adjust、Motions、Body Attrs
     LegEditor.tsx                # 2D canvas 關節編輯器，支援多腿編輯
-    LegEditor.css                # LegEditor 樣式
-    StatusBar.tsx                # 狀態列：步態、模式、物理、腿數
+    LegAttributesPanel.tsx       # 每腿屬性：DOF、腿數、肢段長度/半徑/角度滑塊
+    BodyPreview.tsx              # Canvas 迷你身體形狀預覽，含腿部點位
+    StatusBar.tsx                # 狀態列：步態、模式、物理、腿數 × DOF
     StatusPanel.tsx              # 狀態歷史列表，含播放/應用
     CommandDisplay.tsx           # 當前 + 上一個 servo 指令字串
     TimeChart.tsx                # 指令時間間隔 canvas 圖表
@@ -77,8 +78,13 @@ src/
     joystick2.ts                 # JoyStick 類別（基於 canvas）
     pos_calculator.ts            # 逆向運動學：梯度下降求解器，tip→servo 值
     pos_calculator_backup_2026-05-02.ts  # 重構前 PosCalculator 備份
+    forward_kinematics.ts        # 純正向運動學（零 Three.js 依賴），供測試使用
     physics_solver.ts            # 多腿約束求解器 (PhysicsSolver.solveAll)
-    hexapod.ts                   # Hexapod + HexapodLeg 類別、佈局計算、配置輔助
+    servo_output.ts              # ServoOutput 介面 + DirectOutput / AnimatedOutput 策略
+    hexapod.ts                   # Hexapod 類別、佈局計算、配置輔助
+    hexapod_leg.ts               # HexapodLeg 類別（由 hexapod.ts 匯入）
+    leg_layout.ts                # computeLegLayout、computeJointPositions、getSegNamesForLeg
+    presets.ts                   # PRESETS 陣列：15 個預設配置（default + 3-DOF + 4-DOF）
     gaits.ts                     # GaitController + GaitAction 階層
     gait_configs.ts              # 預設步態定義（依腿數）
     gait_generator.ts            # 運行時步態過濾：平衡驗證、去重、循環旋轉
@@ -96,10 +102,10 @@ stylesheets/
 ## 架構
 
 **核心類別（與 legacy 邏輯相同，現為 ES 模組）：**
-- `Hexapod` — 機器人主體。建立 3D 身體 mesh、6 個 `HexapodLeg` 實例、持有 `GaitController`。管理 servo 值計算、狀態快照/恢復。持有 `mesh`（步態路徑）和 `body_mesh`（身體控制路徑）的 keyframe 動畫狀態。`_servo_anim_disabled` 標誌在重建和 transform_body 子步驟期間防止新動畫；`is_animating()` 在動畫進行期間阻擋 `act()`。
+- `Hexapod` — 機器人主體。建立 3D 身體 mesh、N 個 `HexapodLeg` 實例（3–9 腿）、持有 `GaitController`。管理 servo 值計算、狀態快照/恢復。持有 `mesh`（步態路徑）和 `body_mesh`（身體控制路徑）的 keyframe 動畫狀態。`_servo_anim_disabled` 標誌在重建和 transform_body 子步驟期間防止新動畫；`is_animating()` 在動畫進行期間阻擋 `act()`。
 - `HexapodLeg` — 2–6 DOF 肢段鏈。每個肢段為 Three.js mesh，具有 `servo_value`、`servo_idx`、`revert`。使用 `ServoOutput` 策略（`DirectOutput` 或 `AnimatedOutput`）控制 servo 值是立即套用還是透過 keyframes 動畫。`set_servo_values()` **必須立即套用**——PosCalculator 在 IK 迭代期間呼叫它後立即讀取 Three.js 場景。
 - `GaitController` — 步態控制器。`act()` 由 `bot.is_animating()` 阻擋——動畫進行期間跳過新指令。
-- `PosCalculator` — 梯度下降 IK 求解器。使用 `REG_STRENGTH`（0.012）將多餘 DOF 拉回 home servos。
+- `PosCalculator` — 梯度下降 IK 求解器。使用 `REG_STRENGTH`（0.05）將多餘 DOF 拉回 home servos。
 - `ServoOutput` — 策略模式（`src/hexapod/servo_output.ts`）。`DirectOutput` 立即套用；`AnimatedOutput` 透過 keyframes 以 `servo_speed` 速度動畫。
 
 **React 整合模式：**
@@ -111,7 +117,7 @@ stylesheets/
 **資料流：**
 1. 配置從 `localStorage` 鍵 `"hexapod_options"` 載入（備選：`DEFAULT_HEXAPOD_OPTIONS`）
 2. `initScene(container)` → Three.js 場景、相機、渲染器、動畫迴圈
-3. `build_bot()` → `new Hexapod(scene, options)` 繪製身體 + 6 條腿
+3. `build_bot()` → `new Hexapod(scene, options)` 繪製身體 + N 條腿（3–9）
 4. `laydown()` + `putdown_tips()` 將足部置於地面 (y=0)
 5. 每個移動步驟調用 `after_status_change()`，更新 DOM、可選發送 servo 指令、記錄狀態歷史
 6. Servo 指令格式：`#0 P1500 #1 P1500 ... T500`（servo 索引、脈衝寬度、時間間隔）

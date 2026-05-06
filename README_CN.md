@@ -49,15 +49,20 @@ src/
     AttrSlider.tsx            # 可重用標籤範圍滑塊
     SliderColumn.tsx          # 可重用滑塊列（垂直/水平、彈回）
   hexapod/
-    hexapod.ts                # Hexapod、HexapodLeg、配置輔助
+    hexapod.ts                # Hexapod 類別、配置輔助
+    hexapod_leg.ts            # HexapodLeg 類別
     gaits.ts                  # GaitController、步態動作
     gait_configs.ts           # 預設步態定義（wave、ripple、tripod、quad）
     gait_generator.ts         # 運行時步態過濾和驗證
     pos_calculator.ts         # 梯度下降 IK 求解器
+    forward_kinematics.ts     # 純正向運動學（零 Three.js 依賴），供測試使用
     physics_solver.ts         # 多腿約束求解器
+    servo_output.ts           # ServoOutput 介面 + DirectOutput/AnimatedOutput
     scene.ts                  # initScene — Three.js 設定
     joystick2.ts              # 基於 canvas 的 2D 搖桿
-    defaults.ts               # 常數、DEFAULT_HEXAPOD_OPTIONS
+    leg_layout.ts             # 腿部佈局計算、關節位置
+    presets.ts                # 15 個預設配置
+    defaults.ts               # 常數、DEFAULT_HEAPOD_OPTIONS
     utils.ts                  # DOM/向量/數學/localStorage 輔助
     appState.ts               # 可變單例狀態
     history.ts                # 撤銷/重做堆疊
@@ -76,7 +81,7 @@ stylesheets/
 - **guide_pos** 是所有步態 tip/body 移動的統一參考框架
 - **步態步長因子**：tips 以完整步長移動，body 以 `step / leg_groups.length * 3` 移動
 - **Servo Constraint 原則**：動畫反映物理現實 — servo 以恆速獨立旋轉，不同到達時間是正確的，絕不可人為同步
-- **Keyframe 動畫**：統一的 `_servo_keyframes` / `_mesh_keyframes` 陣列取代舊的單一目標欄位；每腿 segment 推進獨立
+- **Keyframe 動畫**：mesh keyframes 用於步態行走；body_mesh keyframes 用於身體控制；每腿 keyframes 由 AnimatedOutput 策略管理
 
 完整不可協商設計規則見 `CLAUDE.md`（英文）或 `CLAUDE_CN.md`（中文）。
 
