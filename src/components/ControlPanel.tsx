@@ -15,12 +15,6 @@ const drawTypes = [
   { value: 'points', label: 'Points' },
 ];
 
-const moveModes = [
-  { value: 'move', label: 'Move Mode' },
-  { value: 'move_body', label: 'Move Body' },
-  { value: 'rotate_body', label: 'Rotate Body' },
-];
-
 const K_LABELS: Record<string, string> = {
   wave: 'Wave (k=1)',
   ripple: 'Ripple (k=2)',
@@ -161,7 +155,6 @@ export default function ControlPanel() {
   const saved = useMemo(() => get_bot_options(), []);
 
   const [drawType, setDrawType] = useState(saved.draw_type || 'mesh');
-  const [moveMode, setMoveMode] = useState(saved.move_mode || 'move');
   const [gait, setGait] = useState(saved.gait || 'tripod');
   const [actionType, setActionType] = useState(saved.action_type || 'efficient');
   const [targetMode, setTargetMode] = useState(saved.target_mode || 'target');
@@ -212,12 +205,6 @@ export default function ControlPanel() {
         bot.scene.remove(bot.mesh);
         bot.draw();
         bot.apply_status(bot.get_status());
-        break;
-      case 'mode_switch':
-        setMoveMode(value!);
-        if (gc()) gc().move_mode = value;
-        bot.options.move_mode = value;
-        set_bot_options(bot.options);
         break;
       case 'act_stop_motion':
         if (gc()) gc().stop();
@@ -437,22 +424,9 @@ export default function ControlPanel() {
   return (
     <div>
       <Card className="mb-4">
-        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Mode</CardTitle></CardHeader>
+        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Gaits</CardTitle></CardHeader>
         <CardContent className="py-1 px-3 space-y-3">
           <div>
-            <div className="text-[11px] text-muted-foreground mb-1.5">Move Mode</div>
-            <div className="flex flex-wrap gap-0.5">
-              {moveModes.map(m => (
-                <Button key={m.value}
-                  variant={moveMode === m.value ? 'default' : 'outline'}
-                  size="sm" onClick={() => handleAction('mode_switch', m.value)}
-                >{m.label}</Button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[11px] text-muted-foreground mb-1.5">Gaits</div>
             <div className="flex flex-wrap gap-0.5 mb-1">
               {gaitGroups.map(g => (
                 <Button key={g.prefix}

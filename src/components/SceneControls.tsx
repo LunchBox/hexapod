@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
+import { set_bot_options } from '../hexapod/hexapod';
 import { JoyStick } from '../hexapod/joystick2';
 import SliderColumn from './SliderColumn';
 
@@ -79,17 +80,20 @@ export default function SceneControls() {
 
     makeJoystick(moveJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
-      if (gc) { gc.move_mode = 'move'; gc.follow(j); }
+      const bot = botRef.current;
+      if (gc && bot) { gc.move_mode = 'move'; bot.options.move_mode = 'move'; set_bot_options(bot.options); gc.follow(j); }
     }, stop);
 
     makeJoystick(bodyJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
-      if (gc) { gc.move_mode = 'move_body'; gc.follow(j); }
+      const bot = botRef.current;
+      if (gc && bot) { gc.move_mode = 'move_body'; bot.options.move_mode = 'move_body'; set_bot_options(bot.options); gc.follow(j); }
     }, stop);
 
     makeJoystick(rotJsRef.current, 45, (j) => {
       const gc = botRef.current?.gait_controller;
-      if (gc) { gc.move_mode = 'rotate_body'; gc.follow(j); }
+      const bot = botRef.current;
+      if (gc && bot) { gc.move_mode = 'rotate_body'; bot.options.move_mode = 'rotate_body'; set_bot_options(bot.options); gc.follow(j); }
     }, stop);
   }, [botRef]);
 
