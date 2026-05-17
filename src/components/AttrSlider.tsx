@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -15,6 +15,8 @@ interface Props {
 
 export default function AttrSlider({ label, value, min, max, step, onChange, displayValue, title }: Props) {
   const [effectiveMax, setEffectiveMax] = useState(max);
+  // When parent raises max beyond our current ceiling (including user-extended), sync up
+  useEffect(() => { setEffectiveMax(prev => max > prev ? max : prev); }, [max]);
   const atMax = value >= effectiveMax;
 
   return (

@@ -82,6 +82,13 @@ export class AnimatedOutput implements ServoOutput {
   }
 
   setKeyframes(keyframes: number[][], startTime?: number): void {
+    // Reset any in-progress animation before loading new keyframes.
+    // Callers (apply_physics_keyframes) gate on _servo_anim_disabled, but
+    // if a body movement starts during a leg-level set_tip_pos animation,
+    // the old animation must be cleanly replaced rather than silently merged.
+    if (this._keyframes !== null) {
+      this._keyframes = null;
+    }
     this._keyframes = keyframes.map(kf => kf.slice());
     this._currentSegment = 0;
     this._segmentStartTime = startTime ?? -1;
