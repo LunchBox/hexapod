@@ -28,16 +28,18 @@ export const history = {
     if (!this.canUndo()) return null;
     // Push current state to redo stack
     this.redoStack.push(JSON.stringify(bot.options));
-    const prev = JSON.parse(this.undoStack.pop()!);
-    return prev;
+    const raw = this.undoStack.pop();
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
   },
 
   redo(bot: any): any | null {
     if (!this.canRedo()) return null;
     // Push current state to undo stack
     this.undoStack.push(JSON.stringify(bot.options));
-    const next = JSON.parse(this.redoStack.pop()!);
-    return next;
+    const raw = this.redoStack.pop();
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
   },
 
   save(options: any) {

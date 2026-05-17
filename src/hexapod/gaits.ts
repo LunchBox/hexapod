@@ -66,20 +66,29 @@ export class GaitAction {
   }
 
   run() {
-    let step = this.steps[this.acting_idx];
-    // console.log(step);
+    const step = this.steps[this.acting_idx];
+    if (!step) { this.next_step(); return false; }
 
-    let _send_cmd = false;
+    let funcName: string;
+    let sendCmd = true;
+
     if (typeof step === "string") {
-      (this as any)[step]();
-      _send_cmd = true;
+      funcName = step;
+    } else if (step && typeof step.func === "string") {
+      funcName = step.func;
+      sendCmd = !!step.send_cmd;
     } else {
-      (this as any)[step.func]();
-      _send_cmd = step.send_cmd;
+      this.next_step();
+      return false;
+    }
+
+    const fn = (this as any)[funcName];
+    if (typeof fn === "function") {
+      fn.call(this);
     }
 
     this.next_step();
-    return _send_cmd;
+    return sendCmd;
   }
 }
 

@@ -226,20 +226,23 @@ export class HexapodLeg {
       savedRendered.push(this.limbs[i]._rendered_servo_value);
     }
 
-    const groundConstraint = this.bot.options.ground_constraint ?? true;
-    const calculator = new PosCalculator(this, targetPos, this._home_servos, undefined, groundConstraint);
-    const result = calculator.run();
-
-    // Restore pre-solve state — PosCalculator.run() mutates limb.servo_value
-    // via set_servo_values() inside calc_distance().
-    for (let i = 0; i < this.joint_count; i++) {
-      this._set_joint_rotation(i, savedServos[i]);
-      this.limbs[i].servo_value = savedServos[i];
-      this.limbs[i]._rendered_servo_value = savedRendered[i];
-      this._output.renderedValues[i] = savedOutputRendered[i];
+    let result: PosResult | null = null;
+    try {
+      const groundConstraint = this.bot.options.ground_constraint ?? true;
+      const calculator = new PosCalculator(this, targetPos, this._home_servos, undefined, groundConstraint);
+      result = calculator.run();
+    } finally {
+      // Restore pre-solve state — PosCalculator.run() mutates limb.servo_value
+      // via set_servo_values() inside calc_distance().
+      for (let i = 0; i < this.joint_count; i++) {
+        this._set_joint_rotation(i, savedServos[i]);
+        this.limbs[i].servo_value = savedServos[i];
+        this.limbs[i]._rendered_servo_value = savedRendered[i];
+        this._output.renderedValues[i] = savedOutputRendered[i];
+      }
     }
 
-    return result.success ? result.values : null;
+    return result?.success ? result.values : null;
   }
 
   /** IK computation starting explicitly from _home_servos.
@@ -264,19 +267,22 @@ export class HexapodLeg {
       this.set_servo_value(i, this._home_servos[i]);
     }
 
-    const groundConstraint = this.bot.options.ground_constraint ?? true;
-    const calculator = new PosCalculator(this, targetPos, this._home_servos, undefined, groundConstraint);
-    const result = calculator.run();
-
-    // Restore pre-solve state
-    for (let i = 0; i < this.joint_count; i++) {
-      this._set_joint_rotation(i, savedServos[i]);
-      this.limbs[i].servo_value = savedServos[i];
-      this.limbs[i]._rendered_servo_value = savedRendered[i];
-      this._output.renderedValues[i] = savedOutputRendered[i];
+    let result: PosResult | null = null;
+    try {
+      const groundConstraint = this.bot.options.ground_constraint ?? true;
+      const calculator = new PosCalculator(this, targetPos, this._home_servos, undefined, groundConstraint);
+      result = calculator.run();
+    } finally {
+      // Restore pre-solve state
+      for (let i = 0; i < this.joint_count; i++) {
+        this._set_joint_rotation(i, savedServos[i]);
+        this.limbs[i].servo_value = savedServos[i];
+        this.limbs[i]._rendered_servo_value = savedRendered[i];
+        this._output.renderedValues[i] = savedOutputRendered[i];
+      }
     }
 
-    return result.success ? result.values : null;
+    return result?.success ? result.values : null;
   }
 
   set_tip_pos(new_pos: any, stallThreshold = 0): PosResult {
@@ -284,7 +290,19 @@ export class HexapodLeg {
 
     const groundConstraint = this.bot.options.ground_constraint ?? true;
     let calculator = new PosCalculator(this, new_pos, this._home_servos, undefined, groundConstraint);
-    const result = calculator.run();
+    let result: PosResult;
+    try {
+      result = calculator.run();
+    } catch {
+      // Restore pre-solve rendered state so leg isn't left at mid-calculation pose
+      this._output.reset();
+      for (let j = 0; j < this.joint_count; j++) {
+        this._set_joint_rotation(j, preRendered[j]);
+        this.limbs[j]._rendered_servo_value = preRendered[j];
+        this._output.renderedValues[j] = preRendered[j];
+      }
+      return { success: false, distance: Infinity, iterations: 0, values: [] };
+    }
 
     if (stallThreshold > 0 && result.distance > stallThreshold) {
       const currentServos: number[] = [];

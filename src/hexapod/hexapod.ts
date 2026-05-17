@@ -75,6 +75,9 @@ export class Hexapod {
     this.socket.on('message', (data: any) => {
       console.log(data.message);
     });
+    this.socket.on('connect_error', () => {
+      // Expected when no physical bot is connected — app works standalone
+    });
     this.socket.on('disconnect', () => {
       console.log("-- lost socket connect.");
     });
