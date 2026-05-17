@@ -79,7 +79,7 @@ export function initScene(container: HTMLElement) {
   particleLight.position.set(1, 500, 0);
 
   // Grid
-  let gridHelper = new THREE.GridHelper(1000, 100);
+  let gridHelper = new THREE.GridHelper(1000, 20);
   gridHelper.position.set(0, 0, 0);
   gridHelper.rotation.set(0, 0, 0);
   appState.scene!.add(gridHelper);
