@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp -r js/hexapod/* legacy/js/hexapod/)",
+      "Bash(cp -r js/*.js legacy/js/)",
+      "Bash(cp stylesheets/*.css legacy/stylesheets/)",
+      "Bash(cd /tmp)",
+      "Bash(rm -rf hexapod-temp)",
+      "Bash(npm create *)",
+      "Bash(cp /tmp/hexapod-temp/.gitignore /tmp/hexapod-temp/README.md /tmp/hexapod-temp/eslint.config.js /tmp/hexapod-temp/index.html /tmp/hexapod-temp/package.json /tmp/hexapod-temp/vite.config.js /tmp/hexapod-temp/public/vite.svg D:/workspace/hexapod/)",
+      "Bash(cp -r /tmp/hexapod-temp/src/* D:/workspace/hexapod/src/)",
+      "Bash(cp /tmp/hexapod-temp/public/vite.svg D:/workspace/hexapod/public/)",
+      "Bash(cp -r \"/tmp/hexapod-temp/src\" /workspace/hexapod/)",
+      "Bash(cp -r \"/tmp/hexapod-temp/public\" /workspace/hexapod/)",
+      "Read(//workspace/hexapod/**)",
+      "Bash(cp -r \"/tmp/hexapod-temp/src\" \"D:/workspace/hexapod/\")",
+      "Bash(cp -r \"/tmp/hexapod-temp/public\" \"D:/workspace/hexapod/\")",
+      "Bash(npm install *)",
+      "Bash(npx vite *)",
+      "WebFetch(domain:localhost)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/libs/three.min.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/libs/OrbitControls.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/src/main.jsx)",
+      "Bash(node -e \"const io = require\\('socket.io-client'\\); console.log\\(typeof io\\);\")",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)",
+      "Bash(git reset *)",
+      "Bash(git commit *)",
+      "Bash(npm run *)",
+      "Bash(npx vitest *)",
+      "Bash(npx shadcn@latest *)",
+      "Bash(head -254 \"src/hexapod/__tests__/servo_constraint.test.ts\")",
+      "Bash(cat)",
+      "Bash(mv temp_test.ts \"src/hexapod/__tests__/servo_constraint.test.ts\")"
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { LIMB_NAMES } from './defaults.js';
 
 // ── Leg layout computation ─────────────────────────────────────

@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { SERVO_MIN_VALUE, SERVO_MAX_VALUE, LIMB_NAMES } from './defaults.js';
 import { getWorldPosition, degree_to_radians } from './utils.js';
 import { PosCalculator, PosResult } from './pos_calculator.js';
@@ -64,8 +65,8 @@ export class HexapodLeg {
     }
 
     // tip
-    let geometry = new THREE.Geometry();
-    geometry.vertices.push(new THREE.Vector3(0, 0, 0));
+    let geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3));
     let tip = new THREE.Points(geometry, new THREE.PointsMaterial());
     tip.type = "tip";
     tip.position.y = options[names[this.joint_count - 1]].length;
@@ -96,28 +97,30 @@ export class HexapodLeg {
     const isFirst = prevName === null;
 
     switch (this.bot.draw_type) {
-      case "bone":
+      case "bone": {
         material = new THREE.LineBasicMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, opt.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, opt.length, 0));
+        const half = opt.length / 2;
+        geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(
+          new Float32Array([0, -half, 0, 0, half, 0]), 3));
         mesh = new THREE.Line(geometry, material);
         break;
-      case "points":
+      }
+      case "points": {
         material = new THREE.PointsMaterial({ color: this.color });
-        geometry = new THREE.Geometry();
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, opt.length / 2, 0));
-        geometry.vertices.push(new THREE.Vector3(0, 0, 0));
-        geometry.vertices.push(new THREE.Vector3(0, opt.length, 0));
+        const half = opt.length / 2;
+        geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(
+          new Float32Array([0, -half, 0, 0, half, 0]), 3));
         mesh = new THREE.Points(geometry, material);
         break;
+      }
       default:
         material = new THREE.MeshBasicMaterial({ color: this.color });
         geometry = new THREE.BoxGeometry(opt.radius, opt.length, opt.radius);
-        geometry.applyMatrix(new THREE.Matrix4().makeTranslation(0, opt.length / 2, 0));
+        geometry.applyMatrix4(new THREE.Matrix4().makeTranslation(0, opt.length / 2, 0));
         mesh = new THREE.Mesh(geometry, material);
-        let axisHelper = new THREE.AxisHelper(isFirst ? 30 : 15);
+        let axisHelper = new THREE.AxesHelper(isFirst ? 30 : 15);
         mesh.add(axisHelper);
     }
 

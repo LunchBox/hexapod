@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { PosCalculator, PosResult } from './pos_calculator.js';
 import { SERVO_MIN_VALUE, SERVO_MAX_VALUE } from './defaults.js';
 

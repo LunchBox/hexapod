@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import io from 'socket.io-client';
 import appState from './appState.js';
 import {
@@ -284,35 +285,42 @@ export class Hexapod {
     );
 
     switch (this.draw_type) {
-      case "bone":
+      case "bone": {
         material = new THREE.LineBasicMaterial({ color: color });
-        geometry = new THREE.Geometry();
-        legPositions.forEach(v => geometry.vertices.push(v.clone()));
-        geometry.vertices.push(legPositions[0].clone());
+        // Closed loop: N leg vertices + first vertex repeated
+        const count = legPositions.length + 1;
+        const verts = new Float32Array(count * 3);
+        for (let i = 0; i < legPositions.length; i++) {
+          verts[i * 3] = legPositions[i].x;
+          verts[i * 3 + 1] = legPositions[i].y;
+          verts[i * 3 + 2] = legPositions[i].z;
+        }
+        verts[legPositions.length * 3] = legPositions[0].x;
+        verts[legPositions.length * 3 + 1] = legPositions[0].y;
+        verts[legPositions.length * 3 + 2] = legPositions[0].z;
+        geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
         bodyVisual = new THREE.Line(geometry, material);
         break;
-      case "points":
+      }
+      case "points": {
         material = new THREE.PointsMaterial({ color: color });
-        geometry = new THREE.Geometry();
-        legPositions.forEach(v => geometry.vertices.push(v.clone()));
+        const verts = new Float32Array(legPositions.length * 3);
+        legPositions.forEach((v, i) => {
+          verts[i * 3] = v.x; verts[i * 3 + 1] = v.y; verts[i * 3 + 2] = v.z;
+        });
+        geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
         bodyVisual = new THREE.Points(geometry, material);
         break;
+      }
       default:
         if (bodyShape === 'polygon' && legCount >= 3) {
           // Build N-gon prism with corners at vertex positions (full polygon).
           // Body shape is independent of leg placement mode — legs may attach
           // at corners (vertex mode) or edge midpoints (edge mode).
-          geometry = new THREE.Geometry();
+          {
           const halfH = bodyHeight / 2;
-
-          // Center vertices for top/bottom caps
-          const btmCenter = geometry.vertices.length;
-          geometry.vertices.push(new THREE.Vector3(0, -halfH, 0));
-          const topCenter = geometry.vertices.length;
-          geometry.vertices.push(new THREE.Vector3(0, halfH, 0));
-
-          // Body polygon corners — rotated in edge mode so edge midpoints align with legs.
-          // Legs stay at fixed vertex angles; body rotates to match placement.
           const bw = this.options.body_width || 50;
           const bl = this.options.body_length || 100;
           const bodyRx = bw / 2;
@@ -323,39 +331,46 @@ export class Hexapod {
           const firstLegAngle = ((this.options.polygon_odd_orientation || 'back') === 'back'
             ? Math.PI / 2 : -Math.PI / 2) + evenOffset;
 
-          const btmRing: number[] = [], topRing: number[] = [];
+          // Vertices: btmCenter(0), topCenter(1), btmRing[0..N-1], topRing[0..N-1]
+          const vertCount = 2 + 2 * legCount;
+          const positions = new Float32Array(vertCount * 3);
+          positions[0] = 0; positions[1] = -halfH; positions[2] = 0;   // btmCenter
+          positions[3] = 0; positions[4] = halfH; positions[5] = 0;    // topCenter
+
           for (let i = 0; i < legCount; i++) {
             const angle = (2 * Math.PI * i) / legCount + bodyOffset + firstLegAngle;
             const lx = bodyRx * Math.cos(angle);
             const lz = bodyRz * Math.sin(angle);
-            btmRing.push(geometry.vertices.length);
-            geometry.vertices.push(new THREE.Vector3(lx, -halfH, lz));
-            topRing.push(geometry.vertices.length);
-            geometry.vertices.push(new THREE.Vector3(lx, halfH, lz));
+            const bi = (2 + 2 * i) * 3;
+            positions[bi] = lx; positions[bi + 1] = -halfH; positions[bi + 2] = lz;
+            const ti = (2 + 2 * i + 1) * 3;
+            positions[ti] = lx; positions[ti + 1] = halfH; positions[ti + 2] = lz;
           }
 
-          // Bottom & top caps
+          // Triangles: bottom cap + top cap + 2 side triangles per segment
+          const indices: number[] = [];
           for (let i = 0; i < legCount; i++) {
             const next = (i + 1) % legCount;
-            geometry.faces.push(new (THREE as any).Face3(btmCenter, btmRing[next], btmRing[i]));
-            geometry.faces.push(new (THREE as any).Face3(topCenter, topRing[i], topRing[next]));
+            const bi = 2 + 2 * i, bnext = 2 + 2 * next;
+            const ti = bi + 1, tnext = bnext + 1;
+            indices.push(0, bnext, bi);      // bottom cap
+            indices.push(1, ti, tnext);      // top cap
+            indices.push(bi, bnext, tnext);  // side quad (2 tris)
+            indices.push(bi, tnext, ti);
           }
 
-          // Side faces (2 triangles per quad)
-          for (let i = 0; i < legCount; i++) {
-            const next = (i + 1) % legCount;
-            geometry.faces.push(new (THREE as any).Face3(btmRing[i], btmRing[next], topRing[next]));
-            geometry.faces.push(new (THREE as any).Face3(btmRing[i], topRing[next], topRing[i]));
-          }
-
-          geometry.computeFaceNormals();
+          geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+          geometry.setIndex(indices);
+          geometry.computeVertexNormals();
           bodyVisual = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
+          }
         } else {
           // Rectangle body with thickness
           geometry = new THREE.BoxGeometry(this.options.body_width, bodyHeight, this.options.body_length);
           bodyVisual = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
         }
-        let axisHelper = new THREE.AxisHelper(30);
+        let axisHelper = new THREE.AxesHelper(30);
         bodyVisual.add(axisHelper);
     }
 
@@ -490,13 +505,14 @@ export class Hexapod {
     this.guideline = new THREE.Object3D();
     this.guideline.position.set(centerX, 0, centerZ);
     for (let idx = 0; idx < this.legs.length; idx++) {
-      let geometry = new THREE.Geometry();
       const worldTip = this.legs[idx].get_tip_pos();
       const localTip = this.mesh.worldToLocal(worldTip.clone());
-      geometry.vertices.push(
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(localTip.x - centerX, 0, localTip.z - centerZ),
-      );
+      const positions = new Float32Array([
+        0, 0, 0,
+        localTip.x - centerX, 0, localTip.z - centerZ,
+      ]);
+      let geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       let line = new THREE.Line(geometry, material);
       this.guideline.add(line);
     }
@@ -529,9 +545,10 @@ export class Hexapod {
       if (!homeLocal) continue;
       const line = this.guideline.children[idx] as any;
       if (line) {
-        line.geometry.vertices[0].set(0, 0, 0);
-        line.geometry.vertices[1].set(homeLocal.x, 0, homeLocal.z);
-        line.geometry.verticesNeedUpdate = true;
+        const pos = line.geometry.attributes.position;
+        pos.setXYZ(0, 0, 0, 0);
+        pos.setXYZ(1, homeLocal.x, 0, homeLocal.z);
+        pos.needsUpdate = true;
       }
     }
 
@@ -543,9 +560,10 @@ export class Hexapod {
         if (!line) continue;
         const homeLocal = homePositions[idx];
         if (!homeLocal) continue;
-        line.geometry.vertices[0].set(0, 0, 0);
-        line.geometry.vertices[1].set(homeLocal.x, 0, homeLocal.z);
-        line.geometry.verticesNeedUpdate = true;
+        const pos = line.geometry.attributes.position;
+        pos.setXYZ(0, 0, 0, 0);
+        pos.setXYZ(1, homeLocal.x, 0, homeLocal.z);
+        pos.needsUpdate = true;
       }
     };
     if (this.left_gl) { this.left_gl.rotation.y = this.rotate_step; updateClone(this.left_gl); }

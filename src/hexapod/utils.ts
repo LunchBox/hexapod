@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export function uniq(array) {
   let n = [];
   for (let i = 0; i < array.length; i++) {

@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 // Mutable app state — replaces the old global variables.
 // Initialized by SceneCanvas mount, consumed by all hexapod modules.
 
