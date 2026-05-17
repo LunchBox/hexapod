@@ -5,6 +5,8 @@ const HexapodContext = createContext(null);
 export function HexapodProvider({ children }) {
   const [servoValues, setServoValues] = useState('');
   const [lastServoValues, setLastServoValues] = useState('');
+  const [statusEntries, setStatusEntries] = useState<Array<{ status: any; formatted: string }>>([]);
+  const [timeIntervals, setTimeIntervals] = useState<number[]>([]);
   const [botVersion, setBotVersion] = useState(0);
   const botRef = useRef(null);
 
@@ -17,6 +19,13 @@ export function HexapodProvider({ children }) {
     }
   }, []);
 
+  const pushTimeInterval = useCallback((interval: number) => {
+    setTimeIntervals(prev => {
+      const next = [...prev, interval];
+      return next.length > 100 ? next.slice(-100) : next;
+    });
+  }, []);
+
   const bumpBotVersion = useCallback(() => {
     setBotVersion(v => v + 1);
   }, []);
@@ -25,9 +34,12 @@ export function HexapodProvider({ children }) {
     botRef,
     servoValues,
     lastServoValues,
+    statusEntries,
+    timeIntervals,
     updateServoDisplay,
     botVersion,
     bumpBotVersion,
+    pushTimeInterval,
   };
 
   return (

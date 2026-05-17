@@ -7,7 +7,7 @@ import appState from '../hexapod/appState';
 
 export default function SceneCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { botRef, updateServoDisplay, bumpBotVersion } = useHexapod();
+  const { botRef, updateServoDisplay, bumpBotVersion, setStatusEntries, pushTimeInterval } = useHexapod();
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -25,6 +25,13 @@ export default function SceneCanvas() {
     const bot_options = get_bot_options();
     const bot = build_bot(bot_options);
     bot.onServoUpdate = updateServoDisplay;
+    bot.onStatusEntry = (status, formatted) => {
+      setStatusEntries(prev => {
+        const next = [...prev, { status, formatted }];
+        return next.length > 100 ? next.slice(-100) : next;
+      });
+    };
+    bot.onTimeInterval = pushTimeInterval;
     botRef.current = bot;
     appState.current_bot = bot;
     bumpBotVersion(); // trigger SceneControls & AttributesPanel to sync
@@ -39,6 +46,8 @@ export default function SceneCanvas() {
         sceneObjs.scene.remove(bot.mesh);
       }
       bot.onServoUpdate = null;
+      bot.onStatusEntry = null;
+      bot.onTimeInterval = null;
       botRef.current = null;
       appState.current_bot = null;
     };

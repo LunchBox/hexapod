@@ -4,34 +4,31 @@ import { Button } from '@/components/ui/button';
 import { Play, Square } from 'lucide-react';
 
 export default function StatusPanel() {
-  const { botRef } = useHexapod();
+  const { botRef, statusEntries } = useHexapod();
   const [playing, setPlaying] = useState(false);
   const playingRef = useRef(false);
   const playIdxRef = useRef(0);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const playStatus = useCallback(() => {
     if (!playingRef.current) return;
+    if (statusEntries.length === 0) return;
 
-    const rows = document.querySelectorAll('#status_history .sv_row');
-    if (rows.length === 0) return;
+    const idx = playIdxRef.current % statusEntries.length;
+    const entry = statusEntries[idx];
+    if (entry.status) botRef.current?.apply_status(entry.status);
 
-    const idx = playIdxRef.current % rows.length;
-    const row = rows[idx] as any;
-    const status = row.data_value;
-    if (status) botRef.current?.apply_status(status);
+    playIdxRef.current = (idx + 1) % statusEntries.length;
 
-    playIdxRef.current = (idx + 1) % rows.length;
-
-    const nextIdx = playIdxRef.current % rows.length;
-    const nextRow = rows[nextIdx] as any;
-    const nextStatus = nextRow?.data_value;
-    const interval = nextStatus
-      ? botRef.current?.get_min_interval(nextStatus.servo_values, status?.servo_values || [])
+    const nextIdx = playIdxRef.current % statusEntries.length;
+    const nextEntry = statusEntries[nextIdx];
+    const interval = nextEntry
+      ? botRef.current?.get_min_interval(nextEntry.status.servo_values, entry.status?.servo_values || [])
       : 500;
 
     playTimeoutRef.current = setTimeout(playStatus, interval);
-  }, [botRef]);
+  }, [botRef, statusEntries]);
 
   const handlePlay = useCallback(() => {
     if (playing) {
@@ -48,12 +45,30 @@ export default function StatusPanel() {
 
   return (
     <div>
-      <div className="mb-3">
+      <div className="mb-3 flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={handlePlay}>
           {playing ? <><Square data-icon="inline-start" />Stop</> : <><Play data-icon="inline-start" />Play</>}
         </Button>
+        <Button variant="outline" size="sm"
+          onClick={() => {
+            const entry = statusEntries[statusEntries.length - 1];
+            if (entry) botRef.current?.apply_status(entry.status);
+          }}
+        >Apply Latest</Button>
       </div>
-      <div id="status_history" style={{ maxHeight: 800, overflowY: 'scroll' }} />
+      <div ref={listRef} style={{ maxHeight: 800, overflowY: 'scroll' }}
+        className="border border-border rounded font-mono text-xs">
+        {statusEntries.length === 0 ? (
+          <div className="p-2 text-muted-foreground">No status entries yet. Start a gait to record.</div>
+        ) : (
+          statusEntries.map((entry, i) => (
+            <div key={i}
+              className="sv_row p-1 border-b border-border last:border-0 cursor-pointer hover:bg-accent"
+              onDoubleClick={() => botRef.current?.apply_status(entry.status)}
+            >{entry.formatted}</div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

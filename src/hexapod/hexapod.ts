@@ -3,7 +3,7 @@ import appState from './appState.js';
 import {
   HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS, LIMB_NAMES, LIMB_DEFAULTS,
 } from './defaults.js';
-import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage, remove_class, add_class, clearSelection } from './utils.js';
+import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage } from './utils.js';
 import { GaitController } from './gaits.js';
 import { PhysicsSolver } from './physics_solver.js';
 import { history } from './history.js';
@@ -52,8 +52,9 @@ export class Hexapod {
   _current_body_mesh_segment: number = 0;
   _body_mesh_segment_start_time: number = 0;
   _onBodyAnimComplete: (() => void) | null = null;
-  time_interval_stack: number[];
   onServoUpdate: (() => void) | null;
+  onStatusEntry: ((status: any, formatted: string) => void) | null;
+  onTimeInterval: ((interval: number) => void) | null;
   leg_layout: LegLayout[];
 
   constructor(scene: any, options: HexapodOptions) {
@@ -645,34 +646,6 @@ export class Hexapod {
     return formatted_value.join(" ");
   }
 
-  display_status(container: HTMLElement) {
-    let servo_values = this.get_servo_values();
-
-    let row = document.createElement('div');
-    row.setAttribute("class", "sv_row");
-    container.appendChild(row);
-
-    (row as any).data_value = this.get_status();
-
-    let data = document.createElement('div');
-    data.setAttribute("class", "data");
-    data.innerHTML = this.format_servo_values(servo_values);
-    row.appendChild(data);
-
-    row.addEventListener("dblclick", () => {
-      this.apply_status((row as any).data_value);
-
-      Array.prototype.forEach.call(document.querySelectorAll(".sv_row.active"), (elem: HTMLElement) => {
-        remove_class(elem, "active");
-      });
-      add_class(row, "active");
-
-      clearSelection();
-    });
-
-    container.scrollTop = container.scrollHeight;
-  }
-
   debug_joint_positions() {
     this.mesh.updateMatrixWorld();
     const names = [...(this.legs[0]?._limbNames || LIMB_NAMES.slice(0, 3)), 'tip'];
@@ -1218,11 +1191,8 @@ export class Hexapod {
 
     let servo_values = this.get_servo_values();
     let cmd = this.build_cmd(servo_values);
-    let el = document.querySelector("#servo_values");
-    if (el) el.innerHTML = cmd;
 
     if (this.options.physics_mode === 'servo_constraint') {
-      // Servo constraint: timing driven by servo rotation speed
       if (this.on_servo_values) {
         this.hold_time = this.get_min_interval(servo_values, this.on_servo_values);
       } else {
@@ -1238,7 +1208,6 @@ export class Hexapod {
         }
       }
     } else {
-      // None mode: original timing logic (SERVO_VALUE_TIME_UNIT for sync, 0 otherwise)
       if (this.sync_cmd) {
         if (typeof send_cmd === "undefined" || send_cmd) {
           this.send_cmd(cmd);
@@ -1257,33 +1226,16 @@ export class Hexapod {
       }
     }
 
-    let el2 = document.querySelector("#on_servo_values");
-    if (this.on_servo_values && el2) {
-      el2.innerHTML = this.format_servo_values(this.on_servo_values);
-    }
-
-    let container = document.querySelector("#status_history");
-    if (container) this.display_status(container as HTMLElement);
-
-    this.draw_time_interval(this.hold_time);
-
     if (this.onServoUpdate) this.onServoUpdate();
+    if (this.onStatusEntry) this.onStatusEntry(this.get_status(), this.format_servo_values(servo_values));
+    if (this.onTimeInterval) this.onTimeInterval(this.hold_time);
   }
 
   send_status() {
     let servo_values = this.get_servo_values();
     let cmd = this.build_cmd(servo_values);
-
-    let el = document.querySelector("#servo_values");
-    if (el) el.innerHTML = cmd;
-
     this.send_cmd(cmd);
     this.on_servo_values = servo_values;
-
-    let el2 = document.querySelector("#on_servo_values");
-    if (this.on_servo_values && el2) {
-      el2.innerHTML = this.format_servo_values(this.on_servo_values);
-    }
   }
 
   display_values() {
@@ -1330,57 +1282,6 @@ export class Hexapod {
     }
   }
 
-  draw_time_interval(time_interval: number) {
-    let canvas = document.getElementById('chart') as HTMLCanvasElement | null;
-    if (!canvas) return;
-    let context = canvas.getContext('2d')!;
-    context.fillStyle = '#333';
-
-    let max_number = 100;
-    let scale = 1 / 2;
-    let gap = Math.round((canvas.width - 60) / max_number);
-
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.font = "12px Arial";
-
-    context.beginPath();
-    context.rect(0, 25, canvas.width, 0.5);
-    context.fillText(String(25 / scale), 0, canvas.height - 25 + 4);
-    context.rect(0, 50, canvas.width, 0.5);
-    context.fillText(String(50 / scale), 0, canvas.height - 50 + 4);
-    context.rect(0, 75, canvas.width, 0.5);
-    context.fillText(String(75 / scale), 0, canvas.height - 75 + 4);
-    context.fillStyle = '#ccc';
-    context.fill();
-
-    if (time_interval < 1) {
-      return;
-    }
-
-    if (!this.time_interval_stack) {
-      this.time_interval_stack = [];
-    }
-
-    this.time_interval_stack.push(time_interval);
-
-    if (this.time_interval_stack.length > max_number) {
-      this.time_interval_stack = this.time_interval_stack.slice(-max_number);
-    }
-
-    let total = 0;
-    for (let i = 0; i < this.time_interval_stack.length; i++) {
-      let h = this.time_interval_stack[i] * scale;
-      total += this.time_interval_stack[i];
-
-      context.beginPath();
-      context.rect(i * gap + 30, canvas.height - h, 0.5, h);
-      context.fillStyle = '#333';
-      context.fill();
-    }
-
-    let avg = (total / this.time_interval_stack.length).toFixed(2);
-    context.fillText("average: " + avg + "ms", 2, 12);
-  }
 }
 
 // ── HexapodLeg ──────────────────────────────────────────────────
