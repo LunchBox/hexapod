@@ -1,148 +1,126 @@
-import { useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 
-import { SERVO_MIN_VALUE, SERVO_MAX_VALUE, SERVO_CURRENT_VALUE } from '../hexapod/defaults';
-import { getWorldPosition, make_input } from '../hexapod/utils';
+import { SERVO_MIN_VALUE, SERVO_MAX_VALUE } from '../hexapod/defaults';
 import { set_bot_options } from '../hexapod/hexapod';
 import { PosCalculator } from '../hexapod/pos_calculator';
 
 export default function ServoPanel() {
-  const { botRef, updateServoDisplay, botVersion } = useHexapod();
-  const containerRef = useRef(null);
+  const { botRef, botVersion } = useHexapod();
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const bot = botRef.current;
-    if (!bot) return;
+  const bot = botRef.current;
+  if (!bot) return null;
 
-    const controller = containerRef.current;
-    // Clear and rebuild when bot structure changes
-    controller.innerHTML = '';
+  const updateLeg = useCallback((leg: any, limbIdx: number, value: number) => {
+    leg.set_servo_value(limbIdx, value);
+    bot.after_status_change();
+  }, [bot]);
 
-    const updateLeg = function () {
-      this.leg.set_servo_value(this.limb_idx, this.value);
-      bot.after_status_change();
-    };
+  const handleServoIdxChange = useCallback((leg: any, legIdx: number, limbIdx: number, value: string) => {
+    const l = leg.limbs[limbIdx];
+    const numVal = parseInt(value, 10);
+    l.servo_idx = numVal;
+    bot.options.leg_options[legIdx][l.type].servo_idx = numVal;
+    set_bot_options(bot.options);
+  }, [bot]);
 
-    // Compute cumulative servo index base per leg (variable joints per leg)
-    let servoBase = 0;
-    for (let idx = 0; idx < bot.legs.length; idx++) {
-      const legIdx = idx;
-      let limbs = bot.legs[idx].limbs;
-      const jointCount = limbs.length - 1;
+  const handleRevertChange = useCallback((leg: any, legIdx: number, limbIdx: number, checked: boolean) => {
+    leg.limbs[limbIdx].revert = checked;
+    const rangeInput = leg.limbs[limbIdx].range_control;
+    if (rangeInput) leg.set_servo_value(limbIdx, rangeInput.value);
 
-      for (let jdx = 0; jdx < jointCount; jdx++) {
-        let limb = limbs[jdx];
+    const l = leg.limbs[limbIdx];
+    bot.options.leg_options[legIdx][l.type].revert = checked;
+    set_bot_options(bot.options);
+  }, [bot]);
 
-        if (!bot.options.leg_options[idx][limb.type].servo_idx) {
-          bot.options.leg_options[idx][limb.type].servo_idx = servoBase + jdx;
-        }
-        limb.servo_idx = bot.options.leg_options[idx][limb.type].servo_idx;
+  const handleEndPosChange = useCallback((leg: any, lastSeg: any) => {
+    const newPos = new (window as any).THREE.Vector3(
+      parseFloat(lastSeg.end_x_control.value),
+      parseFloat(lastSeg.end_y_control.value),
+      parseFloat(lastSeg.end_z_control.value),
+    );
+    const calculator = new PosCalculator(leg, newPos);
+    calculator.run();
+    bot.after_status_change();
+  }, [bot]);
 
-        let controlElem = document.createElement('div');
-        controlElem.setAttribute('class', 'range_widget');
+  // Compute cumulative servo index base per leg
+  let servoBase = 0;
+  const rows: React.ReactNode[] = [];
 
-        // Servo index marker
-        let mark = make_input({ type: 'number', value: limb.servo_idx, style: 'width: 3em;' });
-        controlElem.appendChild(mark);
-        mark.leg = bot.legs[idx];
-        mark.leg_idx = legIdx;
-        mark.limb_idx = jdx;
+  for (let legIdx = 0; legIdx < bot.legs.length; legIdx++) {
+    const leg = bot.legs[legIdx];
+    const limbs = leg.limbs;
+    const jointCount = limbs.length - 1;
 
-        mark.addEventListener('change', function () {
-          const l = this.leg.limbs[this.limb_idx];
-          l.servo_idx = this.value;
-          this.leg.bot.options.leg_options[this.leg_idx][l.type].servo_idx = this.value;
-          set_bot_options(this.leg.bot.options);
-        });
+    for (let jdx = 0; jdx < jointCount; jdx++) {
+      const limb = limbs[jdx];
+      const isLastSeg = jdx === limbs.length - 2; // last non-tip segment
 
-        // Range slider
-        let rangeInput = make_input({ type: 'range', class: 'range', min: SERVO_MIN_VALUE, max: SERVO_MAX_VALUE, value: SERVO_CURRENT_VALUE });
-        controlElem.appendChild(rangeInput);
-        limb.range_control = rangeInput;
-        rangeInput.leg = bot.legs[idx];
-        rangeInput.limb_idx = jdx;
-        rangeInput.addEventListener('input', updateLeg);
-
-        // Current value input
-        let currentInput = make_input({ type: 'number', class: 'current', value: SERVO_CURRENT_VALUE });
-        controlElem.appendChild(currentInput);
-        limb.current_control = currentInput;
-        currentInput.leg = bot.legs[idx];
-        currentInput.limb_idx = jdx;
-        currentInput.addEventListener('change', updateLeg);
-
-        // End position display
-        let endPosition: any = getWorldPosition(bot.mesh, limbs[jdx + 1]);
-        let labels = ['x', 'y', 'z'];
-        for (let kdx = 0; kdx < labels.length; kdx++) {
-          let label = labels[kdx];
-          let roundedValue = endPosition[label].toFixed(2);
-
-          let inputField = make_input({ type: 'number', name: label, class: 'direction end_' + label, value: roundedValue });
-
-          const isLastSeg = jdx === limbs.length - 2; // last non-tip segment
-          if (!isLastSeg) {
-            inputField.disabled = true;
-          }
-
-          controlElem.appendChild(inputField);
-          limb['end_' + label + '_control'] = inputField;
-          inputField.leg = bot.legs[idx];
-          inputField.limb_idx = jdx;
-
-          if (isLastSeg) {
-            inputField.addEventListener('change', function () {
-              let lastSeg = this.leg.limbs[this.leg.limbs.length - 2];
-              let newPos = new THREE.Vector3(
-                parseFloat(lastSeg.end_x_control.value),
-                parseFloat(lastSeg.end_y_control.value),
-                parseFloat(lastSeg.end_z_control.value)
-              );
-              let calculator = new PosCalculator(this.leg, newPos);
-              calculator.run();
-              bot.after_status_change();
-            });
-          }
-        }
-
-        // Revert checkbox
-        let revertOpts: any = { type: 'checkbox', name: 'revert_input' };
-        if (bot.options.leg_options[idx][limb.type].revert) {
-          revertOpts.checked = true;
-        }
-        let revertInput = make_input(revertOpts);
-        controlElem.appendChild(revertInput);
-
-        revertInput.range_input = rangeInput;
-        revertInput.leg = bot.legs[idx];
-        (revertInput as any).leg_idx = legIdx;
-        revertInput.limb_idx = jdx;
-
-        let revertLabel = document.createElement('label');
-        revertLabel.setAttribute('for', 'revert_input');
-        revertLabel.innerHTML = 'Revert';
-        controlElem.appendChild(revertLabel);
-
-        revertInput.addEventListener('change', function () {
-          this.leg.limbs[this.limb_idx].revert = this.checked;
-          this.leg.set_servo_value(this.limb_idx, this.range_input.value);
-
-          const l = this.leg.limbs[this.limb_idx];
-          this.leg.bot.options.leg_options[this.leg_idx][l.type].revert = this.checked;
-          set_bot_options(this.leg.bot.options);
-        });
-
-        controller.appendChild(controlElem);
+      // Initialize servo index if not set
+      if (!bot.options.leg_options[legIdx][limb.type].servo_idx) {
+        bot.options.leg_options[legIdx][limb.type].servo_idx = servoBase + jdx;
       }
-      servoBase += jointCount;
+      limb.servo_idx = bot.options.leg_options[legIdx][limb.type].servo_idx;
+
+      // Compute end position for display
+      let endPos: any = { x: 0, y: 0, z: 0 };
+      try {
+        const nextLimb = limbs[jdx + 1];
+        if (nextLimb) {
+          bot.mesh.updateMatrixWorld();
+          const v = new (window as any).THREE.Vector3();
+          v.setFromMatrixPosition(nextLimb.matrixWorld);
+          endPos = v;
+        }
+      } catch { /* use zeros */ }
+
+      const revert = bot.options.leg_options[legIdx][limb.type].revert;
+
+      rows.push(
+        <div className="range_widget" key={`${legIdx}-${jdx}`}>
+          <input type="number" defaultValue={limb.servo_idx}
+            style={{ width: '3em' }}
+            onChange={e => handleServoIdxChange(leg, legIdx, jdx, e.target.value)} />
+          <input type="range" className="range"
+            min={SERVO_MIN_VALUE} max={SERVO_MAX_VALUE}
+            defaultValue={limb.servo_value}
+            ref={el => { limb.range_control = el; }}
+            onChange={e => updateLeg(leg, jdx, parseInt(e.target.value, 10))} />
+          <input type="number" className="current"
+            defaultValue={limb.servo_value}
+            ref={el => { limb.current_control = el; }}
+            onChange={e => updateLeg(leg, jdx, parseInt(e.target.value, 10))} />
+          <input type="number" className="direction end_x"
+            defaultValue={endPos.x.toFixed(2)}
+            disabled={!isLastSeg}
+            ref={el => { limb.end_x_control = el; }}
+            onChange={() => handleEndPosChange(leg, limb)} />
+          <input type="number" className="direction end_y"
+            defaultValue={endPos.y.toFixed(2)}
+            disabled={!isLastSeg}
+            ref={el => { limb.end_y_control = el; }}
+            onChange={() => handleEndPosChange(leg, limb)} />
+          <input type="number" className="direction end_z"
+            defaultValue={endPos.z.toFixed(2)}
+            disabled={!isLastSeg}
+            ref={el => { limb.end_z_control = el; }}
+            onChange={() => handleEndPosChange(leg, limb)} />
+          <input type="checkbox" name="revert_input"
+            defaultChecked={revert}
+            onChange={e => handleRevertChange(leg, legIdx, jdx, e.target.checked)} />
+          <label>Revert</label>
+        </div>
+      );
     }
-  }, [botVersion]);
+    servoBase += jointCount;
+  }
 
   return (
     <div>
       <h3 className="text-sm font-medium mb-2">Servo Values</h3>
-      <div id="servo_controls" ref={containerRef}></div>
+      <div id="servo_controls" key={botVersion}>{rows}</div>
     </div>
   );
 }

@@ -40,21 +40,6 @@ export function remove_class(elem, class_name) {
   elem.setAttribute("class", class_names.join(" "));
 }
 
-export function make_input(options) {
-  let input = document.createElement('input');
-  for (let key in options) {
-    input.setAttribute(key, options[key]);
-  }
-  return input;
-}
-
-export function make_label(name, label_for) {
-  let label = document.createElement('label');
-  label.setAttribute("for", label_for);
-  label.innerHTML = name;
-  return label;
-}
-
 export function getWorldPosition(root_mesh, mesh) {
   root_mesh.updateMatrixWorld();
   let vector = new THREE.Vector3();
