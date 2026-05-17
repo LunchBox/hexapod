@@ -31,13 +31,11 @@ describe('GaitAction.run() — safety guards', () => {
     expect(action.run()).toBe(false);
   });
 
-  it('handles step with non-existent method name', () => {
+  it('throws TypeError for non-existent method name (original behavior)', () => {
     const action = new GaitAction(makeController());
     action.steps = ['nonexistent_method'];
-    // Should not throw TypeError — guards against missing method
-    expect(() => action.run()).not.toThrow();
-    // send_cmd defaults to true for string steps (legacy behavior)
-    expect(action.run()).toBe(true);
+    // Original code throws — step names must match defined methods
+    expect(() => action.run()).toThrow();
   });
 
   it('dispatches valid string steps to controller methods', () => {
@@ -63,7 +61,7 @@ describe('GaitAction.run() — safety guards', () => {
     expect(sendCmd).toBe(false);
   });
 
-  it('object step send_cmd defaults to false when absent', () => {
+  it('object step send_cmd is undefined when absent (falsy, no-command)', () => {
     let called = false;
     const ctrl = makeController({
       legs_down: () => { called = true; },
@@ -72,7 +70,8 @@ describe('GaitAction.run() — safety guards', () => {
     action.steps = [{ func: 'legs_down' }];
     const sendCmd = action.run();
     expect(called).toBe(true);
-    expect(sendCmd).toBe(false);
+    // Original behavior: step.send_cmd is undefined, which is falsy
+    expect(sendCmd).toBeUndefined();
   });
 
   it('advances acting_idx after each step', () => {

@@ -67,24 +67,16 @@ export class GaitAction {
 
   run() {
     const step = this.steps[this.acting_idx];
-    if (!step) { this.next_step(); return false; }
+    // Guard: null/undefined step (shouldn't happen with valid step_types, but
+    // prevents TypeError if step arrays are externally corrupted).
+    if (step == null) { this.next_step(); return false; }
 
-    let funcName: string;
     let sendCmd = true;
-
     if (typeof step === "string") {
-      funcName = step;
-    } else if (step && typeof step.func === "string") {
-      funcName = step.func;
-      sendCmd = !!step.send_cmd;
+      (this as any)[step]();
     } else {
-      this.next_step();
-      return false;
-    }
-
-    const fn = (this as any)[funcName];
-    if (typeof fn === "function") {
-      fn.call(this);
+      (this as any)[step.func]();
+      sendCmd = step.send_cmd;
     }
 
     this.next_step();
