@@ -193,6 +193,17 @@ export default function ControlPanel() {
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 
+  // Apply a behavioral option change: undo snapshot, React state, gc sync, bot.options, persist
+  const applyOption = useCallback((key: string, value: any, setState: (v: any) => void, gcSync?: () => void) => {
+    const bot = botRef.current;
+    if (!bot) return;
+    history.push(bot.options);
+    setState(value);
+    if (gcSync) gcSync();
+    bot.options[key] = value;
+    set_bot_options(bot.options);
+  }, [botRef]);
+
   const handleAction = useCallback((action: string, value?: string) => {
     const bot = botRef.current;
     if (!bot) return;
@@ -226,27 +237,19 @@ export default function ControlPanel() {
         }
         break;
       case 'gait_switch':
-        setGait(value!);
-        if (gc()) gc().switch_gait(value);
-        bot.options.gait = value;
-        set_bot_options(bot.options);
+        applyOption('gait', value, setGait, () => gc()?.switch_gait(value));
         break;
       case 'action_switch':
-        setActionType(value!);
-        if (gc()) gc().switch_action_type(value);
-        bot.options.action_type = value;
-        set_bot_options(bot.options);
+        applyOption('action_type', value, setActionType, () => gc()?.switch_action_type(value));
         break;
       case 'target_mode_switch':
-        setTargetMode(value!);
-        if (gc()) gc().switch_target_mode(value);
-        bot.options.target_mode = value;
-        set_bot_options(bot.options);
+        applyOption('target_mode', value, setTargetMode, () => gc()?.switch_target_mode(value));
         break;
       case 'act_send_cmd':
         bot.send_status();
         break;
       case 'act_sync_cmd':
+        history.push(bot.options);
         setSyncMode(value === 'sync' ? 'sync' : 'manual');
         bot.sync_cmd = value === 'sync';
         bot.options.sync_cmd = value === 'sync';
@@ -305,12 +308,14 @@ export default function ControlPanel() {
         bumpBotVersion();
         break;
       case 'act_poly_placement_switch':
+        history.push(bot.options);
         setPolyPlacement(value!);
         bot.options.polygon_leg_placement = value;
         bot.apply_attributes(bot.options);
         bumpBotVersion();
         break;
       case 'act_odd_orientation_switch':
+        history.push(bot.options);
         setOddOrientation(value!);
         bot.options.polygon_odd_orientation = value;
         bot.apply_attributes(bot.options);
