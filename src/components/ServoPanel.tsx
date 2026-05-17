@@ -3,7 +3,7 @@ import { useHexapod } from '../context/HexapodContext';
 
 import { SERVO_MIN_VALUE, SERVO_MAX_VALUE, SERVO_CURRENT_VALUE } from '../hexapod/defaults';
 import { getWorldPosition, make_input } from '../hexapod/utils';
-import { get_bot_options, set_bot_options } from '../hexapod/hexapod';
+import { set_bot_options } from '../hexapod/hexapod';
 import { PosCalculator } from '../hexapod/pos_calculator';
 
 export default function ServoPanel() {
@@ -18,7 +18,6 @@ export default function ServoPanel() {
     const controller = containerRef.current;
     // Clear and rebuild when bot structure changes
     controller.innerHTML = '';
-    const bot_options = get_bot_options();
 
     const updateLeg = function () {
       this.leg.set_servo_value(this.limb_idx, this.value);
@@ -35,10 +34,10 @@ export default function ServoPanel() {
       for (let jdx = 0; jdx < jointCount; jdx++) {
         let limb = limbs[jdx];
 
-        if (!bot_options.leg_options[idx][limb.type].servo_idx) {
-          bot_options.leg_options[idx][limb.type].servo_idx = servoBase + jdx;
+        if (!bot.options.leg_options[idx][limb.type].servo_idx) {
+          bot.options.leg_options[idx][limb.type].servo_idx = servoBase + jdx;
         }
-        limb.servo_idx = bot_options.leg_options[idx][limb.type].servo_idx;
+        limb.servo_idx = bot.options.leg_options[idx][limb.type].servo_idx;
 
         let controlElem = document.createElement('div');
         controlElem.setAttribute('class', 'range_widget');
@@ -51,10 +50,10 @@ export default function ServoPanel() {
         mark.limb_idx = jdx;
 
         mark.addEventListener('change', function () {
-          let opts = get_bot_options();
-          let l = this.leg.limbs[this.limb_idx];
-          l.servo_idx = opts.leg_options[this.leg_idx][l.type].servo_idx = this.value;
-          set_bot_options(opts);
+          const l = this.leg.limbs[this.limb_idx];
+          l.servo_idx = this.value;
+          this.leg.bot.options.leg_options[this.leg_idx][l.type].servo_idx = this.value;
+          set_bot_options(this.leg.bot.options);
         });
 
         // Range slider
@@ -109,7 +108,7 @@ export default function ServoPanel() {
 
         // Revert checkbox
         let revertOpts: any = { type: 'checkbox', name: 'revert_input' };
-        if (bot_options.leg_options[idx][limb.type].revert) {
+        if (bot.options.leg_options[idx][limb.type].revert) {
           revertOpts.checked = true;
         }
         let revertInput = make_input(revertOpts);
@@ -129,10 +128,9 @@ export default function ServoPanel() {
           this.leg.limbs[this.limb_idx].revert = this.checked;
           this.leg.set_servo_value(this.limb_idx, this.range_input.value);
 
-          let opts = get_bot_options();
-          let l = this.leg.limbs[this.limb_idx];
-          opts.leg_options[this.leg_idx][l.type].revert = this.checked;
-          set_bot_options(opts);
+          const l = this.leg.limbs[this.limb_idx];
+          this.leg.bot.options.leg_options[this.leg_idx][l.type].revert = this.checked;
+          set_bot_options(this.leg.bot.options);
         });
 
         controller.appendChild(controlElem);
