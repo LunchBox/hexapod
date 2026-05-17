@@ -104,9 +104,15 @@ export class PosCalculator {
         const minus = [...cur];
         minus[j] = Math.max(SERVO_MIN_VALUE, minus[j] - STEP);
 
+        const denom = plus[j] - minus[j];  // 2*STEP, less if clamped at bounds
+        if (denom < 0.5) {
+          // Perturbation too small — skip this column (zero contribution)
+          J[0][j] = 0; J[1][j] = 0; J[2][j] = 0;
+          continue;
+        }
+
         const tipP = this._get_tip_pos(plus);
         const tipM = this._get_tip_pos(minus);
-        const denom = plus[j] - minus[j];  // 2*STEP, less if clamped at bounds
 
         J[0][j] = (tipP.x - tipM.x) / denom;
         J[1][j] = (tipP.y - tipM.y) / denom;

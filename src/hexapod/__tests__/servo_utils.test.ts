@@ -56,3 +56,23 @@ describe('computeFixedUnitHoldTime', () => {
     expect(t2).toBeGreaterThan(t1);
   });
 });
+
+describe('computeMaxDelta — edge cases', () => {
+  it('returns correct delta for extreme boundary values', () => {
+    // servo range is 500-2500
+    expect(computeMaxDelta([500], [2500])).toBe(2000);
+    expect(computeMaxDelta([2500], [500])).toBe(2000);
+  });
+
+  it('handles single-element boundary arrays', () => {
+    expect(computeMaxDelta([500], [510])).toBe(10);
+    expect(computeMaxDelta([2490], [2500])).toBe(10);
+  });
+
+  it('handles large arrays efficiently', () => {
+    const a = Array.from({ length: 100 }, (_, i) => 1500 + i);
+    const b = Array.from({ length: 100 }, () => 1500);
+    // max delta is at index 99: 1500+99 - 1500 = 99
+    expect(computeMaxDelta(a, b)).toBe(99);
+  });
+});
