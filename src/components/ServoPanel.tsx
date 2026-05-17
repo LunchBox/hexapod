@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 
 import { SERVO_MIN_VALUE, SERVO_MAX_VALUE } from '../hexapod/defaults';
@@ -83,77 +83,80 @@ export default function ServoPanel() {
     bot.after_status_change();
   }, [bot]);
 
-  // Compute cumulative servo index base per leg
-  let servoBase = 0;
-  const rows: React.ReactNode[] = [];
+  // Memoize JSX rows — bot structure only changes when botVersion bumps.
+  // Without this, every 30ms status update triggers full re-render of
+  // all servo inputs, competing with the gait cycle for CPU time.
+  const rows = useMemo(() => {
+    const result: React.ReactNode[] = [];
+    let servoBase = 0;
 
-  for (let legIdx = 0; legIdx < bot.legs.length; legIdx++) {
-    const leg = bot.legs[legIdx];
-    const limbs = leg.limbs;
-    const jointCount = limbs.length - 1;
+    for (let legIdx = 0; legIdx < bot.legs.length; legIdx++) {
+      const leg = bot.legs[legIdx];
+      const limbs = leg.limbs;
+      const jointCount = limbs.length - 1;
 
-    for (let jdx = 0; jdx < jointCount; jdx++) {
-      const limb = limbs[jdx];
-      const isLastSeg = jdx === limbs.length - 2; // last non-tip segment
+      for (let jdx = 0; jdx < jointCount; jdx++) {
+        const limb = limbs[jdx];
+        const isLastSeg = jdx === limbs.length - 2;
 
-      // Initialize servo index if not set
-      if (!bot.options.leg_options[legIdx][limb.type].servo_idx) {
-        bot.options.leg_options[legIdx][limb.type].servo_idx = servoBase + jdx;
-      }
-      limb.servo_idx = bot.options.leg_options[legIdx][limb.type].servo_idx;
-
-      // Compute end position for display
-      let endPos: any = { x: 0, y: 0, z: 0 };
-      try {
-        const nextLimb = limbs[jdx + 1];
-        if (nextLimb) {
-          bot.mesh.updateMatrixWorld();
-          const v = new (window as any).THREE.Vector3();
-          v.setFromMatrixPosition(nextLimb.matrixWorld);
-          endPos = v;
+        if (!bot.options.leg_options[legIdx][limb.type].servo_idx) {
+          bot.options.leg_options[legIdx][limb.type].servo_idx = servoBase + jdx;
         }
-      } catch { /* use zeros */ }
+        limb.servo_idx = bot.options.leg_options[legIdx][limb.type].servo_idx;
 
-      const revert = bot.options.leg_options[legIdx][limb.type].revert;
+        let endPos: any = { x: 0, y: 0, z: 0 };
+        try {
+          const nextLimb = limbs[jdx + 1];
+          if (nextLimb) {
+            bot.mesh.updateMatrixWorld();
+            const v = new (window as any).THREE.Vector3();
+            v.setFromMatrixPosition(nextLimb.matrixWorld);
+            endPos = v;
+          }
+        } catch { /* use zeros */ }
 
-      rows.push(
-        <div className="range_widget" key={`${legIdx}-${jdx}`}>
-          <input type="number" defaultValue={limb.servo_idx}
-            style={{ width: '3em' }}
-            onChange={e => handleServoIdxChange(leg, legIdx, jdx, e.target.value)} />
-          <input type="range" className="range"
-            min={SERVO_MIN_VALUE} max={SERVO_MAX_VALUE}
-            defaultValue={limb.servo_value}
-            ref={el => { limb.range_control = el; }}
-            onChange={e => updateLeg(leg, jdx, parseInt(e.target.value, 10))} />
-          <input type="number" className="current"
-            defaultValue={limb.servo_value}
-            ref={el => { limb.current_control = el; }}
-            onChange={e => updateLeg(leg, jdx, parseInt(e.target.value, 10))} />
-          <input type="number" className="direction end_x"
-            defaultValue={endPos.x.toFixed(2)}
-            disabled={!isLastSeg}
-            ref={el => { limb.end_x_control = el; }}
-            onChange={() => handleEndPosChange(leg, limb)} />
-          <input type="number" className="direction end_y"
-            defaultValue={endPos.y.toFixed(2)}
-            disabled={!isLastSeg}
-            ref={el => { limb.end_y_control = el; }}
-            onChange={() => handleEndPosChange(leg, limb)} />
-          <input type="number" className="direction end_z"
-            defaultValue={endPos.z.toFixed(2)}
-            disabled={!isLastSeg}
-            ref={el => { limb.end_z_control = el; }}
-            onChange={() => handleEndPosChange(leg, limb)} />
-          <input type="checkbox" name="revert_input"
-            defaultChecked={revert}
-            onChange={e => handleRevertChange(leg, legIdx, jdx, e.target.checked)} />
-          <label>Revert</label>
-        </div>
-      );
+        const revert = bot.options.leg_options[legIdx][limb.type].revert;
+
+        result.push(
+          <div className="range_widget" key={`${legIdx}-${jdx}`}>
+            <input type="number" defaultValue={limb.servo_idx}
+              style={{ width: '3em' }}
+              onChange={e => handleServoIdxChange(leg, legIdx, jdx, e.target.value)} />
+            <input type="range" className="range"
+              min={SERVO_MIN_VALUE} max={SERVO_MAX_VALUE}
+              defaultValue={limb.servo_value}
+              ref={el => { limb.range_control = el; }}
+              onChange={e => updateLeg(leg, jdx, parseInt(e.target.value, 10))} />
+            <input type="number" className="current"
+              defaultValue={limb.servo_value}
+              ref={el => { limb.current_control = el; }}
+              onChange={e => updateLeg(leg, jdx, parseInt(e.target.value, 10))} />
+            <input type="number" className="direction end_x"
+              defaultValue={endPos.x.toFixed(2)}
+              disabled={!isLastSeg}
+              ref={el => { limb.end_x_control = el; }}
+              onChange={() => handleEndPosChange(leg, limb)} />
+            <input type="number" className="direction end_y"
+              defaultValue={endPos.y.toFixed(2)}
+              disabled={!isLastSeg}
+              ref={el => { limb.end_y_control = el; }}
+              onChange={() => handleEndPosChange(leg, limb)} />
+            <input type="number" className="direction end_z"
+              defaultValue={endPos.z.toFixed(2)}
+              disabled={!isLastSeg}
+              ref={el => { limb.end_z_control = el; }}
+              onChange={() => handleEndPosChange(leg, limb)} />
+            <input type="checkbox" name="revert_input"
+              defaultChecked={revert}
+              onChange={e => handleRevertChange(leg, legIdx, jdx, e.target.checked)} />
+            <label>Revert</label>
+          </div>
+        );
+      }
+      servoBase += jointCount;
     }
-    servoBase += jointCount;
-  }
+    return result;
+  }, [bot, botVersion, handleServoIdxChange, handleEndPosChange, handleRevertChange, updateLeg]);
 
   return (
     <div>
