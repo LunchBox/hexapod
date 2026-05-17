@@ -1190,6 +1190,9 @@ export class Hexapod {
   }
 
   after_status_change(send_cmd?: boolean) {
+    // updateMatrixWorld must be current for subsequent PosCalculator reads
+    this.mesh.updateMatrixWorld();
+
     let servo_values = this.get_servo_values();
     let cmd = this.build_cmd(servo_values);
 
