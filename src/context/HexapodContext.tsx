@@ -35,6 +35,7 @@ export function HexapodProvider({ children }) {
     servoValues,
     lastServoValues,
     statusEntries,
+    setStatusEntries,
     timeIntervals,
     updateServoDisplay,
     botVersion,
