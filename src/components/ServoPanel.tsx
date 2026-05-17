@@ -7,40 +7,43 @@ import { PosCalculator } from '../hexapod/pos_calculator';
 
 export default function ServoPanel() {
   const { botRef, botVersion } = useHexapod();
-  const tickRef = useRef(0);
+  const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Self-update servo display values from bot at ~10fps when mounted
+  // Self-update servo display values from bot (~10fps). Uses setTimeout
+  // instead of rAF to avoid 60fps overhead when bot is idle.
   useEffect(() => {
     let active = true;
+    const INTERVAL_MS = 100;
+
     const poll = () => {
       if (!active) return;
-      const bot = botRef.current;
-      if (!bot) { setTimeout(poll, 100); return; }
+      const b = botRef.current;
+      if (!b) { setTimeout(poll, INTERVAL_MS); return; }
 
-      for (let i = 0; i < bot.legs.length; i++) {
-        const limbs = bot.legs[i].limbs;
+      b.mesh.updateMatrixWorld();
+      for (let i = 0; i < b.legs.length; i++) {
+        const limbs = b.legs[i].limbs;
         for (let j = 0; j < limbs.length - 1; j++) {
           const limb = limbs[j];
           if (limb.range_control) limb.range_control.value = limb.servo_value;
           if (limb.current_control) limb.current_control.value = limb.servo_value;
           // Update end position for last non-tip segment
-          if (j === limbs.length - 2) {
-            bot.mesh.updateMatrixWorld();
+          if (j === limbs.length - 2 && limb.end_x_control) {
             const nextLimb = limbs[j + 1];
             if (nextLimb) {
               const v = new (window as any).THREE.Vector3();
               v.setFromMatrixPosition(nextLimb.matrixWorld);
-              if (limb.end_x_control) limb.end_x_control.value = v.x.toFixed(2);
-              if (limb.end_y_control) limb.end_y_control.value = v.y.toFixed(2);
-              if (limb.end_z_control) limb.end_z_control.value = v.z.toFixed(2);
+              limb.end_x_control.value = v.x.toFixed(2);
+              limb.end_y_control.value = v.y.toFixed(2);
+              limb.end_z_control.value = v.z.toFixed(2);
             }
           }
         }
       }
-      tickRef.current = requestAnimationFrame(poll);
+      tickRef.current = window.setTimeout(poll, INTERVAL_MS);
     };
-    const id = requestAnimationFrame(poll);
-    return () => { active = false; cancelAnimationFrame(id); cancelAnimationFrame(tickRef.current); };
+    poll();
+    return () => { active = false; if (tickRef.current != null) clearTimeout(tickRef.current); };
   }, [botRef, botVersion]);
 
   const bot = botRef.current;
