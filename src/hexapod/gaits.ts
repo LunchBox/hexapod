@@ -193,9 +193,9 @@ export class GaitController {
   fb_step: number;
   lr_step: number;
   actions: Record<string, any>;
-  target_modes: string[];
-  target_mode: string;
-  move_mode: string;
+  target_modes: TargetMode[];
+  target_mode: TargetMode;
+  move_mode: MoveMode;
   expected_action: any;
   last_fire_time: number;
   last_act_time: number;
@@ -400,7 +400,7 @@ export class GaitController {
     this.reset_action();
   }
 
-  switch_target_mode(target_mode: string) {
+  switch_target_mode(target_mode: TargetMode) {
     this.reset_tips_to_home();
     this.target_mode = target_mode;
     this.reset_action();

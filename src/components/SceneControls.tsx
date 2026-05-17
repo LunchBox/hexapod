@@ -78,23 +78,23 @@ export default function SceneControls() {
       if (im) im._homeSnapped = false;
     };
 
-    makeJoystick(moveJsRef.current, 45, (j) => {
-      const gc = botRef.current?.gait_controller;
-      const bot = botRef.current;
-      if (gc && bot) { gc.move_mode = 'move'; bot.options.move_mode = 'move'; set_bot_options(bot.options); gc.follow(j); }
-    }, stop);
+    const attachJoystick = (ref: typeof moveJsRef, mode: 'move' | 'move_body' | 'rotate_body') => {
+      makeJoystick(ref.current!, 45, (j) => {
+        const bot = botRef.current;
+        const gc = bot?.gait_controller;
+        if (!gc) return;
+        gc.move_mode = mode;
+        if (bot.options.move_mode !== mode) {
+          bot.options.move_mode = mode;
+          set_bot_options(bot.options);
+        }
+        gc.follow(j);
+      }, stop);
+    };
 
-    makeJoystick(bodyJsRef.current, 45, (j) => {
-      const gc = botRef.current?.gait_controller;
-      const bot = botRef.current;
-      if (gc && bot) { gc.move_mode = 'move_body'; bot.options.move_mode = 'move_body'; set_bot_options(bot.options); gc.follow(j); }
-    }, stop);
-
-    makeJoystick(rotJsRef.current, 45, (j) => {
-      const gc = botRef.current?.gait_controller;
-      const bot = botRef.current;
-      if (gc && bot) { gc.move_mode = 'rotate_body'; bot.options.move_mode = 'rotate_body'; set_bot_options(bot.options); gc.follow(j); }
-    }, stop);
+    attachJoystick(moveJsRef, 'move');
+    attachJoystick(bodyJsRef, 'move_body');
+    attachJoystick(rotJsRef, 'rotate_body');
   }, [botRef]);
 
   return (

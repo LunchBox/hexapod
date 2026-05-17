@@ -7,7 +7,7 @@ import { DirectOutput, AnimatedOutput, type ServoOutput } from './servo_output.j
 
 export class HexapodLeg {
   bot: any;
-  options: any;
+  options: HexapodLegOptions;
   mesh: any;
   mirror: number;
   on_floor: boolean;
@@ -25,7 +25,7 @@ export class HexapodLeg {
   _home_servos?: number[];
   _output!: ServoOutput;
 
-  constructor(bot: any, options: any) {
+  constructor(bot: any, options: HexapodLegOptions) {
     this.bot = bot;
     this.options = options;
     this.mesh = new THREE.Object3D();

@@ -17,9 +17,9 @@ export { HexapodLeg, getSegNamesForLeg, computeJointPositions, getActualJointPos
 
 export class Hexapod {
   scene: any;
-  options: any;
-  draw_types: string[];
-  draw_type: string;
+  options: HexapodOptions;
+  draw_types: DrawType[];
+  draw_type: DrawType;
   tip_circle_scale: number;
   socket: any;
   sync_cmd: boolean;
@@ -28,8 +28,8 @@ export class Hexapod {
   lr_step: number;
   mesh: any;
   body_mesh: any;
-  legs: any[];
-  gait_controller: any;
+  legs: HexapodLeg[];
+  gait_controller: GaitController;
   on_servo_values: number[];
   _guideCircles: any[];
   _guideLabels: any[];
@@ -56,7 +56,7 @@ export class Hexapod {
   onServoUpdate: (() => void) | null;
   leg_layout: LegLayout[];
 
-  constructor(scene: any, options: any) {
+  constructor(scene: any, options: HexapodOptions) {
     if (!scene) {
       scene = appState.scene;
     }
