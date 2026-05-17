@@ -138,3 +138,14 @@ interface GaitControllerInstance {
   reset_steps(): void;
   reset_action(): void;
 }
+
+interface BotStatus {
+  mesh: { position: ThreeObj; rotation: ThreeObj };
+  body_mesh: { position: ThreeObj; rotation: ThreeObj };
+  center_offset: number;
+  servo_values: number[];
+  legs: Record<number, {
+    on_floor: boolean;
+    [limbName: string]: any;
+  }>;
+}

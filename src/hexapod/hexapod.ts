@@ -2,7 +2,6 @@ import io from 'socket.io-client';
 import appState from './appState.js';
 import {
   HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS, LIMB_NAMES, LIMB_DEFAULTS,
-  DEFAULT_FRAMES_INTERVAL, SERVO_VALUE_TIME_UNIT,
 } from './defaults.js';
 import { getWorldPosition, apply_xyz, get_obj_from_local_storage, set_obj_to_local_storage, remove_class, add_class, clearSelection } from './utils.js';
 import { GaitController } from './gaits.js';
@@ -10,6 +9,7 @@ import { PhysicsSolver } from './physics_solver.js';
 import { history } from './history.js';
 import { HexapodLeg } from './hexapod_leg.js';
 import { computeLegLayout, getSegNamesForLeg, computeJointPositions, getActualJointPositions, applyJointMove, type LegLayout } from './leg_layout.js';
+import { computeMaxDelta, computeServoSpeedHoldTime, computeFixedUnitHoldTime } from './servo_utils.js';
 
 // Re-export for component backwards compatibility
 export { HexapodLeg, getSegNamesForLeg, computeJointPositions, getActualJointPositions, applyJointMove };
@@ -598,14 +598,8 @@ export class Hexapod {
   }
 
   get_min_interval(new_servo_values: number[], old_servo_values: number[]) {
-    let len = new_servo_values.length;
-    let max_delta = 0;
-    for (let i = 0; i < len; i++) {
-      max_delta = Math.max(max_delta, Math.abs(new_servo_values[i] - old_servo_values[i]));
-    }
-    const speed = this.servo_speed || 2000;
-    const ms = (max_delta / speed) * 1000;
-    return Math.max(DEFAULT_FRAMES_INTERVAL, Math.round(ms));
+    const maxDelta = computeMaxDelta(new_servo_values, old_servo_values);
+    return computeServoSpeedHoldTime(maxDelta, this.servo_speed);
   }
 
   apply_status(status: any) {
@@ -1249,11 +1243,8 @@ export class Hexapod {
         if (typeof send_cmd === "undefined" || send_cmd) {
           this.send_cmd(cmd);
           if (this.on_servo_values) {
-            let maxDelta = 0;
-            for (let i = 0; i < servo_values.length; i++) {
-              maxDelta = Math.max(maxDelta, Math.abs(servo_values[i] - this.on_servo_values[i]));
-            }
-            this.hold_time = Math.max(DEFAULT_FRAMES_INTERVAL, Math.round(maxDelta * SERVO_VALUE_TIME_UNIT));
+            const maxDelta = computeMaxDelta(servo_values, this.on_servo_values);
+            this.hold_time = computeFixedUnitHoldTime(maxDelta);
           } else {
             this.hold_time = 0;
           }
