@@ -74,10 +74,8 @@ export function initScene(container: HTMLElement) {
   }
 
   function update() {
-    // Drive servo animation from rAF loop for smooth 60fps interpolation
-    if ((appState as any).current_bot?.update_servo_animations) {
-      (appState as any).current_bot.update_servo_animations(performance.now());
-    }
+    // Drive servo animation via callback set by SceneCanvas
+    if (appState.onAnimate) appState.onAnimate(performance.now());
 
     // Particle light animation
     let timer = Date.now() * 0.000025;

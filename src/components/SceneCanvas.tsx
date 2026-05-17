@@ -34,6 +34,7 @@ export default function SceneCanvas() {
     bot.onTimeInterval = pushTimeInterval;
     botRef.current = bot;
     appState.current_bot = bot;
+    appState.onAnimate = (now: number) => bot.update_servo_animations(now);
     bumpBotVersion(); // trigger SceneControls & AttributesPanel to sync
 
     // Debug: log joint positions after initial render
@@ -49,6 +50,7 @@ export default function SceneCanvas() {
       bot.onTimeInterval = null;
       botRef.current = null;
       appState.current_bot = null;
+      appState.onAnimate = null;
     };
   }, [botRef, updateServoDisplay]);
 

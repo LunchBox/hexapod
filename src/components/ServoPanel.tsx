@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useHexapod } from '../context/HexapodContext';
 
 import { SERVO_MIN_VALUE, SERVO_MAX_VALUE } from '../hexapod/defaults';
@@ -7,6 +7,41 @@ import { PosCalculator } from '../hexapod/pos_calculator';
 
 export default function ServoPanel() {
   const { botRef, botVersion } = useHexapod();
+  const tickRef = useRef(0);
+
+  // Self-update servo display values from bot at ~10fps when mounted
+  useEffect(() => {
+    let active = true;
+    const poll = () => {
+      if (!active) return;
+      const bot = botRef.current;
+      if (!bot) { setTimeout(poll, 100); return; }
+
+      for (let i = 0; i < bot.legs.length; i++) {
+        const limbs = bot.legs[i].limbs;
+        for (let j = 0; j < limbs.length - 1; j++) {
+          const limb = limbs[j];
+          if (limb.range_control) limb.range_control.value = limb.servo_value;
+          if (limb.current_control) limb.current_control.value = limb.servo_value;
+          // Update end position for last non-tip segment
+          if (j === limbs.length - 2) {
+            bot.mesh.updateMatrixWorld();
+            const nextLimb = limbs[j + 1];
+            if (nextLimb) {
+              const v = new (window as any).THREE.Vector3();
+              v.setFromMatrixPosition(nextLimb.matrixWorld);
+              if (limb.end_x_control) limb.end_x_control.value = v.x.toFixed(2);
+              if (limb.end_y_control) limb.end_y_control.value = v.y.toFixed(2);
+              if (limb.end_z_control) limb.end_z_control.value = v.z.toFixed(2);
+            }
+          }
+        }
+      }
+      tickRef.current = requestAnimationFrame(poll);
+    };
+    const id = requestAnimationFrame(poll);
+    return () => { active = false; cancelAnimationFrame(id); cancelAnimationFrame(tickRef.current); };
+  }, [botRef, botVersion]);
 
   const bot = botRef.current;
   if (!bot) return null;

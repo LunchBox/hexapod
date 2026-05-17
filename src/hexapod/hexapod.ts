@@ -1190,8 +1190,6 @@ export class Hexapod {
   }
 
   after_status_change(send_cmd?: boolean) {
-    this.display_values();
-
     let servo_values = this.get_servo_values();
     let cmd = this.build_cmd(servo_values);
 
@@ -1239,30 +1237,6 @@ export class Hexapod {
     let cmd = this.build_cmd(servo_values);
     this.send_cmd(cmd);
     this.on_servo_values = servo_values;
-  }
-
-  display_values() {
-    let limb: any, next_limb: any, servo_value: any, vector: any;
-    let total_legs = this.legs.length;
-    for (let i = 0; i < total_legs; i++) {
-      for (let jdx = 0; jdx < this.legs[i].limbs.length; jdx++) {
-        limb = this.legs[i].limbs[jdx];
-        servo_value = limb.servo_value;
-
-        if (limb.range_control) {
-          limb.range_control.value = servo_value;
-          limb.current_control.value = servo_value;
-        }
-
-        next_limb = this.legs[i].limbs[jdx + 1];
-        if (next_limb && limb.end_x_control) {
-          vector = getWorldPosition(this.mesh, next_limb);
-          limb.end_x_control.value = vector.x.toFixed(2);
-          limb.end_y_control.value = vector.y.toFixed(2);
-          limb.end_z_control.value = vector.z.toFixed(2);
-        }
-      }
-    }
   }
 
   build_cmd(servo_values: number[]) {

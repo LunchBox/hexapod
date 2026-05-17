@@ -12,6 +12,7 @@ interface AppState {
   clock: THREE.Clock | null;
   current_bot: any;
   render?: () => void;
+  onAnimate?: ((now: number) => void) | null;
 }
 
 const state: AppState = {
@@ -24,6 +25,7 @@ const state: AppState = {
   keyboard: null,
   clock: null,
   current_bot: null,
+  onAnimate: null,
 };
 
 export default state;
