@@ -99,19 +99,17 @@ export class HexapodLeg {
     switch (this.bot.draw_type) {
       case "bone": {
         material = new THREE.LineBasicMaterial({ color: this.color });
-        const half = opt.length / 2;
         geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(
-          new Float32Array([0, -half, 0, 0, half, 0]), 3));
+          new Float32Array([0, 0, 0, 0, opt.length, 0]), 3));
         mesh = new THREE.Line(geometry, material);
         break;
       }
       case "points": {
         material = new THREE.PointsMaterial({ color: this.color });
-        const half = opt.length / 2;
         geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(
-          new Float32Array([0, -half, 0, 0, half, 0]), 3));
+          new Float32Array([0, 0, 0, 0, opt.length, 0]), 3));
         mesh = new THREE.Points(geometry, material);
         break;
       }
