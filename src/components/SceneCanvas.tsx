@@ -36,9 +36,8 @@ export default function SceneCanvas() {
     appState.current_bot = bot;
     bumpBotVersion(); // trigger SceneControls & AttributesPanel to sync
 
-    // Debug: log joint positions, also expose globally
+    // Debug: log joint positions after initial render
     setTimeout(() => bot.debug_joint_positions(), 500);
-    (window as any).debugBot = () => bot.debug_joint_positions();
 
     return () => {
       initialized.current = false;

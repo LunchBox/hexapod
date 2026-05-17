@@ -40,15 +40,6 @@ export function remove_class(elem, class_name) {
   elem.setAttribute("class", class_names.join(" "));
 }
 
-export function sleep(milliseconds) {
-  let start = new Date().getTime();
-  for (let i = 0; i < 1e7; i++) {
-    if ((new Date().getTime() - start) > milliseconds) {
-      break;
-    }
-  }
-}
-
 export function make_input(options) {
   let input = document.createElement('input');
   for (let key in options) {
