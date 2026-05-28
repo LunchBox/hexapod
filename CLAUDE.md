@@ -93,7 +93,7 @@ src/
     hexapod_leg.ts               # HexapodLeg class (imported by hexapod.ts)
     leg_layout.ts                # computeLegLayout, computeJointPositions, getSegNamesForLeg
     presets.ts                   # PRESETS array: 15 preset configs (default + 3-DOF + 4-DOF)
-    gaits.ts                     # GaitController + GaitAction hierarchy (standby, move, internal, putdown)
+    gaits.ts                     # GaitController + GaitAction hierarchy (standby, move, putdown). Walking-only after Phase 3 of the input rewrite; body control moved to body_motions.ts (begin/step/endBodyTracking)
     gait_configs.ts              # Preset gait definitions by leg count (wave, ripple, tripod, quad)
     gait_generator.ts            # Runtime gait filtering: balance validation, dedup, cyclic rotation
     history.ts                   # Undo/redo stack (singleton, JSON-serialized, max 50 entries)
@@ -112,7 +112,7 @@ stylesheets/
 **Core classes (same logic as legacy, now ES modules):**
 - `Hexapod` — The bot. Creates 3D body mesh, N `HexapodLeg` instances (3–9 legs), holds a `GaitController`. Manages servo value computation, status snapshot/restore. After the hexapod.ts split, geometry construction lives in `bot_geometry.ts`, the guide system in `bot_guides.ts` (`bot.guides`), keyframe animation state in `bot_animator.ts` (`bot.animator` — holds both `mesh` Path A and `body_mesh` Path B), Socket.IO command I/O in `bot_commands.ts` (`bot.commands`), and config helpers in `bot_options.ts`. `apply_attributes()` re-draws the entire bot from config. The `_servo_anim_disabled` flag stays on `Hexapod` (cross-cutting; read by HexapodLeg and gaits.ts) and prevents new animations during rebuilds and transform_body sub-steps; `is_animating()` gates `act()` during active animation.
 - `HexapodLeg` — 2–6 DOF limb chain (coxa → femur → tibia → tarsus → segment5 → segment6 → tip). Each limb is a Three.js mesh with `servo_value`, `servo_idx`, `revert` flag. `set_tip_pos()` invokes `PosCalculator`. Uses a `ServoOutput` strategy (`DirectOutput` or `AnimatedOutput`) to control whether servo values are applied instantly or animated through keyframes.
-- `GaitController` — Owns gait definitions (leg group patterns), action types (power/efficient/body_first/fast), target modes (translate/target). Uses `gait_configs.ts` presets filtered through `gait_generator.ts` for balance validation. `fire_action()` runs on a 30ms interval via setInterval in ControlPanel. `act()` is gated by `bot.is_animating()` — new commands are skipped while a previous animation plays.
+- `GaitController` — Owns gait definitions (leg group patterns), action types (power/efficient/body_first/fast), target modes (translate/target). Uses `gait_configs.ts` presets filtered through `gait_generator.ts` for balance validation. Walking step scheduling is driven by the rAF loop in `SceneCanvas`: each frame, if `gc.expected_action` is set and `bot.is_animating()` is false, the rAF callback calls `gc.act(...)` to start the next step. There is no `setInterval` / `fire_action` / `setTimeout` indirection. `none` physics mode has a manual 30ms floor in the rAF scheduler to preserve legacy pace.
 - `PosCalculator` — Inverse kinematics via gradient descent on the servo values for a single leg, minimizing distance to target tip world position. Contains **zero** trigonometric functions. Uses `REG_STRENGTH` (0.05) to pull redundant DOFs toward home servos during iteration. **Calls `set_servo_values()` during IK iterations, which must apply values immediately** (bypass animation) so the Three.js scene-graph FK reads current joint angles.
 - `ServoOutput` — Strategy pattern (`src/hexapod/servo_output.ts`). `DirectOutput` applies servo values instantly (`none` mode). `AnimatedOutput` animates through keyframes at `servo_speed` (`servo_constraint` mode). `Hexapod._setLegOutputs(mode)` switches all legs between strategies.
 - `JoyStick` — Canvas-based 2D joystick. Accepts either a CSS selector string or a DOM element.
@@ -271,9 +271,18 @@ Flow:
 
 **Resetting to kf0 before each solve is CRITICAL.** PosCalculator starts from `limb.servo_value`. Without reset, each keyframe's solve drifts into different local minima → locked tips slide.
 
-### Input gating
+### Input → motion architecture (rAF-driven)
 
-`GaitController.act()` checks `bot.is_animating()` at entry and returns early if true. Real servos execute one command at a time — during active animation, new inputs are skipped (keyboard) or accumulated via `GaitInternal.position/rotation` (joystick).
+There is one rAF loop, set up in `SceneCanvas` via `appState.onAnimate`. Each frame, in order:
+
+1. `bot.update_servo_animations(now)` — advances `bot.animator` (Path A mesh, Path B body_mesh) and per-leg `_output` interpolation.
+2. **Body-target tracking**: if `bot.body_target` is set and the animator is idle, call `bot.step_body_tracking(now)`. This moves `body_mesh` toward `body_target` by at most `(servo_speed × dt)`-equivalent body delta, runs `PhysicsSolver.solveAll` once with on_floor tips locked in world / floaters following body, and applies servos directly. On `_body_tracking_release_pending && arrived`, calls `bot.end_body_tracking()` (emits one status snapshot).
+3. **Walking step scheduler**: if `gc.expected_action` is set and `bot.is_animating()` is false, call `gc.act(...)`. In `none` mode, enforce 30ms floor via `gc.last_act_time`. Real servos execute one command at a time — `is_animating()` is the natural condition for "previous step done, start next".
+4. **Throttled UI tick (~10Hz)**: call `updateServoDisplay()` for the CommandDisplay readout.
+
+Body joysticks (Move Body / Rotate Body) and the body XYZ/RxRyRz sliders write `bot.body_target` on each mousemove/tick (cheap object assign, no IK). Status entry emission is gated on `!bot._suppress_status_entries`, which body_motions sets during tracking to avoid spamming React state at 60Hz. On release, `body_target` is set to the snapshotted home pose; the rAF chases back naturally.
+
+The legacy `setInterval(30ms)` + `gait_controller.fire_action()` + `GaitInternal` + `internal_move` action are all removed.
 
 ### PhysicsSolver — multi-leg constraint solver
 

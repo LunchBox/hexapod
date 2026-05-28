@@ -14,6 +14,17 @@ function makeJoystick(
   return j;
 }
 
+type BodyPose = { px: number; py: number; pz: number; rx: number; ry: number; rz: number };
+type Axis = 'px' | 'py' | 'pz' | 'rx' | 'ry' | 'rz';
+
+function snapshotBodyPose(bot: any): BodyPose {
+  const bm = bot.body_mesh;
+  return {
+    px: bm.position.x, py: bm.position.y, pz: bm.position.z,
+    rx: bm.rotation.x, ry: bm.rotation.y, rz: bm.rotation.z,
+  };
+}
+
 export default function SceneControls() {
   const { botRef } = useHexapod();
   const moveJsRef = useRef<HTMLDivElement>(null);
@@ -21,75 +32,66 @@ export default function SceneControls() {
   const rotJsRef = useRef<HTMLDivElement>(null);
   const inited = useRef(false);
 
-  // Accumulated delta per axis during current drag session
-  const accRef = useRef({ x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 });
+  // Per-axis slider drag session state. accRef[axis] is the accumulated delta
+  // for the current drag; sliderHome is the body pose at drag start.
+  const accRef = useRef<Record<Axis, number>>({ px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0 });
+  const sliderHomeRef = useRef<BodyPose | null>(null);
 
-  const restoreHome = (axis: keyof typeof accRef.current) => {
+  // Begin a slider drag session if one isn't already active.
+  const ensureSliderSession = () => {
     const bot = botRef.current;
-    if (!bot) return;
-    const total = accRef.current[axis];
-    if (Math.abs(total) < 0.001) return;
-    accRef.current[axis] = 0;
-    const useServo = bot.options.physics_mode === 'servo_constraint';
-    const opts: any = {};
-    if (axis === 'x') opts.dx = -total;
-    else if (axis === 'y') opts.dy = -total;
-    else if (axis === 'z') opts.dz = -total;
-    else if (axis === 'rx') opts.rx = -total;
-    else if (axis === 'ry') opts.ry = -total;
-    else if (axis === 'rz') opts.rz = -total;
-    if (useServo) {
-      bot.transform_body_servo(opts);
-    } else {
-      bot.transform_body(opts);
-      bot.recalibrate_legs_to_home();
+    if (!bot) return null;
+    if (!sliderHomeRef.current) {
+      bot.begin_body_tracking();
+      sliderHomeRef.current = snapshotBodyPose(bot);
+      accRef.current = { px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0 };
     }
-    bot.adjust_gait_guidelines();
+    return { bot, home: sliderHomeRef.current };
+  };
+
+  // Slider tick: accumulate delta on axis and write body_target.
+  const sliderTick = (axis: Axis, delta: number) => {
+    const session = ensureSliderSession();
+    if (!session) return false;
+    accRef.current[axis] += delta;
+    session.bot.body_target = {
+      ...session.home,
+      [axis]: session.home[axis] + accRef.current[axis],
+    };
+    return true;
+  };
+
+  // Slider release: spring body back to home.
+  const sliderRelease = () => {
+    const bot = botRef.current;
+    if (!bot || !sliderHomeRef.current) return;
+    bot.body_target = { ...sliderHomeRef.current };
+    bot._body_tracking_release_pending = true;
+    sliderHomeRef.current = null;
+    accRef.current = { px: 0, py: 0, pz: 0, rx: 0, ry: 0, rz: 0 };
   };
 
   useEffect(() => {
     if (inited.current || !moveJsRef.current || !bodyJsRef.current || !rotJsRef.current) return;
     inited.current = true;
 
-    const stop = () => {
-      const bot = botRef.current;
-      const gc = bot?.gait_controller;
-      if (!gc || !bot) return;
-      const im = gc.actions?.['internal_move'];
-      // For move_body / rotate_body, restore body to snapshot home on release
-      if (im?._homeSnapped && (gc.move_mode === 'move_body' || gc.move_mode === 'rotate_body')) {
-        const h = im.homePos, hr = im.homeRot;
-        const bm = bot.body_mesh;
-        const dx = h.x - bm.position.x, dy = h.y - bm.position.y, dz = h.z - bm.position.z;
-        const rx = hr.x - bm.rotation.x, ry = hr.y - bm.rotation.y, rz = hr.z - bm.rotation.z;
-        if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001 || Math.abs(dz) > 0.001 ||
-            Math.abs(rx) > 0.001 || Math.abs(ry) > 0.001 || Math.abs(rz) > 0.001) {
-          const useServo = bot.options.physics_mode === 'servo_constraint';
-          if (useServo) {
-            bot.transform_body_servo({ dx, dy, dz, rx, ry, rz });
-          } else {
-            bot.transform_body({ dx, dy, dz, rx, ry, rz });
-            bot.recalibrate_legs_to_home();
-          }
-          bot.adjust_gait_guidelines();
-        }
-      }
-      gc.stop();
-      if (im) im._homeSnapped = false;
+    // Walking joystick: routes through gc.follow / gc.stop. Unchanged.
+    const stopWalking = () => {
+      const gc = botRef.current?.gait_controller;
+      gc?.stop();
     };
-
-    const attachJoystick = (ref: typeof moveJsRef, mode: 'move' | 'move_body' | 'rotate_body') => {
+    const attachWalkingJoystick = (ref: typeof moveJsRef) => {
       makeJoystick(ref.current!, 45, (j) => {
         const bot = botRef.current;
         const gc = bot?.gait_controller;
         if (!gc) return;
-        gc.move_mode = mode;
-        if (bot.options.move_mode !== mode) {
-          bot.options.move_mode = mode;
+        gc.move_mode = 'move';
+        if (bot.options.move_mode !== 'move') {
+          bot.options.move_mode = 'move';
           set_bot_options(bot.options);
         }
         gc.follow(j);
-      }, stop);
+      }, stopWalking);
     };
 
     // Body-target tracking joysticks. The rAF loop in SceneCanvas chases
@@ -97,24 +99,18 @@ export default function SceneControls() {
     // transform_body. On release we set body_target = home and let rAF spring back.
     const attachBodyTargetJoystick = (
       ref: typeof bodyJsRef,
-      compute: (j: any, home: any) => any,
+      compute: (j: any, home: BodyPose) => BodyPose,
     ) => {
-      // Per-session snapshot of body_mesh pose at first activation
-      let homeSnapshot: any = null;
+      let homeSnapshot: BodyPose | null = null;
       makeJoystick(ref.current!, 45, (j) => {
         const bot = botRef.current;
         if (!bot) return;
         if (!homeSnapshot) {
-          // First mousemove of this session
           bot.begin_body_tracking();
-          homeSnapshot = {
-            px: bot.body_mesh.position.x, py: bot.body_mesh.position.y, pz: bot.body_mesh.position.z,
-            rx: bot.body_mesh.rotation.x, ry: bot.body_mesh.rotation.y, rz: bot.body_mesh.rotation.z,
-          };
+          homeSnapshot = snapshotBodyPose(bot);
         }
         bot.body_target = compute(j, homeSnapshot);
       }, () => {
-        // Joystick released — spring back to the snapshotted home pose.
         const bot = botRef.current;
         if (!bot || !homeSnapshot) return;
         bot.body_target = { ...homeSnapshot };
@@ -123,7 +119,7 @@ export default function SceneControls() {
       });
     };
 
-    attachJoystick(moveJsRef, 'move');
+    attachWalkingJoystick(moveJsRef);
     attachBodyTargetJoystick(bodyJsRef, (j, home) => {
       const max = 40;
       const fb_rate = max / j.radius;
@@ -166,71 +162,20 @@ export default function SceneControls() {
         </div>
       </div>
 
-      {/* Row 2: Sliders */}
+      {/* Row 2: Sliders — all 6 axes write bot.body_target via sliderTick. */}
       <div className="flex items-end gap-2.5 flex-wrap">
         <SliderColumn value={0} min={-40} max={40} label="X" title="Nudge body X" springBack
-          onChange={(v) => {
-            const bot = botRef.current; if (!bot) return false;
-            accRef.current.x += v;
-            const ok = bot.transform_body({ dx: v });
-            bot.adjust_gait_guidelines();
-            return ok;
-          }}
-          onDragEnd={() => restoreHome('x')}
-        />
+          onChange={(v) => sliderTick('px', v)} onDragEnd={sliderRelease} />
         <SliderColumn value={0} min={-24} max={24} label="Y" title="Nudge body height" springBack
-          onChange={(v) => {
-            const bot = botRef.current; if (!bot) return false;
-            accRef.current.y += v;
-            const ok = bot.transform_body({ dy: v });
-            bot.adjust_gait_guidelines();
-            return ok;
-          }}
-          onDragEnd={() => restoreHome('y')}
-        />
+          onChange={(v) => sliderTick('py', v)} onDragEnd={sliderRelease} />
         <SliderColumn value={0} min={-40} max={40} label="Z" title="Nudge body Z" springBack
-          onChange={(v) => {
-            const bot = botRef.current; if (!bot) return false;
-            accRef.current.z += v;
-            const ok = bot.transform_body({ dz: v });
-            bot.adjust_gait_guidelines();
-            return ok;
-          }}
-          onDragEnd={() => restoreHome('z')}
-        />
+          onChange={(v) => sliderTick('pz', v)} onDragEnd={sliderRelease} />
         <SliderColumn value={0} min={-30} max={30} label="Rx°" title="Nudge rotate X" springBack
-          onChange={(v) => {
-            const bot = botRef.current; if (!bot) return false;
-            const rad = v * Math.PI / 180;
-            accRef.current.rx += rad;
-            const ok = bot.transform_body({ rx: rad });
-            bot.adjust_gait_guidelines();
-            return ok;
-          }}
-          onDragEnd={() => restoreHome('rx')}
-        />
+          onChange={(v) => sliderTick('rx', v * Math.PI / 180)} onDragEnd={sliderRelease} />
         <SliderColumn value={0} min={-30} max={30} label="Ry°" title="Nudge rotate Y" springBack
-          onChange={(v) => {
-            const bot = botRef.current; if (!bot) return false;
-            const rad = v * Math.PI / 180;
-            accRef.current.ry += rad;
-            const ok = bot.transform_body({ ry: rad });
-            bot.adjust_gait_guidelines();
-            return ok;
-          }}
-          onDragEnd={() => restoreHome('ry')}
-        />
+          onChange={(v) => sliderTick('ry', v * Math.PI / 180)} onDragEnd={sliderRelease} />
         <SliderColumn value={0} min={-30} max={30} label="Rz°" title="Nudge rotate Z" springBack
-          onChange={(v) => {
-            const bot = botRef.current; if (!bot) return false;
-            const rad = v * Math.PI / 180;
-            accRef.current.rz += rad;
-            const ok = bot.transform_body({ rz: rad });
-            bot.adjust_gait_guidelines();
-            return ok;
-          }}
-          onDragEnd={() => restoreHome('rz')}
-        />
+          onChange={(v) => sliderTick('rz', v * Math.PI / 180)} onDragEnd={sliderRelease} />
       </div>
 
       {/* Row 3: tip lock toggle */}

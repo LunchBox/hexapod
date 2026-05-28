@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState, useCallback } from 'react';
+import { createContext, useContext, useMemo, useRef, useState, useCallback } from 'react';
 
 const HexapodContext = createContext(null);
 
@@ -30,7 +30,10 @@ export function HexapodProvider({ children }) {
     setBotVersion(v => v + 1);
   }, []);
 
-  const value = {
+  // Memoize the context value so consumers don't re-render on every state
+  // update when nothing they care about changed. botRef is mutable and
+  // doesn't need to be in deps.
+  const value = useMemo(() => ({
     botRef,
     servoValues,
     lastServoValues,
@@ -41,7 +44,8 @@ export function HexapodProvider({ children }) {
     botVersion,
     bumpBotVersion,
     pushTimeInterval,
-  };
+  }), [servoValues, lastServoValues, statusEntries, timeIntervals,
+       updateServoDisplay, botVersion, bumpBotVersion, pushTimeInterval]);
 
   return (
     <HexapodContext.Provider value={value}>

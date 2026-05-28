@@ -137,51 +137,10 @@ export class GaitMove extends GaitAction {
   }
 }
 
-// ── GaitInternal ───────────────────────────────────────────────
-
-export class GaitInternal extends GaitAction {
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number };
-  homePos: { x: number; y: number; z: number };
-  homeRot: { x: number; y: number; z: number };
-  _homeSnapped: boolean;
-
-  constructor(controller: any) {
-    super(controller);
-    this.position = { x: 0, y: 0, z: 0 };
-    this.rotation = { x: 0, y: 0, z: 0 };
-    this.homePos = { x: 0, y: 0, z: 0 };
-    this.homeRot = { x: 0, y: 0, z: 0 };
-    this._homeSnapped = false;
-    this.steps = ["move"];
-  }
-
-  snapshotHome() {
-    if (this._homeSnapped) return;
-    this._homeSnapped = true;
-    let bm = this.controller.bot.body_mesh;
-    this.homePos.x = bm.position.x; this.homePos.y = bm.position.y; this.homePos.z = bm.position.z;
-    this.homeRot.x = bm.rotation.x; this.homeRot.y = bm.rotation.y; this.homeRot.z = bm.rotation.z;
-  }
-
-  move() {
-    let bot = this.controller.bot;
-    let dRotZ = (this.homeRot.z + this.rotation.z) - bot.body_mesh.rotation.z;
-    let dRotX = (this.homeRot.x + this.rotation.x) - bot.body_mesh.rotation.x;
-    let dPosX = (this.homePos.x + this.position.x) - bot.body_mesh.position.x;
-    let dPosZ = (this.homePos.z + this.position.z) - bot.body_mesh.position.z;
-
-    if (Math.abs(dPosX) < 0.01 && Math.abs(dPosZ) < 0.01 &&
-        Math.abs(dRotX) < 0.01 && Math.abs(dRotZ) < 0.01) {
-      return;
-    }
-
-    // Instant body movement for live joystick tracking — responsive.
-    // Servo-constraint animation is deferred to the spring-back on release
-    // (see SceneControls.stop / restoreHome).
-    bot.transform_body({ dx: dPosX, dz: dPosZ, rx: dRotX, rz: dRotZ });
-  }
-}
+// GaitInternal removed in Phase 3 of the input → motion rewrite.
+// Body-control joysticks now write bot.body_target directly; the rAF
+// loop in SceneCanvas chases it via PhysicsSolver. See body_motions.ts
+// (beginBodyTracking / stepBodyTracking / endBodyTracking).
 
 // ── GaitController ─────────────────────────────────────────────
 
@@ -267,7 +226,6 @@ export class GaitController {
     this.actions[MOVE_LEFT_KEY] = new GaitMove(this, 0, 1, 0);
     this.actions[MOVE_RIGHT_KEY] = new GaitMove(this, 0, -1, 0);
     this.actions["follow_joystick"] = new GaitMove(this);
-    this.actions["internal_move"] = new GaitInternal(this);
     this.actions[ACT_STANDBY] = new GaitStandby(this);
     this.actions[ACT_PUTDOWN_TIPS] = new GaitPutdownTips(this);
 
@@ -332,13 +290,6 @@ export class GaitController {
     let _send_cmd = this.actions[action_name].run();
     this.bot.after_status_change(_send_cmd);
     this.bot.sync_guide_circles();
-
-    // Body-control actions (joystick) should not be throttled by servo
-    // hold_time. internal_move is being retired in Phase 3 but the flag
-    // is preserved here to avoid disturbing any in-flight session.
-    if (action_name === 'internal_move') {
-      this.bot.hold_time = 0;
-    }
   }
 
   next_leg_group() {
@@ -628,50 +579,15 @@ export class GaitController {
 
   follow(joystick: any) {
     if (joystick.handler_activated) {
-      switch (this.move_mode) {
-        case "move":
-          switch (this.target_mode) {
-            case "translate":
-              this.translate_with_joystick(joystick);
-              break;
-            case "target":
-              this.target_with_joystick(joystick);
-              break;
-            default:
-              // console.log("-- just no idea of the move mode");
-          }
-          this.expected_action = "follow_joystick";
-          break;
-        case "move_body":
-          let gait = this.actions["internal_move"];
-          let pos = joystick.pos;
-          gait.snapshotHome();
-          // Clear rotation from any prior rotate_body session
-          gait.rotation.x = 0; gait.rotation.y = 0; gait.rotation.z = 0;
-          let max_fb_distance = 40;
-          let max_lr_distance = 40;
-          let fb_rate = max_fb_distance / joystick.radius;
-          let lr_rate = max_lr_distance / joystick.radius;
-          gait.position.x = pos.x * lr_rate;
-          gait.position.z = pos.y * fb_rate;
-          this.expected_action = "internal_move";
-          break;
-        case "rotate_body":
-          let gait2 = this.actions["internal_move"];
-          let pos2 = joystick.pos;
-          gait2.snapshotHome();
-          // Clear position from any prior move_body session
-          gait2.position.x = 0; gait2.position.y = 0; gait2.position.z = 0;
-          let max_fb_radius = Math.PI / 12;
-          let max_lr_radius = Math.PI / 12;
-          let fb_rate2 = max_fb_radius / joystick.radius;
-          let lr_rate2 = max_lr_radius / joystick.radius;
-          gait2.rotation.z = -pos2.x * lr_rate2;
-          gait2.rotation.x = pos2.y * lr_rate2;
-          this.expected_action = "internal_move";
-          break;
-        default:
-          // console.log("-- just no idea of the move mode");
+      // Only the walking joystick still routes through gc.follow. Body /
+      // rotate joysticks write bot.body_target directly in SceneControls.
+      if (this.move_mode === "move") {
+        if (this.target_mode === "translate") {
+          this.translate_with_joystick(joystick);
+        } else if (this.target_mode === "target") {
+          this.target_with_joystick(joystick);
+        }
+        this.expected_action = "follow_joystick";
       }
     }
   }
