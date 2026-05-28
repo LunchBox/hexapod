@@ -34,7 +34,18 @@ export default function SceneCanvas() {
     bot.onTimeInterval = pushTimeInterval;
     botRef.current = bot;
     appState.current_bot = bot;
-    appState.onAnimate = (now: number) => bot.update_servo_animations(now);
+    appState.onAnimate = (now: number) => {
+      bot.update_servo_animations(now);
+      // Phase 1: body-target tracking — chase bot.body_target each frame.
+      // Skipped while keyframe animations are active (Path A walking or Path B
+      // transform_body_servo); they own body_mesh in those windows.
+      if (bot.body_target && !bot.animator.isAnimating()) {
+        const moved = bot.step_body_tracking(now);
+        if (!moved && bot._body_tracking_release_pending) {
+          bot.end_body_tracking();
+        }
+      }
+    };
     bumpBotVersion(); // trigger SceneControls & AttributesPanel to sync
 
     // Debug: log joint positions after initial render

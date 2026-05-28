@@ -92,9 +92,60 @@ export default function SceneControls() {
       }, stop);
     };
 
+    // Body-target tracking joysticks. The rAF loop in SceneCanvas chases
+    // bot.body_target at servo_speed pace — no setInterval, no synchronous
+    // transform_body. On release we set body_target = home and let rAF spring back.
+    const attachBodyTargetJoystick = (
+      ref: typeof bodyJsRef,
+      compute: (j: any, home: any) => any,
+    ) => {
+      // Per-session snapshot of body_mesh pose at first activation
+      let homeSnapshot: any = null;
+      makeJoystick(ref.current!, 45, (j) => {
+        const bot = botRef.current;
+        if (!bot) return;
+        if (!homeSnapshot) {
+          // First mousemove of this session
+          bot.begin_body_tracking();
+          homeSnapshot = {
+            px: bot.body_mesh.position.x, py: bot.body_mesh.position.y, pz: bot.body_mesh.position.z,
+            rx: bot.body_mesh.rotation.x, ry: bot.body_mesh.rotation.y, rz: bot.body_mesh.rotation.z,
+          };
+        }
+        bot.body_target = compute(j, homeSnapshot);
+      }, () => {
+        // Joystick released — spring back to the snapshotted home pose.
+        const bot = botRef.current;
+        if (!bot || !homeSnapshot) return;
+        bot.body_target = { ...homeSnapshot };
+        bot._body_tracking_release_pending = true;
+        homeSnapshot = null;
+      });
+    };
+
     attachJoystick(moveJsRef, 'move');
-    attachJoystick(bodyJsRef, 'move_body');
-    attachJoystick(rotJsRef, 'rotate_body');
+    attachBodyTargetJoystick(bodyJsRef, (j, home) => {
+      const max = 40;
+      const fb_rate = max / j.radius;
+      const lr_rate = max / j.radius;
+      return {
+        px: home.px + j.pos.x * lr_rate,
+        py: home.py,
+        pz: home.pz + j.pos.y * fb_rate,
+        rx: home.rx, ry: home.ry, rz: home.rz,
+      };
+    });
+    attachBodyTargetJoystick(rotJsRef, (j, home) => {
+      const max = Math.PI / 12;
+      const fb_rate = max / j.radius;
+      const lr_rate = max / j.radius;
+      return {
+        px: home.px, py: home.py, pz: home.pz,
+        rx: home.rx + j.pos.y * lr_rate,
+        ry: home.ry,
+        rz: home.rz - j.pos.x * fb_rate,
+      };
+    });
   }, [botRef]);
 
   return (

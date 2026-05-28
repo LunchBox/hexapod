@@ -11,6 +11,7 @@ import {
   transformBody, transformBodyServo, moveBody, rotateBody, floatBody,
   laydown, autoLevelBody, putdownTips, saveBodyHome, squatBody,
   resetBodyToCenter, snapLegsToInit, recalibrateLegsToHome,
+  beginBodyTracking, stepBodyTracking, endBodyTracking,
   type TransformBodyOpts, type TransformBodyServoOpts,
 } from './body_motions.js';
 import { GaitController } from './gaits.js';
@@ -63,6 +64,21 @@ export class Hexapod {
   onStatusEntry: ((status: any, formatted: string) => void) | null;
   onTimeInterval: ((interval: number) => void) | null;
   leg_layout: LegLayout[];
+
+  // ── Body-target tracking (joystick / slider live drag) ────────────
+  // body_target is the desired body_mesh pose. The rAF loop calls
+  // step_body_tracking each frame to chase it at servo_speed pace.
+  // body_tracking_active is true for the duration of an input session;
+  // status entries are suppressed during the session and a single entry
+  // is emitted on session end (see body_motions.ts beginBodyTracking /
+  // stepBodyTracking / endBodyTracking).
+  body_target: import('./body_motions.js').BodyPose | null = null;
+  body_tracking_active: boolean = false;
+  _body_tracking_release_pending: boolean = false;
+  _body_tracking_last_time: number = 0;
+  _body_tracking_locked_world_tips: any[] | null = null;
+  _body_tracking_local_tips: any[] | null = null;
+  _suppress_status_entries: boolean = false;
 
   constructor(scene: any, options: HexapodOptions) {
     if (!scene) {
@@ -442,6 +458,9 @@ export class Hexapod {
   reset_body_to_center(){ resetBodyToCenter(this); }
   snap_legs_to_init(strength: number, legIdxs?: number[]) { snapLegsToInit(this, strength, legIdxs); }
   recalibrate_legs_to_home() { recalibrateLegsToHome(this); }
+  begin_body_tracking()      { beginBodyTracking(this); }
+  step_body_tracking(now: number): boolean { return stepBodyTracking(this, now); }
+  end_body_tracking()        { endBodyTracking(this); }
 
   after_status_change(send_cmd?: boolean) {
     // updateMatrixWorld must be current for subsequent PosCalculator reads
@@ -485,7 +504,9 @@ export class Hexapod {
     }
 
     if (this.onServoUpdate) this.onServoUpdate();
-    if (this.onStatusEntry) this.onStatusEntry(this.get_status(), this.format_servo_values(servo_values));
+    if (this.onStatusEntry && !this._suppress_status_entries) {
+      this.onStatusEntry(this.get_status(), this.format_servo_values(servo_values));
+    }
     if (this.onTimeInterval) this.onTimeInterval(this.hold_time);
   }
 

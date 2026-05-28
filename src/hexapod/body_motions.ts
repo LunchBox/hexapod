@@ -18,6 +18,116 @@ export type TransformBodyServoOpts = {
   rx?: number; ry?: number; rz?: number;
 };
 
+export type BodyPose = {
+  px: number; py: number; pz: number;
+  rx: number; ry: number; rz: number;
+};
+
+/** Begin a continuous body-tracking session driven by joystick / slider input.
+ *  Captures the current tip world positions so locked legs stay planted while
+ *  body slides; floating-leg body-local positions so they follow the body.
+ *
+ *  After this, the rAF loop calls stepBodyTracking each frame to chase
+ *  `bot.body_target`. Call endBodyTracking when the session is done. */
+export function beginBodyTracking(bot: any) {
+  bot.body_tracking_active = true;
+  bot._body_tracking_release_pending = false;
+  bot._body_tracking_last_time = performance.now();
+  bot.mesh.updateMatrixWorld();
+  bot._body_tracking_locked_world_tips = bot.get_tip_pos();
+  bot._body_tracking_local_tips = bot._body_tracking_locked_world_tips.map(
+    (t: any) => bot.body_mesh.worldToLocal(t.clone()),
+  );
+}
+
+/** Advance body_mesh one frame toward bot.body_target.
+ *  Each axis delta is clamped to a per-frame step proportional to servo_speed × dt
+ *  (so motion respects the servo constraint). Runs PhysicsSolver.solveAll once with
+ *  locked tip world targets for on_floor legs and body-local tip targets for floaters.
+ *
+ *  Returns true if body moved this frame; false if it has arrived (within epsilon).
+ *  Status entries are suppressed during the session; one final entry is emitted by
+ *  endBodyTracking. */
+export function stepBodyTracking(bot: any, now: number): boolean {
+  if (!bot.body_target) return false;
+
+  const dt = Math.max(1, now - bot._body_tracking_last_time);
+  bot._body_tracking_last_time = now;
+
+  const speed = bot.servo_speed || 2000;
+  // Heuristic: max body delta per frame proportional to servo_speed × dt.
+  // 2000 units/sec ÷ 600 ≈ 3.3 mm at 16ms ≈ ~200 mm/sec body speed.
+  // Rotation: tighter — ~0.001 rad at 16ms ≈ ~4 deg/sec.
+  const MAX_POS_STEP = speed * dt / 600;
+  const MAX_ROT_STEP = speed * dt / 30000;
+
+  const bm = bot.body_mesh;
+  const t = bot.body_target;
+  const clamp = (delta: number, max: number) =>
+    Math.abs(delta) < 0.001 ? 0 : Math.sign(delta) * Math.min(Math.abs(delta), max);
+
+  const dx  = clamp(t.px - bm.position.x, MAX_POS_STEP);
+  const dy  = clamp(t.py - bm.position.y, MAX_POS_STEP);
+  const dz  = clamp(t.pz - bm.position.z, MAX_POS_STEP);
+  const drx = clamp(t.rx - bm.rotation.x, MAX_ROT_STEP);
+  const dry = clamp(t.ry - bm.rotation.y, MAX_ROT_STEP);
+  const drz = clamp(t.rz - bm.rotation.z, MAX_ROT_STEP);
+
+  if (dx === 0 && dy === 0 && dz === 0 && drx === 0 && dry === 0 && drz === 0) {
+    return false; // arrived
+  }
+
+  bm.position.x += dx;
+  bm.position.y += dy;
+  bm.position.z += dz;
+  bm.rotation.x += drx;
+  bm.rotation.y += dry;
+  bm.rotation.z += drz;
+  bm.updateMatrixWorld();
+  bot.mesh.updateMatrixWorld();
+
+  // Build per-leg world targets: locked legs stay in world, floaters follow body
+  const targets: any[] = [];
+  const totalLegs = bot.legs.length;
+  for (let i = 0; i < totalLegs; i++) {
+    if (bot.legs[i].on_floor) {
+      targets.push(bot._body_tracking_locked_world_tips[i]);
+    } else {
+      targets.push(bot.body_mesh.localToWorld(bot._body_tracking_local_tips[i].clone()));
+    }
+  }
+
+  const stallThreshold = bot.options.servo_stall_threshold ?? 0;
+  const groundConstraint = bot.options.ground_constraint ?? true;
+  const prevDisabled = bot._servo_anim_disabled;
+  bot._servo_anim_disabled = true;
+  const result = PhysicsSolver.solveAll(bot, targets, stallThreshold, groundConstraint);
+  for (let i = 0; i < totalLegs; i++) {
+    bot.legs[i].set_servo_values(result.servoTargets[i]);
+  }
+  bot._servo_anim_disabled = prevDisabled;
+  bot.sync_guide_circles();
+
+  // after_status_change runs but the onStatusEntry callback is suppressed
+  // for the duration of the session — see Hexapod.after_status_change gating.
+  bot._suppress_status_entries = true;
+  bot.after_status_change();
+  bot._suppress_status_entries = false;
+
+  return true;
+}
+
+/** End a body-tracking session. Clears body_target + tracking state and emits one
+ *  status entry capturing the final pose for undo/history. */
+export function endBodyTracking(bot: any) {
+  bot.body_tracking_active = false;
+  bot._body_tracking_release_pending = false;
+  bot.body_target = null;
+  bot._body_tracking_locked_world_tips = null;
+  bot._body_tracking_local_tips = null;
+  bot.after_status_change();
+}
+
 /** Centralized body transform with optional tip lock.
  *  When lockTips is true (default unless options._tip_lock is false),
  *  subdivides into up to 3 IK sub-steps and rolls back if drift > 8mm. */
