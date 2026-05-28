@@ -4,6 +4,7 @@ import { LIMB_NAMES, LIMB_DEFAULTS } from './defaults.js';
 import { getWorldPosition, apply_xyz } from './utils.js';
 import { set_bot_options } from './bot_options.js';
 import { CommandSocket, formatServoValues, buildCmd } from './bot_commands.js';
+import { drawBody, createHeadIndicator } from './bot_geometry.js';
 import { GaitController } from './gaits.js';
 import { PhysicsSolver } from './physics_solver.js';
 import { history } from './history.js';
@@ -200,17 +201,9 @@ export class Hexapod {
 
     this.leg_layout = computeLegLayout(legCount, bodyShape, rx, rz, placement, firstLegDirection);
 
-    this.body_mesh = this.draw_body();
+    this.body_mesh = drawBody(this.options, this.leg_layout, this.draw_type);
     this.mesh.add(this.body_mesh);
-
-    // Head indicator — small sphere at front-top of body
-    {
-      const headGeom = new (THREE as any).SphereGeometry(5, 8, 8);
-      const headMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-      const head = new THREE.Mesh(headGeom, headMat);
-      head.position.set(0, 100, -120);
-      this.mesh.add(head);
-    }
+    this.mesh.add(createHeadIndicator());
 
     this.legs = [];
     for (let idx = 0; idx < legCount; idx++) {
@@ -262,119 +255,6 @@ export class Hexapod {
     for (let i = 0; i < this.legs.length; i++) {
       this.legs[i].capture_servo_home();
     }
-  }
-
-  draw_body() {
-    let geometry: any, bodyVisual: any, material: any;
-    let container = new THREE.Object3D();
-    let color = this.options.color ? this.options.color : 0x333333;
-    let bodyHeight = this.options.body_height || 20;
-    let bodyShape = this.options.body_shape || 'rectangle';
-    let legCount = this.options.leg_count || 6;
-
-    // Collect leg positions for wireframe views (all signed directly)
-    let legPositions = this.leg_layout.map((l: LegLayout) =>
-      new THREE.Vector3(l.x, 0, l.z)
-    );
-
-    switch (this.draw_type) {
-      case "bone": {
-        material = new THREE.LineBasicMaterial({ color: color });
-        // Closed loop: N leg vertices + first vertex repeated
-        const count = legPositions.length + 1;
-        const verts = new Float32Array(count * 3);
-        for (let i = 0; i < legPositions.length; i++) {
-          verts[i * 3] = legPositions[i].x;
-          verts[i * 3 + 1] = legPositions[i].y;
-          verts[i * 3 + 2] = legPositions[i].z;
-        }
-        verts[legPositions.length * 3] = legPositions[0].x;
-        verts[legPositions.length * 3 + 1] = legPositions[0].y;
-        verts[legPositions.length * 3 + 2] = legPositions[0].z;
-        geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-        bodyVisual = new THREE.Line(geometry, material);
-        break;
-      }
-      case "points": {
-        material = new THREE.PointsMaterial({ color: color });
-        const verts = new Float32Array(legPositions.length * 3);
-        legPositions.forEach((v, i) => {
-          verts[i * 3] = v.x; verts[i * 3 + 1] = v.y; verts[i * 3 + 2] = v.z;
-        });
-        geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-        bodyVisual = new THREE.Points(geometry, material);
-        break;
-      }
-      default:
-        if (bodyShape === 'polygon' && legCount >= 3) {
-          // Build N-gon prism with corners at vertex positions (full polygon).
-          // Body shape is independent of leg placement mode — legs may attach
-          // at corners (vertex mode) or edge midpoints (edge mode).
-          {
-          const halfH = bodyHeight / 2;
-          const bw = this.options.body_width || 50;
-          const bl = this.options.body_length || 100;
-          const bodyRx = bw / 2;
-          const bodyRz = bl / 2;
-          const bodyPlacement = this.options.polygon_leg_placement || 'vertex';
-          const bodyOffset = bodyPlacement === 'edge' ? -Math.PI / legCount : 0;
-          const evenOffset = legCount % 2 === 0 ? Math.PI / legCount : 0;
-          const firstLegAngle = ((this.options.polygon_odd_orientation || 'back') === 'back'
-            ? Math.PI / 2 : -Math.PI / 2) + evenOffset;
-
-          // Vertices: btmCenter(0), topCenter(1), btmRing[0..N-1], topRing[0..N-1]
-          const vertCount = 2 + 2 * legCount;
-          const positions = new Float32Array(vertCount * 3);
-          positions[0] = 0; positions[1] = -halfH; positions[2] = 0;   // btmCenter
-          positions[3] = 0; positions[4] = halfH; positions[5] = 0;    // topCenter
-
-          for (let i = 0; i < legCount; i++) {
-            const angle = (2 * Math.PI * i) / legCount + bodyOffset + firstLegAngle;
-            const lx = bodyRx * Math.cos(angle);
-            const lz = bodyRz * Math.sin(angle);
-            const bi = (2 + 2 * i) * 3;
-            positions[bi] = lx; positions[bi + 1] = -halfH; positions[bi + 2] = lz;
-            const ti = (2 + 2 * i + 1) * 3;
-            positions[ti] = lx; positions[ti + 1] = halfH; positions[ti + 2] = lz;
-          }
-
-          // Triangles: bottom cap + top cap + 2 side triangles per segment
-          const indices: number[] = [];
-          for (let i = 0; i < legCount; i++) {
-            const next = (i + 1) % legCount;
-            const bi = 2 + 2 * i, bnext = 2 + 2 * next;
-            const ti = bi + 1, tnext = bnext + 1;
-            indices.push(0, bnext, bi);      // bottom cap
-            indices.push(1, ti, tnext);      // top cap
-            indices.push(bi, bnext, tnext);  // side quad (2 tris)
-            indices.push(bi, tnext, ti);
-          }
-
-          geometry = new THREE.BufferGeometry();
-          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-          geometry.setIndex(indices);
-          geometry.computeVertexNormals();
-          bodyVisual = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
-          }
-        } else {
-          // Rectangle body with thickness
-          geometry = new THREE.BoxGeometry(this.options.body_width, bodyHeight, this.options.body_length);
-          bodyVisual = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: color }));
-        }
-        let axisHelper = new THREE.AxesHelper(30);
-        bodyVisual.add(axisHelper);
-    }
-
-    // Body offset moves only the visual, not leg attachment points
-    const bodyGroup = new THREE.Object3D();
-    bodyGroup.add(bodyVisual);
-    bodyGroup.position.y = this.options.body_offset || 0;
-    container.add(bodyGroup);
-
-    container.position.y = bodyHeight / 2;
-    return container;
   }
 
   draw_gait_guide() {
