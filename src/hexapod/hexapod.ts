@@ -5,6 +5,7 @@ import { getWorldPosition, apply_xyz } from './utils.js';
 import { set_bot_options } from './bot_options.js';
 import { CommandSocket, formatServoValues, buildCmd } from './bot_commands.js';
 import { drawBody, createHeadIndicator } from './bot_geometry.js';
+import { BotGuides } from './bot_guides.js';
 import { GaitController } from './gaits.js';
 import { PhysicsSolver } from './physics_solver.js';
 import { history } from './history.js';
@@ -35,15 +36,19 @@ export class Hexapod {
   legs: HexapodLeg[];
   gait_controller: GaitController;
   on_servo_values: number[];
-  _guideCircles: any[];
-  _guideLabels: any[];
-  guide_pivot: any;
-  guide_pos: any;
-  _guide_local_positions: any[];
-  guideline: any;
-  left_gl: any;
-  right_gl: any;
+  guides: BotGuides;
   center_offset: number;
+  // Forwarding getters/setters for gaits.ts and other callers that still reference the
+  // legacy names. The state lives on `this.guides`.
+  get guide_pos() { return this.guides.pos; }
+  get guide_pivot() { return this.guides.pivot; }
+  get _guide_local_positions() { return this.guides.localPositions; }
+  set _guide_local_positions(v: any[]) { this.guides.localPositions = v; }
+  get guideline() { return this.guides.guideline; }
+  get left_gl() { return this.guides.left_gl; }
+  get right_gl() { return this.guides.right_gl; }
+  get _guideCircles() { return this.guides.circles; }
+  get _guideLabels() { return this.guides.labels; }
   hold_time: number;
   servo_speed: number;
   _servo_anim_disabled: boolean = true;
@@ -72,6 +77,7 @@ export class Hexapod {
     this.draw_type = options.draw_type || "mesh";
     this.tip_circle_scale = options.tip_circle_scale ?? 1;
     this.sync_cmd = options.sync_cmd ?? false;
+    this.guides = new BotGuides();
 
     this.apply_attributes(options);
 
@@ -101,21 +107,7 @@ export class Hexapod {
       this.scene.remove(this.mesh);
     }
     // Clean up guide circles (world-space children of scene)
-    if (this._guideCircles) {
-      for (const sq of this._guideCircles) {
-        this.scene.remove(sq);
-      }
-      this._guideCircles = [];
-    }
-    if (this._guideLabels) {
-      for (const sp of this._guideLabels) {
-        this.scene.remove(sp);
-      }
-      this._guideLabels = [];
-    }
-    this.guide_pivot = null;
-    this.guide_pos = null;
-    this._guide_local_positions = [];
+    this.guides.dispose(this.scene);
 
     this.on_servo_values = null;
     this.draw();
@@ -257,191 +249,12 @@ export class Hexapod {
     }
   }
 
-  draw_gait_guide() {
-    // Visual circles at tip positions (world-space markers)
-    this._guideCircles = [];
-    this._guideLabels = [];
-    let total_legs = this.legs.length;
-    for (let i = 0; i < total_legs; i++) {
-      let tip = this.legs[i].get_tip_pos();
-      let geom = new (THREE as any).CircleGeometry(7, 16);
-      let mat = new (THREE as any).MeshBasicMaterial({ color: 0x111111, side: (THREE as any).DoubleSide });
-      let sq = new THREE.Mesh(geom, mat);
-      sq.position.set(tip.x, 0, tip.z);
-      sq.rotation.x = -Math.PI / 2;
-      this.scene.add(sq);
-      this._guideCircles.push(sq);
-
-      // Number label flat on the ground, offset outward from tip
-      const canvas = document.createElement('canvas');
-      canvas.width = 256; canvas.height = 256;
-      const ctx = canvas.getContext('2d')!;
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 3;
-      ctx.font = 'bold 192px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.strokeText(String(i), 128, 128);
-      const tex = new (THREE as any).Texture(canvas);
-      tex.needsUpdate = true;
-      const labelMat = new (THREE as any).MeshBasicMaterial({ map: tex, side: (THREE as any).DoubleSide, depthTest: false, depthWrite: false, transparent: true });
-      const labelGeom = new (THREE as any).PlaneGeometry(60, 60);
-      const label = new THREE.Mesh(labelGeom, labelMat);
-      const cx = this.mesh.position.x;
-      const cz = this.mesh.position.z;
-      const dx = tip.x - cx; const dz = tip.z - cz;
-      const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-      const offset = 48;
-      label.position.set(tip.x + (dx / dist) * offset, 0.1, tip.z + (dz / dist) * offset);
-      label.rotation.x = -Math.PI / 2;
-      this.scene.add(label);
-      this._guideLabels.push(label);
-    }
-
-    // Create pivot at body ground center — rotation center for guide_pos
-    this.guide_pivot = new THREE.Object3D();
-    this.guide_pivot.position.set(
-      this.body_mesh.position.x, 0, this.body_mesh.position.z,
-    );
-    this.mesh.add(this.guide_pivot);
-
-    // guide_pos as child of pivot — its rotation/translation are relative to pivot origin
-    this.guide_pos = new THREE.Object3D();
-    this.guide_pivot.add(this.guide_pos);
-
-    // _guide_local_positions in pivot-local space (so body center = pivot origin = (0,0,0))
-    this._guide_local_positions = [];
-    this.mesh.updateMatrixWorld();
-    this.guide_pivot.updateMatrixWorld();
-    for (let i = 0; i < total_legs; i++) {
-      const worldPos = this.legs[i].get_tip_pos();
-      this._guide_local_positions.push(this.guide_pivot.worldToLocal(worldPos.clone()));
-    }
-    this._guide_local_positions.push(new THREE.Vector3(0, 0, 0)); // body center at index N (pivot origin)
-  }
-
-  sync_guide_circles() {
-    if (this._guideCircles) {
-      for (let i = 0; i < this.legs.length; i++) {
-        const sq = this._guideCircles[i];
-        if (sq) {
-          const tip = this.legs[i].get_tip_pos();
-          sq.position.set(tip.x, 0, tip.z);
-        }
-      }
-    }
-    if (this._guideLabels) {
-      const cx = this.mesh.position.x;
-      const cz = this.mesh.position.z;
-      const offset = 48;
-      for (let i = 0; i < this.legs.length; i++) {
-        const sp = this._guideLabels[i];
-        if (sp) {
-          const tip = this.legs[i].get_tip_pos();
-          const dx = tip.x - cx; const dz = tip.z - cz;
-          const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-          sp.position.set(tip.x + (dx / dist) * offset, 0.1, tip.z + (dz / dist) * offset);
-        }
-      }
-    }
-  }
-
-  reset_guide_pos() {
-    if (!this.guide_pos) return;
-    // Sync pivot to current body ground center (body_mesh may have moved via transform_body)
-    if (this.guide_pivot) {
-      this.guide_pivot.position.set(
-        this.body_mesh.position.x, 0, this.body_mesh.position.z,
-      );
-    }
-    this.guide_pos.position.set(0, 0, 0);
-    this.guide_pos.rotation.set(0, 0, 0);
-    this.guide_pos.scale.set(1, 1, 1);
-  }
-
-  get_guide_pos(leg_idx: number) {
-    if (!this.guide_pos) return new THREE.Vector3();
-    this.guide_pos.scale.set(this.tip_circle_scale, this.tip_circle_scale, this.tip_circle_scale);
-    this.mesh.updateMatrixWorld();
-    const localPos = this._guide_local_positions[leg_idx];
-    if (!localPos) return new THREE.Vector3();
-    return localPos.clone().applyMatrix4(this.guide_pos.matrixWorld);
-  }
-
-  draw_gait_guidelines() {
-    this.mesh.updateMatrixWorld();
-
-    const centerX = this.body_mesh.position.x;
-    const centerZ = this.body_mesh.position.z;
-
-    let material = new THREE.LineBasicMaterial({ color: 0xcc3300 });
-    this.guideline = new THREE.Object3D();
-    this.guideline.position.set(centerX, 0, centerZ);
-    for (let idx = 0; idx < this.legs.length; idx++) {
-      const worldTip = this.legs[idx].get_tip_pos();
-      const localTip = this.mesh.worldToLocal(worldTip.clone());
-      const positions = new Float32Array([
-        0, 0, 0,
-        localTip.x - centerX, 0, localTip.z - centerZ,
-      ]);
-      let geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      let line = new THREE.Line(geometry, material);
-      this.guideline.add(line);
-    }
-    this.mesh.add(this.guideline);
-
-    this.left_gl = this.guideline.clone();
-    this.left_gl.rotation.y = this.rotate_step;
-    this.mesh.add(this.left_gl);
-
-    this.right_gl = this.guideline.clone();
-    this.right_gl.rotation.y = -this.rotate_step;
-    this.mesh.add(this.right_gl);
-  }
-
-  adjust_gait_guidelines() {
-    if (!this.guideline) return;
-    const homePositions = this._guide_local_positions;
-    if (!homePositions || homePositions.length === 0) return;
-
-    this.mesh.updateMatrixWorld();
-    const centerX = this.body_mesh.position.x;
-    const centerZ = this.body_mesh.position.z;
-
-    // Update guideline position to ground center
-    this.guideline.position.set(centerX, 0, centerZ);
-
-    // Update guideline lines from stable home positions (now in pivot-local space), projected to ground
-    for (let idx = 0; idx < this.legs.length; idx++) {
-      const homeLocal = homePositions[idx];
-      if (!homeLocal) continue;
-      const line = this.guideline.children[idx] as any;
-      if (line) {
-        const pos = line.geometry.attributes.position;
-        pos.setXYZ(0, 0, 0, 0);
-        pos.setXYZ(1, homeLocal.x, 0, homeLocal.z);
-        pos.needsUpdate = true;
-      }
-    }
-
-    // Update rotation clones with same positions
-    const updateClone = (clone: any) => {
-      clone.position.set(centerX, 0, centerZ);
-      for (let idx = 0; idx < this.legs.length; idx++) {
-        const line = clone.children[idx] as any;
-        if (!line) continue;
-        const homeLocal = homePositions[idx];
-        if (!homeLocal) continue;
-        const pos = line.geometry.attributes.position;
-        pos.setXYZ(0, 0, 0, 0);
-        pos.setXYZ(1, homeLocal.x, 0, homeLocal.z);
-        pos.needsUpdate = true;
-      }
-    };
-    if (this.left_gl) { this.left_gl.rotation.y = this.rotate_step; updateClone(this.left_gl); }
-    if (this.right_gl) { this.right_gl.rotation.y = -this.rotate_step; updateClone(this.right_gl); }
-  }
+  draw_gait_guide()       { this.guides.drawGuide(this); }
+  sync_guide_circles()    { this.guides.syncCircles(this); }
+  reset_guide_pos()       { this.guides.resetPos(this); }
+  get_guide_pos(idx: number) { return this.guides.getPos(this, idx); }
+  draw_gait_guidelines()  { this.guides.drawGuidelines(this); }
+  adjust_gait_guidelines(){ this.guides.adjustGuidelines(this); }
 
   get_servo_values() {
     let values: number[] = [];
