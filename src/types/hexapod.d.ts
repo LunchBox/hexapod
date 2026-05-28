@@ -130,7 +130,6 @@ interface GaitControllerInstance {
   expected_action: any;
   stop(): void;
   act(action_name: any): void;
-  fire_action(): void;
   follow(joystick: any): void;
   switch_gait(name: string): void;
   switch_target_mode(mode: TargetMode): void;

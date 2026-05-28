@@ -199,11 +199,8 @@ export class GaitController {
   target_mode: TargetMode;
   move_mode: MoveMode;
   expected_action: any;
-  last_fire_time: number;
   last_act_time: number;
-  last_act_completed_time: number;
   last_action: string;
-  action_identify: any;
   on_action: any;
   fire_free: boolean;
 
@@ -299,41 +296,7 @@ export class GaitController {
     return Object.keys(this.actions).indexOf(action_name.toString()) > -1;
   }
 
-  fire_action() {
-    if (!this.expected_action) {
-      return;
-    }
-
-    let time = new Date().getTime();
-    this.last_fire_time = time;
-
-    if (!this.has_action(this.expected_action)) {
-      return;
-    }
-
-    if (!this.action_identify) {
-      let time_interval = this.bot.hold_time;
-      if (this.last_act_completed_time) {
-        time_interval -= new Date().getTime() - this.last_act_completed_time;
-      }
-
-      this.action_identify = setTimeout(() => {
-        let gait_controller = this.bot.gait_controller;
-        gait_controller.act(gait_controller.expected_action);
-        gait_controller.action_identify = null;
-      }, time_interval);
-    }
-
-    this.on_action = this.expected_action;
-  }
-
   stop() {
-    console.log("clear timeout");
-    if (typeof this.action_identify !== "undefined") {
-      clearTimeout(this.action_identify);
-      this.action_identify = null;
-    }
-
     this.on_action = null;
     this.expected_action = null;
     this.fire_free = false;
@@ -346,16 +309,17 @@ export class GaitController {
     this.reset_steps();
   }
 
+  /** Run one step of the current expected action.
+   *  Called by the rAF scheduler in SceneCanvas when bot.is_animating() is
+   *  false (i.e. previous step's keyframes have finished playing). In `none`
+   *  physics mode the scheduler additionally enforces a 30ms floor so walking
+   *  doesn't run at the rAF rate. */
   act(action_name: any) {
     if (this.bot.is_animating && this.bot.is_animating()) {
       return;
     }
 
-    let time = new Date().getTime();
-    if (this.last_act_time) {
-      // console.log("delta act time: " + (time - this.last_act_time));
-    }
-    this.last_act_time = time;
+    this.last_act_time = performance.now();
 
     if (this.last_action && action_name !== this.last_action) {
       this.actions[action_name].acting_idx = 0;
@@ -370,12 +334,11 @@ export class GaitController {
     this.bot.sync_guide_circles();
 
     // Body-control actions (joystick) should not be throttled by servo
-    // hold_time — they run at the fixed 30ms interval for responsiveness.
+    // hold_time. internal_move is being retired in Phase 3 but the flag
+    // is preserved here to avoid disturbing any in-flight session.
     if (action_name === 'internal_move') {
       this.bot.hold_time = 0;
     }
-
-    this.last_act_completed_time = new Date().getTime();
   }
 
   next_leg_group() {

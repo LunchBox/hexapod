@@ -34,8 +34,13 @@ export default function SceneCanvas() {
     bot.onTimeInterval = pushTimeInterval;
     botRef.current = bot;
     appState.current_bot = bot;
+    // rAF-driven loop: animations, body-target tracking, walking scheduler,
+    // and throttled UI tick. Replaces the legacy 30ms setInterval in ControlPanel.
+    let lastUITick = 0;
+    const NONE_MODE_FLOOR_MS = 30; // walking pace cap when no animation gates it
     appState.onAnimate = (now: number) => {
       bot.update_servo_animations(now);
+
       // Phase 1: body-target tracking — chase bot.body_target each frame.
       // Skipped while keyframe animations are active (Path A walking or Path B
       // transform_body_servo); they own body_mesh in those windows.
@@ -44,6 +49,25 @@ export default function SceneCanvas() {
         if (!moved && bot._body_tracking_release_pending) {
           bot.end_body_tracking();
         }
+      }
+
+      // Phase 2: walking step scheduler. Fire the expected action whenever
+      // the animator has cleared. In `none` physics mode the animator is
+      // never busy, so enforce a manual 30ms floor to preserve legacy pace.
+      const gc = bot.gait_controller;
+      if (gc && gc.expected_action && !bot.is_animating()) {
+        if (bot.options.physics_mode === 'servo_constraint'
+            || (now - (gc.last_act_time || 0)) >= NONE_MODE_FLOOR_MS) {
+          gc.act(gc.expected_action);
+        }
+      }
+
+      // Throttled UI tick (~10Hz). Replaces the ControlPanel setInterval's
+      // updateServoDisplay() call. CommandDisplay / Servo readouts refresh
+      // at this cadence; gaiting / IK is unaffected.
+      if (now - lastUITick > 100) {
+        lastUITick = now;
+        updateServoDisplay();
       }
     };
     bumpBotVersion(); // trigger SceneControls & AttributesPanel to sync

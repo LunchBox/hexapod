@@ -52,7 +52,6 @@ function getGaitGroups(bot: any): GaitGroup[] {
 
 export default function ControlPanel() {
   const { botRef, updateServoDisplay, bumpBotVersion } = useHexapod();
-  const gaitIntervalRef = useRef(null);
 
   const saved = useMemo(() => get_bot_options(), []);
 
@@ -300,17 +299,13 @@ export default function ControlPanel() {
     document.body.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('keyup', handleKeyUp);
 
-    gaitIntervalRef.current = setInterval(() => {
-      if (gc()) gc().fire_action();
-      updateServoDisplay();
-    }, 30);
-
+    // Gait step scheduling and servo-display refresh are now driven by the
+    // rAF loop in SceneCanvas — no setInterval needed here.
     return () => {
       document.body.removeEventListener('keydown', handleKeyDown);
       document.body.removeEventListener('keyup', handleKeyUp);
-      clearInterval(gaitIntervalRef.current);
     };
-  }, [botRef, gc, updateServoDisplay]);
+  }, [botRef, gc]);
 
   // ── Gaits UI state ──────────────────────────────────────────────
 
