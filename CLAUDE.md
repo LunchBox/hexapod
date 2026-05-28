@@ -14,7 +14,7 @@ The model powering this session is **Deepseek V4 Pro**, not Claude Opus. Update 
 
 ## Overview
 
-JS Hexapod — a Three.js-based 3D hexapod robot simulator with optional physical bot control via Socket.IO. Originally vanilla JS (backed up in `legacy/`), now migrated to **React + Vite**. The old revision 72 Three.js is preserved via script tags so the 3D core logic works unchanged.
+JS Hexapod — a Three.js-based 3D hexapod robot simulator with optional physical bot control via Socket.IO. Originally vanilla JS (backed up in `legacy/`), now migrated to **React + Vite + TypeScript**. Three.js is consumed as an ES module from npm (`three ^0.184.0`); the only remaining `<script>` in `index.html` is `Stats.js` from `public/libs/`.
 
 ## Commands
 
@@ -24,9 +24,10 @@ npm run build    # Production build to dist/
 npm run preview  # Preview production build
 npm run lint     # ESLint
 npx tsc --noEmit # TypeScript type-check
+npx vitest run   # Run test suite once
 ```
 
-Test suite: 55 tests across 4 files (`src/hexapod/__tests__/`), run with `npx vitest run`.
+Test suite: 91 tests across 7 files in `src/hexapod/__tests__/` (forward_kinematics, gait_guards, history, physics_ground_stall, pos_calculator, servo_constraint, servo_utils).
 
 ## Code review status
 
@@ -41,35 +42,41 @@ Architecture recommendations remain open (see report for details).
 ## Project structure
 
 ```
-legacy/                          # Original vanilla JS backup (untouched)
-public/libs/                     # Old Three.js libs loaded as globals via <script>
-  three.min.js                   #   THREE global (revision 72)
-  OrbitControls.js               #   THREE.OrbitControls
-  Stats.js, Detector.js          #   Stats, Detector globals
-  THREEx.*.js                    #   THREEx global
+legacy/                          # Original vanilla JS backup (untouched: index.html, js/, stylesheets/, css-archive/)
+public/libs/                     # Legacy script-tag libs — only Stats.js is still loaded (see index.html)
+  Stats.js                       #   Stats global — loaded via <script> in index.html
+  three.min.js, OrbitControls.js #   Dead — Three.js now comes from npm; safe to remove
+  Detector.js, THREEx.*.js       #   Dead — unreferenced; safe to remove
 src/
   main.tsx                       # React entry point
   App.tsx                        # Shell: tabs, layout, HexapodProvider
   App.css                        # Layout styles
   index.css                      # Minimal reset
+  lib/
+    utils.ts                     # shadcn `cn()` helper (clsx + tailwind-merge)
   context/
-    HexapodContext.tsx           # React context: botRef, sceneRef, servo displays, botVersion
+    HexapodContext.tsx           # React context: botRef, sceneRef, servo displays, botVersion, status entries
   components/
     SceneCanvas.tsx              # Mounts Three.js scene, builds Hexapod on mount
     SceneControls.tsx            # 3 joysticks (Move/Body/Rot), XYZ/RxRyRz sliders, persists move_mode
-    ControlPanel.tsx             # Draw type, gaits, action/step/physics, keyboard, send/sync
-    ServoPanel.tsx               # 18 servo sliders + end-position inputs (per-leg, imperative DOM)
-    AttributesPanel.tsx          # Profile (presets + body shape buttons), Adjust, Motions, Body Attrs
+    ControlPanel.tsx             # Container: composes GaitCard/StepCard/PhysicsCard/ActionsCard, keyboard, send/sync
+    GaitCard.tsx                 # Gait selection (split from ControlPanel)
+    StepCard.tsx                 # Step size controls (split from ControlPanel)
+    PhysicsCard.tsx              # Physics mode + servo_speed (split from ControlPanel)
+    ActionsCard.tsx              # Action type + draw type (split from ControlPanel)
+    GaitDiagram.tsx              # SVG diagram visualizing current gait pattern
+    ServoPanel.tsx               # React JSX servo sliders + end-position inputs; value updates bypass React via stored DOM refs (perf — avoids 30fps gait re-renders)
+    AttributesPanel.tsx          # Profile (presets + body shape buttons), Adjust, Motions, Body Attrs — fully declarative React + shadcn
     LegEditor.tsx                # 2D canvas joint editor with multi-leg editing
     LegAttributesPanel.tsx       # Per-leg attributes: DOF, leg count, segment length/radius/angle sliders
-    BodyPreview.tsx              # Canvas mini preview of body shape with leg dot positions
     StatusBar.tsx                # Status bar: gait, mode, physics, leg count × DOF
-    StatusPanel.tsx              # Status history list with play/apply
+    StatusPanel.tsx              # Status history list with play/apply (reads from HexapodContext)
     CommandDisplay.tsx           # Current + last servo command strings
-    TimeChart.tsx                # Command time interval canvas chart (target for imperative drawing)
+    TimeChart.tsx                # Command time interval canvas chart (imperative canvas drawing)
     Toolbar.tsx                  # Undo/redo/save toolbar with keyboard shortcuts (Ctrl+Z/Y/S)
     AttrSlider.tsx               # Reusable horizontal slider with step buttons and extend-max
     SliderColumn.tsx             # Reusable slider column (vertical/horizontal, spring-back, step)
+    ui/                          # shadcn/ui primitives: button, card, tabs, slider, toggle, toggle-group, badge, separator
   hexapod/
     appState.ts                  # Mutable singleton replacing old window globals
     defaults.ts                  # Constants (HEXAPOD_OPTIONS_KEY, servo ranges, limb defaults) + DEFAULT_HEXAPOD_OPTIONS
@@ -77,10 +84,11 @@ src/
     scene.ts                     # initScene(container) — Three.js setup, returns {scene, camera, ...}
     joystick2.ts                 # JoyStick class (canvas-based, accepts element or selector)
     pos_calculator.ts            # Inverse kinematics: gradient-descent solver for tip→servo values
-    pos_calculator_backup_2026-05-02.ts  # Backup of pre-refactor PosCalculator
+    pos_calculator_backup_2026-05-02.ts  # DEAD — pre-refactor backup, candidate for deletion (git history is the real backup)
     forward_kinematics.ts        # Pure forward kinematics (zero Three.js), used by tests
     physics_solver.ts            # Multi-leg constraint solver (PhysicsSolver.solveAll)
     servo_output.ts              # ServoOutput interface + DirectOutput / AnimatedOutput strategy
+    servo_utils.ts               # Pure servo helpers: computeMaxDelta, computeServoSpeedHoldTime, computeFixedUnitHoldTime
     hexapod.ts                   # Hexapod class, layout computation, config helpers
     hexapod_leg.ts               # HexapodLeg class (imported by hexapod.ts)
     leg_layout.ts                # computeLegLayout, computeJointPositions, getSegNamesForLeg
@@ -91,10 +99,10 @@ src/
     history.ts                   # Undo/redo stack (singleton, JSON-serialized, max 50 entries)
     random.ts                    # Random options generator for testing/demo
   types/
-    globals.d.ts                 # Type declarations for legacy Three.js r72, Stats, Detector, THREEx
+    globals.d.ts                 # DOM element extensions, Stats class declaration, socket.io-client module declaration
     hexapod.d.ts                 # Core interfaces: HexapodOptions, HexapodLegOptions, LimbOptions, etc.
     css.d.ts                     # Module declaration for .css imports
-js/                             # Duplicate legacy libs (leftover from old build setup)
+js/                             # DEAD — duplicate legacy libs leftover from old build setup, safe to remove
 stylesheets/
   application.css                # Original UI styles (imported by React app, covers legacy elements)
 ```
@@ -112,26 +120,33 @@ stylesheets/
 **React integration pattern:**
 - `appState.ts` is a mutable singleton holding `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`. It bridges the old global-based core logic with React.
 - `SceneCanvas` calls `initScene(container)` then `build_bot()` in a useEffect, storing results in both `appState` and React context (`botRef`).
-- UI components read/write `appState.current_bot` directly (the core logic still mutates DOM by ID for `#servo_values`, `#on_servo_values`, `#status_history`, `#chart`).
-- Some components (ServoPanel, AttributesPanel) build their DOM imperatively in useEffect to preserve the original DOM-manipulation logic. These can be progressively converted to declarative React later.
+- UI components read `appState.current_bot` (or `botRef.current` via `useHexapod()`) and write back via helpers like `set_bot_options()`. Status history and command/chart displays are now driven through HexapodContext callbacks (`onStatusEntry`, `onServoUpdate`, `onTimeInterval`) — the legacy `#servo_values` / `#status_history` / `#chart` DOM-mutation paths have been removed.
+- `ServoPanel` is React JSX, but its 100ms poll writes slider/end-position values directly to DOM `<input>` elements via refs stashed on `limb.range_control` / `limb.end_x_control` etc. This is an intentional perf escape hatch — re-rendering 18+ sliders at gait rate (~30fps) is too expensive. The JSX itself is memoized.
+- `AttributesPanel` is fully declarative React + shadcn/ui (no imperative DOM building).
+- `TimeChart` and `LegEditor` use imperative `<canvas>` drawing inside useEffect — this is expected (canvas APIs are inherently imperative).
 
 **Data flow:**
 1. Config loaded from `localStorage` key `"hexapod_options"` (fallback: `DEFAULT_HEXAPOD_OPTIONS`)
 2. `initScene(container)` → Three.js scene, camera, renderer, animation loop
 3. `build_bot()` → `new Hexapod(scene, options)` draws body + N legs (3–9)
 4. `laydown()` + `putdown_tips()` places feet on ground plane (y=0)
-5. Each movement step calls `after_status_change()` which updates DOM, optionally sends servo command via WebSocket, and records status history
+5. Each movement step calls `after_status_change()` which fires HexapodContext callbacks (`onServoUpdate`, `onStatusEntry`, `onTimeInterval`) to refresh React UI, optionally sends a servo command via WebSocket, and records status history
 6. Servo command format: `#0 P1500 #1 P1500 ... T500` (servo index, pulse width, time interval)
 
 ## Three.js API note
 
-This codebase uses a revision 72 Three.js API (old `three.min.js` in public/libs/). Notable patterns:
-- `THREE.Geometry` (not BufferGeometry)
-- `new THREE.Mesh(geometry, material, ...)` with single-material constructor
-- `geometry.applyMatrix()` instead of `.applyMatrix4()`
-- Vector math: `.clone()`, `.applyMatrix4()`, `.setFromMatrixPosition()`
+This codebase migrated from revision 72 (loaded via `<script>` tag) to modern Three.js (`three ^0.184.0`, ES module from npm) — see commit `e573b34`. All source files use `import * as THREE from 'three'`; there is no `THREE` global.
 
-The old libs are loaded as regular `<script>` tags (not modules) to expose `THREE`, `Stats`, `Detector`, `THREEx` globals.
+Modern-API patterns used in src/:
+- `THREE.BufferGeometry` (legacy `THREE.Geometry` has been removed from the codebase)
+- `Matrix4.applyMatrix4()` (not the legacy `.applyMatrix()`)
+- Vector math: `.clone()`, `.applyMatrix4()`, `.setFromMatrixPosition()` — unchanged
+
+Caveats:
+- `OrbitControls` is imported from `three/examples/jsm/controls/OrbitControls.js`.
+- A small number of files still reference `window.THREE` (e.g. `ServoPanel.tsx`) as a leftover from the script-tag era. These should be migrated to direct `import * as THREE from 'three'`. If you touch one of these files, fix it.
+- `Stats.js` is still loaded the old way (`<script src="/libs/Stats.js">` in `index.html`) and is exposed as a global `Stats`. The corresponding `declare class Stats` lives in `src/types/globals.d.ts`.
+- `Detector.js` and the `THREEx.*` files in `public/libs/` and `js/` are dead — they are no longer loaded by `index.html` and are not imported anywhere. Safe to delete.
 
 ## Design Rules (non-negotiable)
 
