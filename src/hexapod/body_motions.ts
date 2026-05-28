@@ -52,54 +52,51 @@ export function beginBodyTracking(bot: any) {
 }
 
 /** Advance body_mesh one frame toward bot.body_target.
- *  Each axis delta is clamped to a per-frame step proportional to servo_speed × dt
- *  (so motion respects the servo constraint). Runs PhysicsSolver.solveAll once with
- *  locked tip world targets for on_floor legs and body-local tip targets for floaters.
+ *  Pacing depends on physics_mode:
+ *   - 'none': body teleports straight to target each frame (one IK solve).
+ *   - 'servo_constraint': IK is solved at the target body pose to get the
+ *     desired servo values, then both body pose and servos are interpolated
+ *     linearly between the previous applied state and the target so the
+ *     fastest servo moves by at most `servo_speed × dt` units this frame.
  *
- *  Returns true if body moved this frame; false if it has arrived (within epsilon).
- *  Status entries are suppressed during the session; one final entry is emitted by
- *  endBodyTracking. */
+ *  Returns true if body moved this frame; false if it has arrived (within
+ *  epsilon). Status entries are suppressed during the session; one final
+ *  entry is emitted by endBodyTracking. */
 export function stepBodyTracking(bot: any, now: number): boolean {
   if (!bot.body_target) return false;
 
   const dt = Math.max(1, now - bot._body_tracking_last_time);
   bot._body_tracking_last_time = now;
 
-  const speed = bot.servo_speed || 2000;
-  // Heuristic: max body delta per frame proportional to servo_speed × dt.
-  // 2000 units/sec ÷ 600 ≈ 3.3 mm at 16ms ≈ ~200 mm/sec body speed.
-  // Rotation: tighter — ~0.001 rad at 16ms ≈ ~4 deg/sec.
-  const MAX_POS_STEP = speed * dt / 600;
-  const MAX_ROT_STEP = speed * dt / 30000;
-
   const bm = bot.body_mesh;
   const t = bot.body_target;
-  const clamp = (delta: number, max: number) =>
-    Math.abs(delta) < 0.001 ? 0 : Math.sign(delta) * Math.min(Math.abs(delta), max);
 
-  const dx  = clamp(t.px - bm.position.x, MAX_POS_STEP);
-  const dy  = clamp(t.py - bm.position.y, MAX_POS_STEP);
-  const dz  = clamp(t.pz - bm.position.z, MAX_POS_STEP);
-  const drx = clamp(t.rx - bm.rotation.x, MAX_ROT_STEP);
-  const dry = clamp(t.ry - bm.rotation.y, MAX_ROT_STEP);
-  const drz = clamp(t.rz - bm.rotation.z, MAX_ROT_STEP);
-
-  if (dx === 0 && dy === 0 && dz === 0 && drx === 0 && dry === 0 && drz === 0) {
-    return false; // arrived
+  // Arrived check — if body pose is already at target within epsilon, nothing to do.
+  if (Math.abs(t.px - bm.position.x) < 0.001 && Math.abs(t.py - bm.position.y) < 0.001
+      && Math.abs(t.pz - bm.position.z) < 0.001 && Math.abs(t.rx - bm.rotation.x) < 0.001
+      && Math.abs(t.ry - bm.rotation.y) < 0.001 && Math.abs(t.rz - bm.rotation.z) < 0.001) {
+    return false;
   }
 
-  bm.position.x += dx;
-  bm.position.y += dy;
-  bm.position.z += dz;
-  bm.rotation.x += drx;
-  bm.rotation.y += dry;
-  bm.rotation.z += drz;
+  // Snapshot pre-move body pose + currently-applied servos for interpolation.
+  const startPx = bm.position.x, startPy = bm.position.y, startPz = bm.position.z;
+  const startRx = bm.rotation.x, startRy = bm.rotation.y, startRz = bm.rotation.z;
+  const totalLegs = bot.legs.length;
+  const lastApplied: number[][] = bot.legs.map((leg: any) => {
+    const a: number[] = [];
+    for (let j = 0; j < leg.joint_count; j++) a.push(leg.limbs[j].servo_value);
+    return a;
+  });
+
+  // Move body to the full target pose, then solve IK there. Reset legs to
+  // captured init_servos first so the IK anchor is stable across frames
+  // (4+ DOF redundant joints don't drift).
+  bm.position.set(t.px, t.py, t.pz);
+  bm.rotation.set(t.rx, t.ry, t.rz);
   bm.updateMatrixWorld();
   bot.mesh.updateMatrixWorld();
 
-  // Build per-leg world targets: locked legs stay in world, floaters follow body
   const targets: any[] = [];
-  const totalLegs = bot.legs.length;
   for (let i = 0; i < totalLegs; i++) {
     if (bot.legs[i].on_floor) {
       targets.push(bot._body_tracking_locked_world_tips[i]);
@@ -108,22 +105,54 @@ export function stepBodyTracking(bot: any, now: number): boolean {
     }
   }
 
-  // Reset legs to the captured init servos BEFORE solving. This anchors each
-  // frame's IK to the same starting joint configuration so 4+ DOF redundant
-  // legs converge consistently. Same pattern as transform_body_servo's
-  // kf0-reset before each microstep.
   const prevDisabled = bot._servo_anim_disabled;
   bot._servo_anim_disabled = true;
   for (let i = 0; i < totalLegs; i++) {
     bot.legs[i].set_servo_values(bot._body_tracking_init_servos[i]);
   }
-
   const stallThreshold = bot.options.servo_stall_threshold ?? 0;
   const groundConstraint = bot.options.ground_constraint ?? true;
   const result = PhysicsSolver.solveAll(bot, targets, stallThreshold, groundConstraint);
+
+  // Servo-constraint pacing: cap the largest per-frame servo delta to
+  // `servo_speed × dt / 1000`. Interpolate body+servos by `ratio` if we're
+  // moving faster than the servo budget. In `none` mode we always snap.
+  const speed = bot.servo_speed || 2000;
+  const allowed = speed * dt / 1000;
+  const isConstrained = bot.options.physics_mode === 'servo_constraint';
+  let maxDelta = 0;
   for (let i = 0; i < totalLegs; i++) {
-    bot.legs[i].set_servo_values(result.servoTargets[i]);
+    for (let j = 0; j < bot.legs[i].joint_count; j++) {
+      const d = Math.abs(result.servoTargets[i][j] - lastApplied[i][j]);
+      if (d > maxDelta) maxDelta = d;
+    }
   }
+  const ratio = (isConstrained && maxDelta > allowed) ? allowed / maxDelta : 1;
+
+  if (ratio < 1) {
+    bm.position.x = startPx + (t.px - startPx) * ratio;
+    bm.position.y = startPy + (t.py - startPy) * ratio;
+    bm.position.z = startPz + (t.pz - startPz) * ratio;
+    bm.rotation.x = startRx + (t.rx - startRx) * ratio;
+    bm.rotation.y = startRy + (t.ry - startRy) * ratio;
+    bm.rotation.z = startRz + (t.rz - startRz) * ratio;
+    bm.updateMatrixWorld();
+    bot.mesh.updateMatrixWorld();
+    for (let i = 0; i < totalLegs; i++) {
+      const interp: number[] = [];
+      for (let j = 0; j < bot.legs[i].joint_count; j++) {
+        interp.push(Math.round(
+          lastApplied[i][j] + (result.servoTargets[i][j] - lastApplied[i][j]) * ratio,
+        ));
+      }
+      bot.legs[i].set_servo_values(interp);
+    }
+  } else {
+    for (let i = 0; i < totalLegs; i++) {
+      bot.legs[i].set_servo_values(result.servoTargets[i]);
+    }
+  }
+
   bot._servo_anim_disabled = prevDisabled;
   bot.sync_guide_circles();
 
