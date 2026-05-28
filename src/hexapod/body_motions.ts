@@ -364,21 +364,24 @@ export function transformBodyServo(bot: any, opts: TransformBodyServoOpts): bool
 }
 
 export function moveBody(bot: any, direction: string, distance: number) {
+  // Raising body needs a fallback: tip-locked transform rolls back when legs
+  // can't extend further (drift > 8mm in transformBody), which leaves R
+  // silently no-op once the bot is near max standing height. Detect the
+  // rollback by comparing body_mesh.position.y, then re-issue with
+  // lockTips=false and re-ground the tips so the request always has a
+  // visible effect until tips physically can't reach.
+  if (direction === 'y' && distance > 0) {
+    const prevY = bot.body_mesh.position.y;
+    transformBody(bot, { dy: distance });
+    if (Math.abs(bot.body_mesh.position.y - prevY) < 0.001) {
+      transformBody(bot, { dy: distance, lockTips: false });
+      putdownTips(bot);
+    }
+    return;
+  }
   const opts: any = {};
   opts['d' + direction] = distance;
   transformBody(bot, opts);
-
-  // For Y-up: ensure at least 2 tips can still reach ground
-  if (direction === 'y' && distance > 0) {
-    let grounded = 0;
-    const tips = bot.get_tip_pos();
-    for (let i = 0; i < bot.legs.length; i++) {
-      if (tips[i].y <= 0) grounded++;
-    }
-    if (grounded < 2) {
-      transformBody(bot, { dy: -distance, lockTips: false });
-    }
-  }
 }
 
 export function rotateBody(bot: any, direction: string, radius: number) {
