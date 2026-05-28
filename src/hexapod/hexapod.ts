@@ -6,6 +6,7 @@ import { set_bot_options } from './bot_options.js';
 import { CommandSocket, formatServoValues, buildCmd } from './bot_commands.js';
 import { drawBody, createHeadIndicator } from './bot_geometry.js';
 import { BotGuides } from './bot_guides.js';
+import { BotAnimator } from './bot_animator.js';
 import { GaitController } from './gaits.js';
 import { PhysicsSolver } from './physics_solver.js';
 import { history } from './history.js';
@@ -52,15 +53,7 @@ export class Hexapod {
   hold_time: number;
   servo_speed: number;
   _servo_anim_disabled: boolean = true;
-  _mesh_keyframes: { pos: any; rotY: number }[] | null = null;
-  _segment_durations: number[] = [];
-  _current_segment: number = 0;
-  _segment_start_time: number = 0;
-  _body_mesh_keyframes: { pos: any; rot: any }[] | null = null;
-  _body_mesh_segment_durations: number[] = [];
-  _current_body_mesh_segment: number = 0;
-  _body_mesh_segment_start_time: number = 0;
-  _onBodyAnimComplete: (() => void) | null = null;
+  animator: BotAnimator;
   onServoUpdate: (() => void) | null;
   onStatusEntry: ((status: any, formatted: string) => void) | null;
   onTimeInterval: ((interval: number) => void) | null;
@@ -78,6 +71,7 @@ export class Hexapod {
     this.tip_circle_scale = options.tip_circle_scale ?? 1;
     this.sync_cmd = options.sync_cmd ?? false;
     this.guides = new BotGuides();
+    this.animator = new BotAnimator();
 
     this.apply_attributes(options);
 
@@ -583,10 +577,7 @@ export class Hexapod {
       }
     }
 
-    this._body_mesh_keyframes = bodyKfs;
-    this._body_mesh_segment_durations = segmentDurs;
-    this._current_body_mesh_segment = 0;
-    this._body_mesh_segment_start_time = now;
+    this.animator.applyBodyKeyframes(bodyKfs, segmentDurs, now);
 
     return true;
   }
@@ -614,31 +605,14 @@ export class Hexapod {
     this.after_status_change();
   }
 
-  /** Populate keyframe animation state from pre-computed keyframes.
-   *  Called by move_body() after building mesh + servo keyframes. */
+  /** Path A entry point. Called by GaitController.move_body() after building
+   *  mesh + servo keyframes. */
   apply_physics_keyframes(
     meshKfs: { pos: any; rotY: number }[],
     segmentDurs: number[],
-    servoKfs: number[][][],  // [legIdx][k][jointIdx]
+    servoKfs: number[][][],
   ) {
-    const now = performance.now();
-
-    this._mesh_keyframes = meshKfs;
-    this._segment_durations = segmentDurs;
-    this._current_segment = 0;
-    this._segment_start_time = now;
-
-    for (let i = 0; i < this.legs.length; i++) {
-      const leg = this.legs[i];
-      leg._output.setKeyframes(servoKfs[i], now); // sync with mesh segment timer
-
-      // Revert joints to keyframe[0] visual state for smooth animation start
-      const kf0 = servoKfs[i][0];
-      for (let j = 0; j < leg.joint_count; j++) {
-        leg._set_joint_rotation(j, kf0[j]);
-        leg.limbs[j]._rendered_servo_value = kf0[j];
-      }
-    }
+    this.animator.applyMeshKeyframes(this, meshKfs, segmentDurs, servoKfs);
   }
 
   private _legOutputMode: string = 'none';
@@ -652,19 +626,16 @@ export class Hexapod {
     for (const leg of this.legs) {
       leg.switchOutput(mode);
     }
-    // When switching away from servo_constraint, also stop mesh
-    // animation so the body doesn't keep drifting after the legs
-    // have stopped.
+    // When switching away from servo_constraint, also stop mesh + body_mesh
+    // animations so the body doesn't keep drifting after the legs have stopped.
     if (mode === 'none') {
-      this._mesh_keyframes = null;
-      this._body_mesh_keyframes = null;
+      this.animator.stop();
     }
   }
 
   /** Whether any keyframe animation is in progress (mesh, body_mesh, or legs). */
   is_animating(): boolean {
-    if (this._mesh_keyframes !== null) return true;
-    if (this._body_mesh_keyframes !== null) return true;
+    if (this.animator.isAnimating()) return true;
     for (const leg of this.legs) {
       if (leg.is_animating()) return true;
     }
@@ -674,63 +645,7 @@ export class Hexapod {
   /** Drive servo + mesh animation through keyframes. Called from rAF loop. */
   update_servo_animations(now: number) {
     const speed = this.servo_speed || 2000;
-    let anyAnimating = false;
-
-    // Mesh keyframe animation (shared timing for body movement)
-    if (this._mesh_keyframes && this._current_segment < this._segment_durations.length) {
-      anyAnimating = true;
-      const dur = this._segment_durations[this._current_segment];
-      const elapsed = now - this._segment_start_time;
-      const t = dur > 0.001 ? Math.min(1, elapsed / dur) : 1;
-
-      const kf0 = this._mesh_keyframes[this._current_segment];
-      const kf1 = this._mesh_keyframes[this._current_segment + 1];
-      this.mesh.position.x = kf0.pos.x + (kf1.pos.x - kf0.pos.x) * t;
-      this.mesh.position.z = kf0.pos.z + (kf1.pos.z - kf0.pos.z) * t;
-      this.mesh.rotation.y = kf0.rotY + (kf1.rotY - kf0.rotY) * t;
-
-      if (t >= 1) {
-        this._current_segment++;
-        this._segment_start_time = now;
-        if (this._current_segment >= this._segment_durations.length) {
-          this._mesh_keyframes = null;
-        }
-      }
-    }
-
-    // Body mesh keyframe animation (for move_body / rotate_body / sliders).
-    // Leg servos animate independently through pre-computed keyframes loaded
-    // by transform_body_servo — no per-frame IK needed here.
-    if (this._body_mesh_keyframes && this._current_body_mesh_segment < this._body_mesh_segment_durations.length) {
-      anyAnimating = true;
-      const dur = this._body_mesh_segment_durations[this._current_body_mesh_segment];
-      const elapsed = now - this._body_mesh_segment_start_time;
-      const t = dur > 0.001 ? Math.min(1, elapsed / dur) : 1;
-
-      const bKf0 = this._body_mesh_keyframes[this._current_body_mesh_segment];
-      const bKf1 = this._body_mesh_keyframes[this._current_body_mesh_segment + 1];
-      this.body_mesh.position.x = bKf0.pos.x + (bKf1.pos.x - bKf0.pos.x) * t;
-      this.body_mesh.position.y = bKf0.pos.y + (bKf1.pos.y - bKf0.pos.y) * t;
-      this.body_mesh.position.z = bKf0.pos.z + (bKf1.pos.z - bKf0.pos.z) * t;
-      this.body_mesh.rotation.x = bKf0.rot.x + (bKf1.rot.x - bKf0.rot.x) * t;
-      this.body_mesh.rotation.y = bKf0.rot.y + (bKf1.rot.y - bKf0.rot.y) * t;
-      this.body_mesh.rotation.z = bKf0.rot.z + (bKf1.rot.z - bKf0.rot.z) * t;
-      this.body_mesh.updateMatrixWorld();
-      this.mesh.updateMatrixWorld();
-
-      if (t >= 1) {
-        this._current_body_mesh_segment++;
-        this._body_mesh_segment_start_time = now;
-        if (this._current_body_mesh_segment >= this._body_mesh_segment_durations.length) {
-          this._body_mesh_keyframes = null;
-          if (this._onBodyAnimComplete) {
-            const cb = this._onBodyAnimComplete;
-            this._onBodyAnimComplete = null;
-            cb();
-          }
-        }
-      }
-    }
+    let anyAnimating = this.animator.update(now, this);
 
     // Leg servo keyframe animation (for gait / standalone set_tip_pos paths)
     for (let i = 0; i < this.legs.length; i++) {

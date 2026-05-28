@@ -110,7 +110,7 @@ stylesheets/
 ## Architecture
 
 **Core classes (same logic as legacy, now ES modules):**
-- `Hexapod` — The bot. Creates 3D body mesh, N `HexapodLeg` instances (3–9 legs), holds a `GaitController`. Manages servo value computation, status snapshot/restore, and Socket.IO commands to `localhost:8888`. `apply_attributes()` re-draws the entire bot from config. Holds keyframe animation state for both `mesh` (gait path) and `body_mesh` (body control path). The `_servo_anim_disabled` flag prevents new animations during rebuilds and transform_body sub-steps; `is_animating()` gates `act()` during active animation.
+- `Hexapod` — The bot. Creates 3D body mesh, N `HexapodLeg` instances (3–9 legs), holds a `GaitController`. Manages servo value computation, status snapshot/restore. After the hexapod.ts split, geometry construction lives in `bot_geometry.ts`, the guide system in `bot_guides.ts` (`bot.guides`), keyframe animation state in `bot_animator.ts` (`bot.animator` — holds both `mesh` Path A and `body_mesh` Path B), Socket.IO command I/O in `bot_commands.ts` (`bot.commands`), and config helpers in `bot_options.ts`. `apply_attributes()` re-draws the entire bot from config. The `_servo_anim_disabled` flag stays on `Hexapod` (cross-cutting; read by HexapodLeg and gaits.ts) and prevents new animations during rebuilds and transform_body sub-steps; `is_animating()` gates `act()` during active animation.
 - `HexapodLeg` — 2–6 DOF limb chain (coxa → femur → tibia → tarsus → segment5 → segment6 → tip). Each limb is a Three.js mesh with `servo_value`, `servo_idx`, `revert` flag. `set_tip_pos()` invokes `PosCalculator`. Uses a `ServoOutput` strategy (`DirectOutput` or `AnimatedOutput`) to control whether servo values are applied instantly or animated through keyframes.
 - `GaitController` — Owns gait definitions (leg group patterns), action types (power/efficient/body_first/fast), target modes (translate/target). Uses `gait_configs.ts` presets filtered through `gait_generator.ts` for balance validation. `fire_action()` runs on a 30ms interval via setInterval in ControlPanel. `act()` is gated by `bot.is_animating()` — new commands are skipped while a previous animation plays.
 - `PosCalculator` — Inverse kinematics via gradient descent on the servo values for a single leg, minimizing distance to target tip world position. Contains **zero** trigonometric functions. Uses `REG_STRENGTH` (0.05) to pull redundant DOFs toward home servos during iteration. **Calls `set_servo_values()` during IK iterations, which must apply values immediately** (bypass animation) so the Three.js scene-graph FK reads current joint angles.
@@ -226,29 +226,32 @@ There are two physics modes (toggled in ControlPanel, stored as `options.physics
 
 ### Keyframe animation system (two independent paths)
 
+As of Phase 5 of the hexapod.ts split, animation state lives on `bot.animator: BotAnimator` (`src/hexapod/bot_animator.ts`) instead of directly on `Hexapod`. The class owns both paths' keyframe arrays, segment indices, timers, and completion callback. `_servo_anim_disabled` is a cross-cutting flag and remains on `Hexapod`.
+
 **Old fields that NO LONGER EXIST:**
 - `leg._anim_targets`, `leg._anim_starts`, `leg._anim_start_time` (replaced by `AnimatedOutput` strategy)
-- `bot._mesh_start_pos`, `bot._mesh_target_pos`, `bot._mesh_start_rotY`, `bot._mesh_target_rotY`, `bot._mesh_anim_start`, `bot._mesh_anim_duration` (replaced by `_mesh_keyframes` arrays)
+- `bot._mesh_start_pos`, `bot._mesh_target_pos`, `bot._mesh_start_rotY`, `bot._mesh_target_rotY`, `bot._mesh_anim_start`, `bot._mesh_anim_duration` (replaced by keyframe arrays on `bot.animator`)
+- `Hexapod._mesh_keyframes` / `_segment_durations` / `_current_segment` / `_segment_start_time` / `_body_mesh_keyframes` / `_body_mesh_segment_durations` / `_current_body_mesh_segment` / `_body_mesh_segment_start_time` / `_onBodyAnimComplete` — all relocated to `bot.animator` under the names below
 
 **Path A — Gait walking (`mesh` keyframes):**
 
-Fields:
-- `Hexapod._mesh_keyframes: {pos, rotY}[]` — N+1 mesh poses
-- `Hexapod._segment_durations: number[]` — N segment durations (ms)
-- `Hexapod._current_segment: number`, `_segment_start_time: number`
+Fields (on `bot.animator`):
+- `meshKfs: {pos, rotY}[]` — N+1 mesh poses
+- `meshDurations: number[]` — N segment durations (ms)
+- `meshSegmentIdx: number`, `meshSegmentStart: number`
 
 Flow:
-- `GaitController.move_body()` → builds mesh + servo keyframes → `apply_physics_keyframes()`
+- `GaitController.move_body()` → builds mesh + servo keyframes → `bot.apply_physics_keyframes(...)` (thin forwarder to `bot.animator.applyMeshKeyframes(bot, ...)`)
 - Servo keyframes stored per leg via `AnimatedOutput.setKeyframes(kfs, now)` (shared timer)
-- `update_servo_animations()` (rAF): interpolates `mesh.position/rotation.y` + calls `leg.update_animation()`
+- `bot.update_servo_animations(now)` (rAF): delegates to `bot.animator.update(now, bot)` which interpolates `mesh.position/rotation.y`, then walks legs and calls `leg.update_animation()`
 - Each leg advances independently (own delta-based duration) — **tip drift is expected and physically real**
 
 **Path B — Body control (`body_mesh` keyframes):**
 
-Fields:
-- `Hexapod._body_mesh_keyframes: {pos, rot}[]` — N+1 body_mesh poses
-- `Hexapod._body_mesh_segment_durations: number[]`, `_current_body_mesh_segment: number`, `_body_mesh_segment_start_time: number`
-- `Hexapod._body_targets: THREE.Vector3[]` — world-space tip targets for per-frame IK
+Fields (on `bot.animator`):
+- `bodyKfs: {pos, rot}[]` — N+1 body_mesh poses
+- `bodyDurations: number[]`, `bodySegmentIdx: number`, `bodySegmentStart: number`
+- `onBodyAnimComplete: (() => void) | null` — one-shot callback fired when Path B finishes
 
 Flow:
 - `GaitInternal.move()` → `transform_body_servo()` → builds body_mesh keyframes + world targets → stores on bot
@@ -264,7 +267,7 @@ Flow:
 2. Keyframe 0 = current rendered servo values
 3. For each keyframe k ≥ 1: reset all legs to kf0, move mesh to kf[k], `PhysicsSolver.solveAll()` → servo keyframe k
 4. Floating legs: apply homeward bias (0.20) to all keyframes k ≥ 1 to preserve natural leg shape
-5. `_segment_durations[k] = max(|servoKf[k+1] - servoKf[k]|) / servo_speed * 1000`
+5. `meshDurations[k] = max(|servoKf[k+1] - servoKf[k]|) / servo_speed * 1000`
 
 **Resetting to kf0 before each solve is CRITICAL.** PosCalculator starts from `limb.servo_value`. Without reset, each keyframe's solve drifts into different local minima → locked tips slide.
 
