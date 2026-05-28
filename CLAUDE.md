@@ -7,10 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All commits made by AI in this repo must use the correct model attribution:
 
 ```
-Co-Authored-By: Deepseek V4 Pro <noreply@deepseek.com>
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ```
 
-The model powering this session is **Deepseek V4 Pro**, not Claude Opus. Update this line if the underlying model changes.
+Update this line if the underlying model changes.
 
 ## Overview
 
