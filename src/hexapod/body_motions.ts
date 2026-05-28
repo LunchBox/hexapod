@@ -224,13 +224,21 @@ export function transformBody(bot: any, opts: TransformBodyOpts): boolean {
       for (let i = 0; i < total_legs; i++) {
         bot.legs[i].set_tip_pos(current_tips[i]);
       }
-      bot.after_status_change();
+      // Re-anchor leg shapes to home (also calls after_status_change).
+      // Even the rollback ran extra IK that can drift redundant joints.
+      recalibrateLegsToHome(bot);
       bot._servo_anim_disabled = prevDisabled;
       return false;
     }
   }
   bot.sync_guide_circles();
-  bot.after_status_change();
+  // Re-anchor leg shapes to home so 4+ DOF redundant joints don't drift
+  // across repeated transformBody calls (R/F keys, AttributesPanel sliders,
+  // and any other discrete body adjustments). The locked-IK substeps above
+  // seed from current servos and can land at different local minima each
+  // call. solve_from_home in recalibrateLegsToHome re-anchors each leg to
+  // its _home_servos at the current tip position.
+  recalibrateLegsToHome(bot);
   bot._servo_anim_disabled = prevDisabled;
   return true;
 }
@@ -377,18 +385,13 @@ export function moveBody(bot: any, direction: string, distance: number) {
       transformBody(bot, { dy: distance, lockTips: false });
       putdownTips(bot);
     }
-  } else {
-    const opts: any = {};
-    opts['d' + direction] = distance;
-    transformBody(bot, opts);
+    return;
   }
-  // Restore each leg's natural home-biased shape. transformBody's IK seeds
-  // from the current servo values, so for 4+ DOF redundant legs the
-  // solution drifts from the natural standing shape across repeated calls
-  // (each R press accumulates deformation). Solving from _home_servos snaps
-  // the leg back to the canonical shape at the current tip position — same
-  // pattern the sliders used before they moved to the body_target path.
-  recalibrateLegsToHome(bot);
+  const opts: any = {};
+  opts['d' + direction] = distance;
+  transformBody(bot, opts);
+  // Leg-shape re-anchoring lives inside transformBody itself — callers
+  // don't have to remember to call recalibrateLegsToHome.
 }
 
 export function rotateBody(bot: any, direction: string, radius: number) {
@@ -443,7 +446,10 @@ export function putdownTips(bot: any, idxs?: number[]) {
     bot.legs[i].set_tip_pos(tip_pos);
   }
   bot.sync_guide_circles();
-  bot.after_status_change();
+  // Same anchoring contract as transformBody — set_tip_pos's IK can drift
+  // redundant DOFs. recalibrateLegsToHome calls after_status_change so we
+  // don't fire it twice.
+  recalibrateLegsToHome(bot);
 }
 
 /** Persist body pose + body-local tip positions so Adjust changes survive refresh. */
