@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import io from 'socket.io-client';
 import appState from './appState.js';
 import { LIMB_NAMES, LIMB_DEFAULTS } from './defaults.js';
 import { getWorldPosition, apply_xyz } from './utils.js';
 import { set_bot_options } from './bot_options.js';
+import { CommandSocket, formatServoValues, buildCmd } from './bot_commands.js';
 import { GaitController } from './gaits.js';
 import { PhysicsSolver } from './physics_solver.js';
 import { history } from './history.js';
@@ -22,7 +22,9 @@ export class Hexapod {
   draw_types: DrawType[];
   draw_type: DrawType;
   tip_circle_scale: number;
-  socket: any;
+  commands: CommandSocket;
+  /** @deprecated use `this.commands` directly. Kept for backwards compatibility. */
+  get socket(): any { return this.commands.socket; }
   sync_cmd: boolean;
   rotate_step: number;
   fb_step: number;
@@ -72,16 +74,7 @@ export class Hexapod {
 
     this.apply_attributes(options);
 
-    this.socket = io('http://localhost:8888', { reconnection: false });
-    this.socket.on('message', (data: any) => {
-      console.log(data.message);
-    });
-    this.socket.on('connect_error', () => {
-      // Expected when no physical bot is connected — app works standalone
-    });
-    this.socket.on('disconnect', () => {
-      console.log("-- lost socket connect.");
-    });
+    this.commands = new CommandSocket();
   }
 
   apply_attributes(options: any) {
@@ -654,17 +647,7 @@ export class Hexapod {
   }
 
   format_servo_values(servo_values: number[]) {
-    let formatted_value: string[] = [];
-    let offset = 0;
-    for (let legIdx = 0; legIdx < this.legs.length; legIdx++) {
-      const leg = this.legs[legIdx];
-      const n = leg.joint_count;
-      for (let j = 0; j < n; j++) {
-        formatted_value.push("#" + leg.limbs[j].servo_idx + " P" + servo_values[offset + j]);
-      }
-      offset += n;
-    }
-    return formatted_value.join(" ");
+    return formatServoValues(this.legs, servo_values);
   }
 
   debug_joint_positions() {
@@ -1254,30 +1237,18 @@ export class Hexapod {
   }
 
   send_status() {
-    let servo_values = this.get_servo_values();
-    let cmd = this.build_cmd(servo_values);
+    const servo_values = this.get_servo_values();
+    const cmd = this.build_cmd(servo_values);
     this.send_cmd(cmd);
     this.on_servo_values = servo_values;
   }
 
   build_cmd(servo_values: number[]) {
-    let cmd = this.format_servo_values(servo_values);
-
-    if (this.on_servo_values) {
-      let interval = this.get_min_interval(servo_values, this.on_servo_values);
-      cmd += " T" + interval;
-    } else {
-      cmd += " T500";
-    }
-
-    return cmd;
+    return buildCmd(this.legs, servo_values, this.on_servo_values, this.servo_speed);
   }
 
   send_cmd(cmd: string) {
-    console.log("-- send_cmd fired.");
-    if (this.socket.connected) {
-      this.socket.emit('client_data', { str: cmd });
-    }
+    this.commands.send(cmd);
   }
 
 }
