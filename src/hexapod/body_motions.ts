@@ -24,11 +24,15 @@ export type BodyPose = {
 };
 
 /** Begin a continuous body-tracking session driven by joystick / slider input.
- *  Captures the current tip world positions so locked legs stay planted while
- *  body slides; floating-leg body-local positions so they follow the body.
+ *  Captures three anchors that stay constant for the whole session:
+ *   1. tip world positions — locked legs stay here while body slides
+ *   2. body-local tip positions — floating legs track these as body moves
+ *   3. per-leg servo values — IK each frame resets to these before solving
  *
- *  After this, the rAF loop calls stepBodyTracking each frame to chase
- *  `bot.body_target`. Call endBodyTracking when the session is done. */
+ *  The servo anchor (3) is critical for 4+ DOF redundant legs: without it,
+ *  each frame's IK starts from the previous frame's joint values and the
+ *  redundant DOFs drift to different local minima, deforming the leg shape.
+ *  See transform_body_servo (Path B) which uses the same kf0-reset pattern. */
 export function beginBodyTracking(bot: any) {
   bot.body_tracking_active = true;
   bot._body_tracking_release_pending = false;
@@ -38,6 +42,13 @@ export function beginBodyTracking(bot: any) {
   bot._body_tracking_local_tips = bot._body_tracking_locked_world_tips.map(
     (t: any) => bot.body_mesh.worldToLocal(t.clone()),
   );
+  bot._body_tracking_init_servos = bot.legs.map((leg: any) => {
+    const arr: number[] = [];
+    for (let j = 0; j < leg.joint_count; j++) {
+      arr.push(leg.limbs[j].servo_value);
+    }
+    return arr;
+  });
 }
 
 /** Advance body_mesh one frame toward bot.body_target.
@@ -97,10 +108,18 @@ export function stepBodyTracking(bot: any, now: number): boolean {
     }
   }
 
-  const stallThreshold = bot.options.servo_stall_threshold ?? 0;
-  const groundConstraint = bot.options.ground_constraint ?? true;
+  // Reset legs to the captured init servos BEFORE solving. This anchors each
+  // frame's IK to the same starting joint configuration so 4+ DOF redundant
+  // legs converge consistently. Same pattern as transform_body_servo's
+  // kf0-reset before each microstep.
   const prevDisabled = bot._servo_anim_disabled;
   bot._servo_anim_disabled = true;
+  for (let i = 0; i < totalLegs; i++) {
+    bot.legs[i].set_servo_values(bot._body_tracking_init_servos[i]);
+  }
+
+  const stallThreshold = bot.options.servo_stall_threshold ?? 0;
+  const groundConstraint = bot.options.ground_constraint ?? true;
   const result = PhysicsSolver.solveAll(bot, targets, stallThreshold, groundConstraint);
   for (let i = 0; i < totalLegs; i++) {
     bot.legs[i].set_servo_values(result.servoTargets[i]);
@@ -118,13 +137,22 @@ export function stepBodyTracking(bot: any, now: number): boolean {
 }
 
 /** End a body-tracking session. Clears body_target + tracking state and emits one
- *  status entry capturing the final pose for undo/history. */
+ *  status entry capturing the final pose for undo/history. Also forces a final
+ *  servo reset to the captured init values — guarantees the leg shape returns
+ *  to its pre-tracking state on release (4+ DOF redundant legs may otherwise
+ *  end the session at a near-init but not identical joint configuration). */
 export function endBodyTracking(bot: any) {
+  if (bot._body_tracking_init_servos) {
+    for (let i = 0; i < bot.legs.length; i++) {
+      bot.legs[i].set_servo_values(bot._body_tracking_init_servos[i]);
+    }
+  }
   bot.body_tracking_active = false;
   bot._body_tracking_release_pending = false;
   bot.body_target = null;
   bot._body_tracking_locked_world_tips = null;
   bot._body_tracking_local_tips = null;
+  bot._body_tracking_init_servos = null;
   bot.after_status_change();
 }
 

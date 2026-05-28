@@ -78,6 +78,10 @@ export class Hexapod {
   _body_tracking_last_time: number = 0;
   _body_tracking_locked_world_tips: any[] | null = null;
   _body_tracking_local_tips: any[] | null = null;
+  // Captured at session start; legs are reset to these values before each
+  // per-frame IK solve so 4+ DOF redundant joints don't drift. Restored on
+  // session end to guarantee leg shape returns to its pre-tracking state.
+  _body_tracking_init_servos: number[][] | null = null;
   _suppress_status_entries: boolean = false;
 
   constructor(scene: any, options: HexapodOptions) {
