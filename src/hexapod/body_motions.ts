@@ -157,8 +157,19 @@ export function endBodyTracking(bot: any) {
 }
 
 /** Centralized body transform with optional tip lock.
- *  When lockTips is true (default unless options._tip_lock is false),
- *  subdivides into up to 3 IK sub-steps and rolls back if drift > 8mm. */
+ *
+ *  When lockTips is true (default unless options._tip_lock is false), the body
+ *  pose is shifted to the target in one move and each leg's joint configuration
+ *  is solved fresh from `_home_servos` to keep its tip at the original world
+ *  position. This is one PosCalculator pass per leg — about 4× faster than the
+ *  legacy 3-substep + separate recalibrate approach, and naturally produces
+ *  the home-anchored leg shape so 4+ DOF redundant DOFs don't drift across
+ *  repeated calls.
+ *
+ *  If any leg's solve fails (tip unreachable in the home-shaped chain), the
+ *  body pose and servos are rolled back and we return false. The previous
+ *  drift > 8mm heuristic is subsumed by `result.success` from each per-leg
+ *  PosCalculator. */
 export function transformBody(bot: any, opts: TransformBodyOpts): boolean {
   const lock = opts.lockTips ?? (bot.options._tip_lock !== false);
   if (!lock) {
@@ -173,73 +184,62 @@ export function transformBody(bot: any, opts: TransformBodyOpts): boolean {
     return true;
   }
 
+  const total_legs = bot.legs.length;
   const current_tips = bot.get_tip_pos();
+  const prevPX = bot.body_mesh.position.x;
+  const prevPY = bot.body_mesh.position.y;
+  const prevPZ = bot.body_mesh.position.z;
+  const prevRX = bot.body_mesh.rotation.x;
+  const prevRY = bot.body_mesh.rotation.y;
+  const prevRZ = bot.body_mesh.rotation.z;
+  const savedServos: number[][] = bot.legs.map((leg: any) => {
+    const a: number[] = [];
+    for (let j = 0; j < leg.joint_count; j++) a.push(leg.limbs[j].servo_value);
+    return a;
+  });
 
-  // Subdivide into at most 3 steps for smooth IK.
-  // body_mesh moves immediately here so per-leg keyframe animations
-  // in set_tip_pos() would start from a stale pre-move rendered state
-  // while body_mesh is already at the target — tip lock desync.
-  // Gait-based body movement uses the multi-keyframe path in
-  // GaitController.move_body() instead.
   const prevDisabled = bot._servo_anim_disabled;
   bot._servo_anim_disabled = true;
 
-  const steps = 3;
-  const total_legs = bot.legs.length;
-  for (let s = 0; s < steps; s++) {
-    const prevRZ = bot.body_mesh.rotation.z;
-    const prevRX = bot.body_mesh.rotation.x;
-    const prevRY = bot.body_mesh.rotation.y;
-    const prevPX = bot.body_mesh.position.x;
-    const prevPY = bot.body_mesh.position.y;
-    const prevPZ = bot.body_mesh.position.z;
+  if (opts.dx != null) bot.body_mesh.position.x += opts.dx;
+  if (opts.dy != null) bot.body_mesh.position.y += opts.dy;
+  if (opts.dz != null) bot.body_mesh.position.z += opts.dz;
+  if (opts.rx != null) bot.body_mesh.rotation.x += opts.rx;
+  if (opts.ry != null) bot.body_mesh.rotation.y += opts.ry;
+  if (opts.rz != null) bot.body_mesh.rotation.z += opts.rz;
+  bot.body_mesh.updateMatrixWorld();
+  bot.mesh.updateMatrixWorld();
 
-    if (opts.dx != null) bot.body_mesh.position.x += opts.dx / steps;
-    if (opts.dy != null) bot.body_mesh.position.y += opts.dy / steps;
-    if (opts.dz != null) bot.body_mesh.position.z += opts.dz / steps;
-    if (opts.rx != null) bot.body_mesh.rotation.x += opts.rx / steps;
-    if (opts.ry != null) bot.body_mesh.rotation.y += opts.ry / steps;
-    if (opts.rz != null) bot.body_mesh.rotation.z += opts.rz / steps;
+  // One home-anchored IK pass per leg. solve_from_home internally resets the
+  // joints to _home_servos, solves with REG pulling toward home, and restores
+  // pre-solve state — we apply the result ourselves.
+  const newServos: (number[] | null)[] = bot.legs.map(
+    (leg: any, i: number) => leg.solve_from_home(current_tips[i]),
+  );
+
+  if (newServos.some((v) => v === null)) {
+    // Rollback: tip unreachable from home shape after the move.
+    bot.body_mesh.position.x = prevPX;
+    bot.body_mesh.position.y = prevPY;
+    bot.body_mesh.position.z = prevPZ;
+    bot.body_mesh.rotation.x = prevRX;
+    bot.body_mesh.rotation.y = prevRY;
+    bot.body_mesh.rotation.z = prevRZ;
     bot.body_mesh.updateMatrixWorld();
-
     for (let i = 0; i < total_legs; i++) {
-      bot.legs[i].set_tip_pos(current_tips[i]);
+      bot.legs[i].set_servo_values(savedServos[i]);
     }
+    bot._servo_anim_disabled = prevDisabled;
+    bot.after_status_change();
+    return false;
+  }
 
-    // Check drift
-    const newTips = bot.get_tip_pos();
-    let maxDrift = 0;
-    for (let i = 0; i < total_legs; i++) {
-      const d = current_tips[i].distanceTo(newTips[i]);
-      if (d > maxDrift) maxDrift = d;
-    }
-    if (maxDrift > 8) {
-      bot.body_mesh.rotation.z = prevRZ;
-      bot.body_mesh.rotation.x = prevRX;
-      bot.body_mesh.rotation.y = prevRY;
-      bot.body_mesh.position.x = prevPX;
-      bot.body_mesh.position.y = prevPY;
-      bot.body_mesh.position.z = prevPZ;
-      bot.body_mesh.updateMatrixWorld();
-      for (let i = 0; i < total_legs; i++) {
-        bot.legs[i].set_tip_pos(current_tips[i]);
-      }
-      // Re-anchor leg shapes to home (also calls after_status_change).
-      // Even the rollback ran extra IK that can drift redundant joints.
-      recalibrateLegsToHome(bot);
-      bot._servo_anim_disabled = prevDisabled;
-      return false;
-    }
+  for (let i = 0; i < total_legs; i++) {
+    bot.legs[i].set_servo_values(newServos[i]!);
   }
   bot.sync_guide_circles();
-  // Re-anchor leg shapes to home so 4+ DOF redundant joints don't drift
-  // across repeated transformBody calls (R/F keys, AttributesPanel sliders,
-  // and any other discrete body adjustments). The locked-IK substeps above
-  // seed from current servos and can land at different local minima each
-  // call. solve_from_home in recalibrateLegsToHome re-anchors each leg to
-  // its _home_servos at the current tip position.
-  recalibrateLegsToHome(bot);
   bot._servo_anim_disabled = prevDisabled;
+  bot.after_status_change();
   return true;
 }
 
@@ -443,13 +443,18 @@ export function putdownTips(bot: any, idxs?: number[]) {
     if (!bot.legs[i]) continue;
     const tip_pos = bot.legs[i].get_tip_pos();
     tip_pos.y = 0;
-    bot.legs[i].set_tip_pos(tip_pos);
+    // One home-anchored IK pass — same speed/shape contract as transformBody.
+    // Falls back to set_tip_pos if _home_servos isn't initialized yet (early
+    // draw() path).
+    const homeValues = bot.legs[i].solve_from_home(tip_pos);
+    if (homeValues) {
+      bot.legs[i].set_servo_values(homeValues);
+    } else {
+      bot.legs[i].set_tip_pos(tip_pos);
+    }
   }
   bot.sync_guide_circles();
-  // Same anchoring contract as transformBody — set_tip_pos's IK can drift
-  // redundant DOFs. recalibrateLegsToHome calls after_status_change so we
-  // don't fire it twice.
-  recalibrateLegsToHome(bot);
+  bot.after_status_change();
 }
 
 /** Persist body pose + body-local tip positions so Adjust changes survive refresh. */
