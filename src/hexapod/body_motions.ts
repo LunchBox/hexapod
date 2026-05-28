@@ -377,11 +377,18 @@ export function moveBody(bot: any, direction: string, distance: number) {
       transformBody(bot, { dy: distance, lockTips: false });
       putdownTips(bot);
     }
-    return;
+  } else {
+    const opts: any = {};
+    opts['d' + direction] = distance;
+    transformBody(bot, opts);
   }
-  const opts: any = {};
-  opts['d' + direction] = distance;
-  transformBody(bot, opts);
+  // Restore each leg's natural home-biased shape. transformBody's IK seeds
+  // from the current servo values, so for 4+ DOF redundant legs the
+  // solution drifts from the natural standing shape across repeated calls
+  // (each R press accumulates deformation). Solving from _home_servos snaps
+  // the leg back to the canonical shape at the current tip position — same
+  // pattern the sliders used before they moved to the body_target path.
+  recalibrateLegsToHome(bot);
 }
 
 export function rotateBody(bot: any, direction: string, radius: number) {
