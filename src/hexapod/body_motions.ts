@@ -71,10 +71,20 @@ export function stepBodyTracking(bot: any, now: number): boolean {
   const bm = bot.body_mesh;
   const t = bot.body_target;
 
+  // Shortest-path angle delta: Three.js Euler can flip sign at ±π, so a
+  // direct subtract returns the "long way around" near the boundary.
+  // Normalize each rotation delta into (-π, π] before comparing.
+  const angDiff = (a: number, b: number) => {
+    let d = a - b;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+  };
+
   // Arrived check — if body pose is already at target within epsilon, nothing to do.
   if (Math.abs(t.px - bm.position.x) < 0.001 && Math.abs(t.py - bm.position.y) < 0.001
-      && Math.abs(t.pz - bm.position.z) < 0.001 && Math.abs(t.rx - bm.rotation.x) < 0.001
-      && Math.abs(t.ry - bm.rotation.y) < 0.001 && Math.abs(t.rz - bm.rotation.z) < 0.001) {
+      && Math.abs(t.pz - bm.position.z) < 0.001 && Math.abs(angDiff(t.rx, bm.rotation.x)) < 0.001
+      && Math.abs(angDiff(t.ry, bm.rotation.y)) < 0.001 && Math.abs(angDiff(t.rz, bm.rotation.z)) < 0.001) {
     return false;
   }
 
@@ -113,6 +123,24 @@ export function stepBodyTracking(bot: any, now: number): boolean {
   const stallThreshold = bot.options.servo_stall_threshold ?? 0;
   const groundConstraint = bot.options.ground_constraint ?? true;
   const result = PhysicsSolver.solveAll(bot, targets, stallThreshold, groundConstraint);
+
+  // If IK couldn't reach the target (unreachable pose), roll the body back
+  // and don't apply servos. Otherwise PhysicsSolver returns best-effort
+  // values and the body keeps sliding into an impossible pose with legs
+  // visibly stretching. Freezing here gives clear "at the limit" feedback.
+  if (!result.success) {
+    bm.position.set(startPx, startPy, startPz);
+    bm.rotation.set(startRx, startRy, startRz);
+    bm.updateMatrixWorld();
+    bot.mesh.updateMatrixWorld();
+    // We already wrote init_servos to legs above as the IK reset anchor —
+    // restore last-applied so the legs don't snap to init on a failed frame.
+    for (let i = 0; i < totalLegs; i++) {
+      bot.legs[i].set_servo_values(lastApplied[i]);
+    }
+    bot._servo_anim_disabled = prevDisabled;
+    return false;
+  }
 
   // Servo-constraint pacing: cap the largest per-frame servo delta to
   // `servo_speed × dt / 1000`. Interpolate body+servos by `ratio` if we're

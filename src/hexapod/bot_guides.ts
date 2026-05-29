@@ -23,15 +23,32 @@ export class BotGuides {
   labels: any[] = [];
 
   /** Remove world-space circles + labels from scene and clear all guide state.
-   *  Called at the top of apply_attributes before the bot is rebuilt. */
+   *  Called at the top of apply_attributes before the bot is rebuilt.
+   *  Disposes Three.js geometry / material / texture to release GPU memory. */
   dispose(scene: any) {
-    for (const c of this.circles) scene.remove(c);
-    for (const l of this.labels) scene.remove(l);
+    const disposeMesh = (m: any) => {
+      if (!m) return;
+      if (m.geometry && typeof m.geometry.dispose === 'function') m.geometry.dispose();
+      if (m.material) {
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        for (const mat of mats) {
+          for (const k in mat) {
+            const v = (mat as any)[k];
+            if (v && v.isTexture && typeof v.dispose === 'function') v.dispose();
+          }
+          if (typeof mat.dispose === 'function') mat.dispose();
+        }
+      }
+    };
+    for (const c of this.circles) { scene.remove(c); disposeMesh(c); }
+    for (const l of this.labels)  { scene.remove(l); disposeMesh(l); }
     this.circles = [];
     this.labels = [];
     this.pivot = null;
     this.pos = null;
     this.localPositions = [];
+    // guideline / left_gl / right_gl are mesh children — disposed by the
+    // disposeObject3D traversal in Hexapod.apply_attributes.
     this.guideline = null;
     this.left_gl = null;
     this.right_gl = null;

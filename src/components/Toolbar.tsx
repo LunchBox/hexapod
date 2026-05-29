@@ -12,8 +12,16 @@ export default function Toolbar() {
 
   // Keyboard shortcuts
   useEffect(() => {
+    const isEditable = (el: any) => {
+      if (!el) return false;
+      const tag = (el.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
     const handler = (e: KeyboardEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
+      // Don't hijack Ctrl+Z / Ctrl+S inside an input — the user expects
+      // native text undo / browser save behavior in form fields.
+      if (isEditable(e.target)) return;
       const bot = botRef.current;
       if (!bot) return;
       if (e.key === 'z' || e.key === 'Z') {
@@ -23,8 +31,10 @@ export default function Toolbar() {
         e.preventDefault();
         if (performRedo(bot, bumpBotVersion)) refresh();
       } else if (e.key === 's' || e.key === 'S') {
+        // Always preventDefault on Ctrl+S so the browser "Save Page As"
+        // dialog never appears. Only run save when autoSave is off.
+        e.preventDefault();
         if (!history.autoSave) {
-          e.preventDefault();
           performSave(bot, bumpBotVersion);
           refresh();
         }

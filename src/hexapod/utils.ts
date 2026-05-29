@@ -14,6 +14,32 @@ export function apply_xyz(obj_a, obj_b) {
   obj_a.z = obj_b.z;
 }
 
+/** Walk a Three.js Object3D tree and dispose every geometry, material,
+ *  and texture. Three.js doesn't auto-dispose on scene.remove(); without
+ *  this, every apply_attributes rebuild leaks the previous bot's GPU
+ *  resources. Safe to call on null. */
+export function disposeObject3D(obj: any) {
+  if (!obj) return;
+  obj.traverse((child: any) => {
+    if (child.geometry && typeof child.geometry.dispose === 'function') {
+      child.geometry.dispose();
+    }
+    if (child.material) {
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      for (const mat of mats) {
+        // Dispose textures bound to the material before disposing the material itself.
+        for (const key in mat) {
+          const value = (mat as any)[key];
+          if (value && value.isTexture && typeof value.dispose === 'function') {
+            value.dispose();
+          }
+        }
+        if (typeof mat.dispose === 'function') mat.dispose();
+      }
+    }
+  });
+}
+
 export function clearSelection() {
   if (window.getSelection) {
     window.getSelection().removeAllRanges();

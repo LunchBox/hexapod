@@ -262,9 +262,18 @@ export default function ControlPanel() {
       }
     };
 
+    const isEditable = (el: any) => {
+      if (!el) return false;
+      const tag = (el.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const bot = botRef.current;
       if (!bot) return;
+      // Don't steal WASD/RF from text inputs. ServoPanel, AttributesPanel,
+      // and other number inputs need these letters for typing.
+      if (isEditable(e.target)) return;
 
       if (e.ctrlKey || e.metaKey) {
         if (gc()) gc().stop();
@@ -307,14 +316,29 @@ export default function ControlPanel() {
       }
     };
 
+    // If the window loses focus (Alt-Tab, devtools, modal alert) we never
+    // see the keyup — the bot would keep walking forever. Clear all held
+    // keys on blur / visibilitychange.
+    const clearKeys = () => {
+      if (pressedKeys.current.size > 0) {
+        pressedKeys.current.clear();
+        updateGaitDirections();
+      }
+    };
+    const visHandler = () => { if (document.hidden) clearKeys(); };
+
     document.body.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', clearKeys);
+    document.addEventListener('visibilitychange', visHandler);
 
     // Gait step scheduling and servo-display refresh are now driven by the
     // rAF loop in SceneCanvas — no setInterval needed here.
     return () => {
       document.body.removeEventListener('keydown', handleKeyDown);
       document.body.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', clearKeys);
+      document.removeEventListener('visibilitychange', visHandler);
     };
   }, [botRef, gc]);
 

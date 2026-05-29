@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import appState from './appState.js';
 import { LIMB_NAMES, LIMB_DEFAULTS } from './defaults.js';
-import { getWorldPosition, apply_xyz } from './utils.js';
+import { getWorldPosition, apply_xyz, disposeObject3D } from './utils.js';
 import { set_bot_options } from './bot_options.js';
 import { CommandSocket, formatServoValues, buildCmd } from './bot_commands.js';
 import { drawBody, createHeadIndicator } from './bot_geometry.js';
@@ -134,9 +134,11 @@ export class Hexapod {
       this.gait_controller.stop();
     }
 
-    const isInitialBuild = !this.mesh;
-
     if (this.mesh) {
+      // Dispose all GPU resources held by the old mesh tree before drop.
+      // Three.js scene.remove() unparents but doesn't free geometry /
+      // material / texture — repeated apply_attributes leaks the lot.
+      disposeObject3D(this.mesh);
       this.scene.remove(this.mesh);
     }
     // Clean up guide circles (world-space children of scene)
@@ -159,14 +161,19 @@ export class Hexapod {
     this.sync_guide_circles();
 
     // Restore saved body pose on top of init_angles baseline.
-    // Body position/rotation always applies; tip positions only on initial build
-    // (subsequent apply_attributes() calls come from geometry edits where old tips are stale).
+    // Body position/rotation always applies; tip positions whenever the
+    // recorded count matches the current legs[]. The previous
+    // isInitialBuild gate dropped tip pose on physics_mode / servo_speed
+    // toggles (non-geometry rebuilds), so body translate persisted but
+    // legs returned to default. apply_attributes already invalidates
+    // _body_home when leg_count changes, so the length check is enough
+    // to guard against topology mismatch.
     if (this.options._body_home) {
       const h = this.options._body_home;
       this.body_mesh.position.set(h.px, h.py, h.pz);
       this.body_mesh.rotation.set(h.rx, h.ry, h.rz);
       this.body_mesh.updateMatrixWorld();
-      if (isInitialBuild && h.tips && h.tips.length === this.legs.length) {
+      if (h.tips && h.tips.length === this.legs.length) {
         for (let i = 0; i < this.legs.length; i++) {
           const t = h.tips[i];
           this.legs[i].set_tip_pos(this.body_mesh.localToWorld(new THREE.Vector3(t.x, t.y, t.z)));

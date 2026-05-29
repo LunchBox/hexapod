@@ -2,6 +2,7 @@ import {
   HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS, LIMB_NAMES, LIMB_DEFAULTS,
 } from './defaults.js';
 import { get_obj_from_local_storage, set_obj_to_local_storage } from './utils.js';
+import { history } from './history.js';
 
 export function get_bot_options() {
   let options = get_obj_from_local_storage(HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS);
@@ -51,6 +52,11 @@ export function get_bot_options() {
 
 export function set_bot_options(hexapod_options: any) {
   set_obj_to_local_storage(HEXAPOD_OPTIONS_KEY, hexapod_options);
+  // Keep history._lastSaved in sync. Components call this directly on
+  // every slider drag etc.; without marking, isDirty() reports stale,
+  // the "unsaved" badge stays visible, and beforeunload warns even
+  // though localStorage already has the latest options.
+  history.markSaved(hexapod_options);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('bot-options-saved', { detail: Date.now() }));
   }
