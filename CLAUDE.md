@@ -29,6 +29,8 @@ npx vitest run   # Run test suite once
 
 Test suite: 91 tests across 7 files in `src/hexapod/__tests__/` (forward_kinematics, gait_guards, history, physics_ground_stall, pos_calculator, servo_constraint, servo_utils).
 
+**For a deeper runtime / motion / IK map**, see `docs/architecture.md` — it traces the single rAF loop, the three motion entry paths (walking gait, body_target chase, discrete body ops), the animator paths A/B + per-leg `_output`, and where state-capture / persistence sit. The sections below are the working-day reference; `architecture.md` is the explanatory one.
+
 ## Code review status
 
 A comprehensive code review was conducted on 2026-05-02 (`docs/code-review-2026-05-02.md`). Of the 4 bugs identified:
@@ -58,8 +60,8 @@ src/
     HexapodContext.tsx           # React context: botRef, sceneRef, servo displays, botVersion, status entries
   components/
     SceneCanvas.tsx              # Mounts Three.js scene, builds Hexapod on mount
-    SceneControls.tsx            # 3 joysticks (Move/Body/Rot), XYZ/RxRyRz sliders, persists move_mode
-    ControlPanel.tsx             # Container: composes GaitCard/StepCard/PhysicsCard/ActionsCard, keyboard, send/sync
+    SceneControls.tsx            # 3 joysticks (Move/Body/Rot), XYZ/RxRyRz sliders. Lifted ABOVE the tabs in App.tsx — always visible, usable across every tab.
+    ControlPanel.tsx             # GaitCard/StepCard/PhysicsCard/ActionsCard, WASD keyboard, send/sync. Inside Tabs with `keepMounted` so document.body keyboard listeners survive tab switches.
     GaitCard.tsx                 # Gait selection (split from ControlPanel)
     StepCard.tsx                 # Step size controls (split from ControlPanel)
     PhysicsCard.tsx              # Physics mode + servo_speed (split from ControlPanel)
@@ -70,7 +72,7 @@ src/
     LegEditor.tsx                # 2D canvas joint editor with multi-leg editing
     LegAttributesPanel.tsx       # Per-leg attributes: DOF, leg count, segment length/radius/angle sliders
     StatusBar.tsx                # Status bar: gait, mode, physics, leg count × DOF
-    StatusPanel.tsx              # Status history list with play/apply (reads from HexapodContext)
+    StatusPanel.tsx              # Recording + playback UI (record/stop/play/pause/step/save/load/clear). Subscribes to `recorder` external store via useSyncExternalStore — NOT context.
     CommandDisplay.tsx           # Current + last servo command strings
     TimeChart.tsx                # Command time interval canvas chart (imperative canvas drawing)
     Toolbar.tsx                  # Undo/redo/save toolbar with keyboard shortcuts (Ctrl+Z/Y/S)
@@ -120,7 +122,7 @@ stylesheets/
 **React integration pattern:**
 - `appState.ts` is a mutable singleton holding `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`. It bridges the old global-based core logic with React.
 - `SceneCanvas` calls `initScene(container)` then `build_bot()` in a useEffect, storing results in both `appState` and React context (`botRef`).
-- UI components read `appState.current_bot` (or `botRef.current` via `useHexapod()`) and write back via helpers like `set_bot_options()`. Status history and command/chart displays are now driven through HexapodContext callbacks (`onStatusEntry`, `onServoUpdate`, `onTimeInterval`) — the legacy `#servo_values` / `#status_history` / `#chart` DOM-mutation paths have been removed.
+- UI components read `appState.current_bot` (or `botRef.current` via `useHexapod()`) and write back via helpers like `set_bot_options()`. Command + chart displays use HexapodContext callbacks (`onServoUpdate`, `onTimeInterval`). **Status recording lives in a separate external store** — `src/hexapod/recorder.ts` is a `useSyncExternalStore`-backed singleton that the bot pushes into via `onStatusEntry`. Recording is opt-in (explicit Record / Stop button in the Status tab), playback uses recorded `performance.now()` gaps for inter-frame timing. Keeping it out of React context means walking gait doesn't churn the tree on every step.
 - `ServoPanel` is React JSX, but its 100ms poll writes slider/end-position values directly to DOM `<input>` elements via refs stashed on `limb.range_control` / `limb.end_x_control` etc. This is an intentional perf escape hatch — re-rendering 18+ sliders at gait rate (~30fps) is too expensive. The JSX itself is memoized.
 - `AttributesPanel` is fully declarative React + shadcn/ui (no imperative DOM building).
 - `TimeChart` and `LegEditor` use imperative `<canvas>` drawing inside useEffect — this is expected (canvas APIs are inherently imperative).
@@ -130,7 +132,7 @@ stylesheets/
 2. `initScene(container)` → Three.js scene, camera, renderer, animation loop
 3. `build_bot()` → `new Hexapod(scene, options)` draws body + N legs (3–9)
 4. `laydown()` + `putdown_tips()` places feet on ground plane (y=0)
-5. Each movement step calls `after_status_change()` which fires HexapodContext callbacks (`onServoUpdate`, `onStatusEntry`, `onTimeInterval`) to refresh React UI, optionally sends a servo command via WebSocket, and records status history
+5. Each movement step calls `after_status_change()` which fires `onServoUpdate` (command/chart display), `onStatusEntry` (recorder push if recording is on), `onTimeInterval` (time chart). It also optionally sends a servo command via WebSocket and updates `on_servo_values` so the next step can compute its delta against it.
 6. Servo command format: `#0 P1500 #1 P1500 ... T500` (servo index, pulse width, time interval)
 
 ## Three.js API note
@@ -246,7 +248,7 @@ Flow:
 - `bot.update_servo_animations(now)` (rAF): delegates to `bot.animator.update(now, bot)` which interpolates `mesh.position/rotation.y`, then walks legs and calls `leg.update_animation()`
 - Each leg advances independently (own delta-based duration) — **tip drift is expected and physically real**
 
-**Path B — Body control (`body_mesh` keyframes):**
+**Path B — Discrete body transforms (`body_mesh` keyframes):**
 
 Fields (on `bot.animator`):
 - `bodyKfs: {pos, rot}[]` — N+1 body_mesh poses
@@ -254,13 +256,11 @@ Fields (on `bot.animator`):
 - `onBodyAnimComplete: (() => void) | null` — one-shot callback fired when Path B finishes
 
 Flow:
-- `GaitInternal.move()` → `transform_body_servo()` → builds body_mesh keyframes + world targets → stores on bot
-- Leg servo keyframes are NOT pre-computed for this path
-- `update_servo_animations()` (rAF): interpolates `body_mesh.position/rotation` → runs `PhysicsSolver.solveAll()` at each frame with exact body_mesh pose → applies via `set_servo_values()` directly
-- **Tip locking is exact** (per-frame IK eliminates interpolation error). Body slides at `servo_speed` pace.
-- `_servo_anim_disabled` toggled during solves to prevent per-leg animations.
+- `transformBodyServo()` (body_motions.ts) → builds body_mesh keyframes + per-leg servo keyframes → loads servo keyframes onto each leg's `_output` AND calls `bot.animator.applyBodyKeyframes(...)`.
+- `update_servo_animations()` (rAF): `bot.animator.update` interpolates `body_mesh.position/rotation`. Per-leg `_output.update` interpolates the pre-computed servo keyframes independently. **No per-frame IK runs in this path** — all IK was done upfront when keyframes were built.
+- Body slides at `servo_speed` pace; legs reach their target rotations on the same global timing.
 
-**Path B key difference:** Leg servos snap per frame rather than animating through pre-computed keyframes. This trades servo animation smoothness for perfect tip locking — critical for body control where tips must stay planted while the body shifts.
+**Path B is used for discrete body operations** (squat, auto-level, saved-pose restore) in `servo_constraint` mode. **Live-input body control** (joystick / sliders) uses a different path — `step_body_tracking` (below) — which DOES run per-frame IK and is not part of the animator.
 
 **Computation** in `GaitController.move_body()` servo constraint path:
 1. Build N+1 mesh keyframes
@@ -275,14 +275,19 @@ Flow:
 
 There is one rAF loop, set up in `SceneCanvas` via `appState.onAnimate`. Each frame, in order:
 
-1. `bot.update_servo_animations(now)` — advances `bot.animator` (Path A mesh, Path B body_mesh) and per-leg `_output` interpolation.
-2. **Body-target tracking**: if `bot.body_target` is set and the animator is idle, call `bot.step_body_tracking(now)`. This moves `body_mesh` toward `body_target` by at most `(servo_speed × dt)`-equivalent body delta, runs `PhysicsSolver.solveAll` once with on_floor tips locked in world / floaters following body, and applies servos directly. On `_body_tracking_release_pending && arrived`, calls `bot.end_body_tracking()` (emits one status snapshot).
+1. `bot.update_servo_animations(now)` — advances `bot.animator` (Path A mesh + Path B body_mesh) and per-leg `_output` interpolation.
+2. **Body-target tracking**: if `bot.body_target` is set and the animator is idle, call `bot.step_body_tracking(now)`. This snaps `body_mesh` to the target, runs `PhysicsSolver.solveAll` once with locked tips in world / floaters in body-local. Then it caps the per-frame servo delta at `servo_speed × dt / 1000`: if `maxDelta > allowed`, body pose AND servos are linearly interpolated by `ratio = allowed / maxDelta` — that's how the servo PWM speed limit is actually enforced on the live-input path. Bails on `!result.success` (rolls back body + restores `lastApplied` servos). On `_body_tracking_release_pending && arrived`, calls `bot.end_body_tracking()` (emits one status snapshot).
 3. **Walking step scheduler**: if `gc.expected_action` is set and `bot.is_animating()` is false, call `gc.act(...)`. In `none` mode, enforce 30ms floor via `gc.last_act_time`. Real servos execute one command at a time — `is_animating()` is the natural condition for "previous step done, start next".
 4. **Throttled UI tick (~10Hz)**: call `updateServoDisplay()` for the CommandDisplay readout.
 
 Body joysticks (Move Body / Rotate Body) and the body XYZ/RxRyRz sliders write `bot.body_target` on each mousemove/tick (cheap object assign, no IK). Status entry emission is gated on `!bot._suppress_status_entries`, which body_motions sets during tracking to avoid spamming React state at 60Hz. On release, `body_target` is set to the snapshotted home pose; the rAF chases back naturally.
 
 The legacy `setInterval(30ms)` + `gait_controller.fire_action()` + `GaitInternal` + `internal_move` action are all removed.
+
+**Path B vs body_target chase — both live in `servo_constraint` mode but serve different inputs:**
+- Path B (`bot.animator` body_mesh keyframes): discrete pose targets (squat, auto-level, body_home restore). One animation goes from pose A to pose B at servo_speed. Servo keyframes are pre-computed.
+- body_target chase (`step_body_tracking`): continuous live input (joystick, sliders). Each rAF tick re-solves IK at the current target, applies a per-frame servo-delta-limited interpolation. No pre-computed keyframes.
+- They are mutually exclusive: chase only runs when `animator.isAnimating()` is false (rAF order #2 above).
 
 ### PhysicsSolver — multi-leg constraint solver
 

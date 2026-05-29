@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useMemo } from 'react';
+import * as THREE from 'three';
 import { useHexapod } from '../context/HexapodContext';
 
 import { SERVO_MIN_VALUE, SERVO_MAX_VALUE } from '../hexapod/defaults';
@@ -9,6 +10,52 @@ export default function ServoPanel() {
   const { botRef, botVersion } = useHexapod();
   const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // All hooks MUST run unconditionally before any early-return — React
+  // tracks hook order across renders and a conditional return between
+  // hooks crashes with "rendered more hooks than during the previous
+  // render" the moment botRef.current flips from null to a value.
+  const updateLeg = useCallback((leg: any, limbIdx: number, value: number) => {
+    const bot = botRef.current;
+    if (!bot) return;
+    leg.set_servo_value(limbIdx, value);
+    bot.after_status_change();
+  }, [botRef]);
+
+  const handleServoIdxChange = useCallback((leg: any, legIdx: number, limbIdx: number, value: string) => {
+    const bot = botRef.current;
+    if (!bot) return;
+    const l = leg.limbs[limbIdx];
+    const numVal = parseInt(value, 10);
+    l.servo_idx = numVal;
+    bot.options.leg_options[legIdx][l.type].servo_idx = numVal;
+    set_bot_options(bot.options);
+  }, [botRef]);
+
+  const handleRevertChange = useCallback((leg: any, legIdx: number, limbIdx: number, checked: boolean) => {
+    const bot = botRef.current;
+    if (!bot) return;
+    leg.limbs[limbIdx].revert = checked;
+    const rangeInput = leg.limbs[limbIdx].range_control;
+    if (rangeInput) leg.set_servo_value(limbIdx, rangeInput.value);
+
+    const l = leg.limbs[limbIdx];
+    bot.options.leg_options[legIdx][l.type].revert = checked;
+    set_bot_options(bot.options);
+  }, [botRef]);
+
+  const handleEndPosChange = useCallback((leg: any, lastSeg: any) => {
+    const bot = botRef.current;
+    if (!bot) return;
+    const newPos = new THREE.Vector3(
+      parseFloat(lastSeg.end_x_control.value),
+      parseFloat(lastSeg.end_y_control.value),
+      parseFloat(lastSeg.end_z_control.value),
+    );
+    const calculator = new PosCalculator(leg, newPos);
+    calculator.run();
+    bot.after_status_change();
+  }, [botRef]);
+
   // Self-update servo display values from bot (~10fps). Uses setTimeout
   // instead of rAF to avoid 60fps overhead when bot is idle.
   useEffect(() => {
@@ -18,7 +65,10 @@ export default function ServoPanel() {
     const poll = () => {
       if (!active) return;
       const b = botRef.current;
-      if (!b) { setTimeout(poll, INTERVAL_MS); return; }
+      if (!b) {
+        tickRef.current = window.setTimeout(poll, INTERVAL_MS);
+        return;
+      }
 
       b.mesh.updateMatrixWorld();
       for (let i = 0; i < b.legs.length; i++) {
@@ -31,7 +81,7 @@ export default function ServoPanel() {
           if (j === limbs.length - 2 && limb.end_x_control) {
             const nextLimb = limbs[j + 1];
             if (nextLimb) {
-              const v = new (window as any).THREE.Vector3();
+              const v = new THREE.Vector3();
               v.setFromMatrixPosition(nextLimb.matrixWorld);
               limb.end_x_control.value = v.x.toFixed(2);
               limb.end_y_control.value = v.y.toFixed(2);
@@ -46,47 +96,12 @@ export default function ServoPanel() {
     return () => { active = false; if (tickRef.current != null) clearTimeout(tickRef.current); };
   }, [botRef, botVersion]);
 
-  const bot = botRef.current;
-  if (!bot) return null;
-
-  const updateLeg = useCallback((leg: any, limbIdx: number, value: number) => {
-    leg.set_servo_value(limbIdx, value);
-    bot.after_status_change();
-  }, [bot]);
-
-  const handleServoIdxChange = useCallback((leg: any, legIdx: number, limbIdx: number, value: string) => {
-    const l = leg.limbs[limbIdx];
-    const numVal = parseInt(value, 10);
-    l.servo_idx = numVal;
-    bot.options.leg_options[legIdx][l.type].servo_idx = numVal;
-    set_bot_options(bot.options);
-  }, [bot]);
-
-  const handleRevertChange = useCallback((leg: any, legIdx: number, limbIdx: number, checked: boolean) => {
-    leg.limbs[limbIdx].revert = checked;
-    const rangeInput = leg.limbs[limbIdx].range_control;
-    if (rangeInput) leg.set_servo_value(limbIdx, rangeInput.value);
-
-    const l = leg.limbs[limbIdx];
-    bot.options.leg_options[legIdx][l.type].revert = checked;
-    set_bot_options(bot.options);
-  }, [bot]);
-
-  const handleEndPosChange = useCallback((leg: any, lastSeg: any) => {
-    const newPos = new (window as any).THREE.Vector3(
-      parseFloat(lastSeg.end_x_control.value),
-      parseFloat(lastSeg.end_y_control.value),
-      parseFloat(lastSeg.end_z_control.value),
-    );
-    const calculator = new PosCalculator(leg, newPos);
-    calculator.run();
-    bot.after_status_change();
-  }, [bot]);
-
   // Memoize JSX rows — bot structure only changes when botVersion bumps.
   // Without this, every 30ms status update triggers full re-render of
   // all servo inputs, competing with the gait cycle for CPU time.
   const rows = useMemo(() => {
+    const bot = botRef.current;
+    if (!bot) return null;
     const result: React.ReactNode[] = [];
     let servoBase = 0;
 
@@ -105,15 +120,13 @@ export default function ServoPanel() {
         limb.servo_idx = bot.options.leg_options[legIdx][limb.type].servo_idx;
 
         let endPos: any = { x: 0, y: 0, z: 0 };
-        try {
-          const nextLimb = limbs[jdx + 1];
-          if (nextLimb) {
-            bot.mesh.updateMatrixWorld();
-            const v = new (window as any).THREE.Vector3();
-            v.setFromMatrixPosition(nextLimb.matrixWorld);
-            endPos = v;
-          }
-        } catch { /* use zeros */ }
+        const nextLimb = limbs[jdx + 1];
+        if (nextLimb) {
+          bot.mesh.updateMatrixWorld();
+          const v = new THREE.Vector3();
+          v.setFromMatrixPosition(nextLimb.matrixWorld);
+          endPos = v;
+        }
 
         const revert = bot.options.leg_options[legIdx][limb.type].revert;
 
@@ -156,7 +169,13 @@ export default function ServoPanel() {
       servoBase += jointCount;
     }
     return result;
-  }, [bot, botVersion, handleServoIdxChange, handleEndPosChange, handleRevertChange, updateLeg]);
+  }, [botRef, botVersion, handleServoIdxChange, handleEndPosChange, handleRevertChange, updateLeg]);
+
+  // Show a stub until the bot exists. Hooks above already ran in stable
+  // order; this conditional is render-output only, not hook order.
+  if (!botRef.current || !rows) {
+    return <div className="text-xs text-muted-foreground p-2">Loading servo state…</div>;
+  }
 
   return (
     <div>
