@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All commits made by AI in this repo must use the correct model attribution:
 
 ```
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 
 Update this line if the underlying model changes.
@@ -122,7 +122,7 @@ stylesheets/
 **React integration pattern:**
 - `appState.ts` is a mutable singleton holding `{ scene, camera, renderer, controls, stats, keyboard, clock, current_bot, container }`. It bridges the old global-based core logic with React.
 - `SceneCanvas` calls `initScene(container)` then `build_bot()` in a useEffect, storing results in both `appState` and React context (`botRef`).
-- UI components read `appState.current_bot` (or `botRef.current` via `useHexapod()`) and write back via helpers like `set_bot_options()`. Command + chart displays use HexapodContext callbacks (`onServoUpdate`, `onTimeInterval`). **Status recording lives in a separate external store** — `src/hexapod/recorder.ts` is a `useSyncExternalStore`-backed singleton that the bot pushes into via `onStatusEntry`. Recording is opt-in (explicit Record / Stop button in the Status tab), playback uses recorded `performance.now()` gaps for inter-frame timing. Keeping it out of React context means walking gait doesn't churn the tree on every step.
+- UI components read `appState.current_bot` (or `botRef.current` via `useHexapod()`) and write back via helpers like `set_bot_options()`. Command + chart displays use HexapodContext callbacks (`onServoUpdate`, `onTimeInterval`). **Status recording lives in a separate external store** — `src/hexapod/recorder.ts` is a `useSyncExternalStore`-backed singleton that the bot pushes into via `onStatusEntry`. Recording is opt-in (explicit Record / Stop button in the Status tab) and **supported only in `none` physics mode** — servo_constraint capture + playback was removed (a recording samples only sparse gait endpoints, which can't be replayed without tip drift). `recorder.push` drops any frame captured outside `none`; `recorder.play` refuses to run while the bot is in servo_constraint; the Status tab disables Record / Play and shows a hint in that mode. Playback is snap-based: each frame is applied exactly via `apply_status` (a recorded pose is a valid IK solution → no tip drift), and the recorder only controls the dwell time between snaps — it does NOT interpolate between sparse frames (that slides the bot, since FK is non-linear). Pacing is selectable: `'recorded'` reproduces the original `performance.now()` segment gaps, `'current'` recomputes from `servo_speed × delta` (toggled in the Status tab). Body joystick / slider motion is captured via a throttled release inside `step_body_tracking`. Keeping it out of React context means walking gait doesn't churn the tree on every step.
 - `ServoPanel` is React JSX, but its 100ms poll writes slider/end-position values directly to DOM `<input>` elements via refs stashed on `limb.range_control` / `limb.end_x_control` etc. This is an intentional perf escape hatch — re-rendering 18+ sliders at gait rate (~30fps) is too expensive. The JSX itself is memoized.
 - `AttributesPanel` is fully declarative React + shadcn/ui (no imperative DOM building).
 - `TimeChart` and `LegEditor` use imperative `<canvas>` drawing inside useEffect — this is expected (canvas APIs are inherently imperative).

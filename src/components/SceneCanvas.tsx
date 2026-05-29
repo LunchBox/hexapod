@@ -26,7 +26,8 @@ export default function SceneCanvas() {
     const bot_options = get_bot_options();
     const bot = build_bot(bot_options);
     bot.onServoUpdate = updateServoDisplay;
-    bot.onStatusEntry = (status, formatted) => recorder.push(status, formatted);
+    bot.onStatusEntry = (status, formatted) =>
+      recorder.push(status, formatted, bot.options.physics_mode, bot.servo_speed);
     bot.onTimeInterval = pushTimeInterval;
     botRef.current = bot;
     appState.current_bot = bot;

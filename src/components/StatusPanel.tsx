@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Play, Pause, Square, SkipForward, SkipBack, Circle,
-  Trash2, Download, Upload, Repeat, X,
+  Trash2, Download, Upload, Repeat, X, Clock, Gauge,
 } from 'lucide-react';
 
 function downloadJSON(text: string, filename: string) {
@@ -19,9 +19,16 @@ function downloadJSON(text: string, filename: string) {
 }
 
 export default function StatusPanel() {
-  const { botRef } = useHexapod();
+  const { botRef, botVersion } = useHexapod();
   const snap = useSyncExternalStore(recorder.subscribe, recorder.getSnapshot, recorder.getSnapshot);
-  const { entries, recording, playing, playIdx, loop } = snap;
+  const { entries, recording, playing, playIdx, loop, play_speed_mode } = snap;
+
+  // Record + playback are supported only in `none` physics mode. Reading
+  // botRef here is non-reactive, so we key on botVersion (bumped by the
+  // physics-mode toggle) to re-evaluate after a mode change. servo_constraint
+  // recording/playback was removed — it could not be replayed without drift.
+  void botVersion;
+  const servoMode = botRef.current?.options?.physics_mode === 'servo_constraint';
 
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -34,15 +41,16 @@ export default function StatusPanel() {
   }, [playIdx, playing]);
 
   const handleRecord = useCallback(() => {
+    if (servoMode) return; // recording disabled outside `none` mode
     if (recording) recorder.stop_record();
     else recorder.start();
-  }, [recording]);
+  }, [recording, servoMode]);
 
   const handlePlay = useCallback(() => {
     const bot = botRef.current;
     if (!bot) return;
     if (playing) recorder.pause();
-    else recorder.play(bot);
+    else recorder.play(bot); // refuses in servo_constraint (backstop)
   }, [botRef, playing]);
 
   const handleStop = useCallback(() => recorder.stop_play(), []);
@@ -95,6 +103,13 @@ export default function StatusPanel() {
 
   const toggleLoop = useCallback(() => recorder.set_loop(!recorder.loop), []);
 
+  const toggleSpeedMode = useCallback(
+    () => recorder.set_play_speed_mode(
+      recorder.play_speed_mode === 'recorded' ? 'current' : 'recorded',
+    ),
+    [],
+  );
+
   // Format duration since first frame for entry display
   const t0 = entries[0]?.timestamp ?? 0;
 
@@ -106,7 +121,10 @@ export default function StatusPanel() {
           variant={recording ? 'destructive' : 'outline'}
           size="sm"
           onClick={handleRecord}
-          title={recording ? 'Stop recording' : 'Start recording status snapshots'}
+          disabled={servoMode}
+          title={servoMode
+            ? "Recording is available only in 'none' physics mode"
+            : recording ? 'Stop recording' : 'Start recording status snapshots'}
         >
           <Circle
             data-icon="inline-start"
@@ -118,8 +136,10 @@ export default function StatusPanel() {
         <div className="w-px h-5 bg-border mx-1" />
 
         <Button variant="outline" size="sm" onClick={handlePlay}
-          disabled={entries.length === 0}
-          title={playing ? 'Pause playback' : 'Play recorded sequence'}>
+          disabled={entries.length === 0 || servoMode}
+          title={servoMode
+            ? "Playback is available only in 'none' physics mode"
+            : playing ? 'Pause playback' : 'Play recorded sequence'}>
           {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
           {playing ? 'Pause' : 'Play'}
         </Button>
@@ -148,6 +168,21 @@ export default function StatusPanel() {
           onClick={toggleLoop}
           title="Loop playback">
           <Repeat data-icon="inline-start" />
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleSpeedMode}
+          title={
+            play_speed_mode === 'recorded'
+              ? 'Pacing: reproduce recorded timing (click for live servo_speed)'
+              : 'Pacing: current servo_speed (click for recorded timing)'
+          }>
+          {play_speed_mode === 'recorded'
+            ? <Clock data-icon="inline-start" />
+            : <Gauge data-icon="inline-start" />}
+          {play_speed_mode === 'recorded' ? 'Recorded' : 'Live'}
         </Button>
 
         <div className="w-px h-5 bg-border mx-1" />
@@ -179,6 +214,13 @@ export default function StatusPanel() {
           {playing && ` · @${playIdx + 1}`}
         </Badge>
       </div>
+
+      {servoMode && (
+        <div className="text-[11px] text-muted-foreground bg-muted/40 border border-border rounded px-2 py-1">
+          Record &amp; playback are available only in <span className="font-medium">none</span> physics
+          mode. Switch physics mode to <span className="font-medium">None</span> to use them.
+        </div>
+      )}
 
       {/* Entry list */}
       <div

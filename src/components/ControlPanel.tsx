@@ -95,8 +95,11 @@ export default function ControlPanel() {
         b._setLegOutputs(mode === 'servo_constraint' ? 'servo_constraint' : 'none');
       }
       b._servo_anim_disabled = mode !== 'servo_constraint';
+      // Let mode-aware UI (e.g. StatusPanel disabling record/play outside
+      // `none`) re-render immediately on the toggle.
+      bumpBotVersion();
     }
-  }, [botRef]);
+  }, [botRef, bumpBotVersion]);
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);
 

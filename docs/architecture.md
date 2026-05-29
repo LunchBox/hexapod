@@ -202,9 +202,30 @@ Two classes of guide visuals:
 - **`history`** — undo/redo stack of `options` JSON strings (config, not
   pose). Max 50 entries. Used by Toolbar undo/redo and bot rebuild flows.
 - **`recorder`** (`src/hexapod/recorder.ts`) — external store backed by
-  `useSyncExternalStore`. Stores status snapshots + capture timestamps.
-  Playback uses recorded timestamp gaps for inter-frame interval, falls
-  back to `servo_speed × delta` when timestamps are unavailable.
+  `useSyncExternalStore`. Stores status snapshots + capture timestamps +
+  the `physics_mode` / `servo_speed` in effect at capture. **Record + playback
+  are supported only in `none` physics mode** — servo_constraint capture +
+  playback was removed: a recording samples only sparse gait endpoints and
+  cannot be replayed without tip drift. `push` drops frames captured outside
+  `none`; `play` refuses while the bot is in servo_constraint; the Status tab
+  disables Record / Play (keyed on `botVersion`, bumped by the physics-mode
+  toggle) and shows a hint. Playback is **snap-based**: each frame is applied
+  exactly with `apply_status` (a recorded pose is a valid IK solution, so
+  locked tips sit where they belong → zero drift), and the recorder only
+  controls the dwell time between snaps. It deliberately does **not**
+  interpolate between frames:
+  a recording samples only the endpoints of each gait sub-step / a ~11Hz
+  body-tracking tick, and linearly blending mesh + body_mesh + servo values
+  between sparse endpoints does not preserve tip lock (the FK map is
+  non-linear), making the whole bot slide. Segment pacing is selectable via
+  `play_speed_mode`: `'recorded'` reproduces the original timing using the
+  per-segment timestamp gap (falling back to `servo_speed × delta` at the
+  loop seam / when timestamps are unusable); `'current'` recomputes every
+  segment from the bot's live `servo_speed`. Playback first quiesces all
+  other motion sources (body_target, gait, animator, per-leg `_output`) so
+  nothing fights the snaps. Body-tracking sessions (`step_body_tracking`)
+  release a throttled status entry (~11Hz) so joystick / slider body motion
+  is captured while recording, instead of being fully suppressed.
 
 ## 6. CLAUDE.md drift (caught by code re-read)
 

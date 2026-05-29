@@ -21,16 +21,22 @@ import { computeMaxDelta, computeServoSpeedHoldTime } from './servo_utils';
 // (loaded JSON without timestamps, or first entry of a new wrap-around).
 const MAX_PLAY_INTERVAL_MS = 5000;
 
+export type PlaySpeedMode = 'recorded' | 'current';
+
 export type RecorderEntry = {
   status: any;
   formatted: string;
   timestamp: number;
+  // Mode + servo_speed in effect when this frame was captured. Used for
+  // display and fidelity; snap-based playback (see play() / schedule_next)
+  // is mode-independent and doesn't branch on the current UI physics_mode.
+  physics_mode?: string;
+  servo_speed?: number;
 };
 
 type Listener = () => void;
 
 const MIN_PLAY_INTERVAL_MS = 30;
-const FALLBACK_PLAY_INTERVAL_MS = 500;
 
 class Recorder {
   entries: RecorderEntry[] = [];
@@ -38,6 +44,10 @@ class Recorder {
   playing: boolean = false;
   playIdx: number = 0;
   loop: boolean = true;
+  // Playback pacing:
+  //   'recorded' — reproduce the original timing (per-segment timestamp gap).
+  //   'current'  — recompute each segment from the bot's current servo_speed.
+  play_speed_mode: PlaySpeedMode = 'recorded';
 
   private listeners = new Set<Listener>();
   private playTimer: ReturnType<typeof setTimeout> | null = null;
@@ -52,12 +62,14 @@ class Recorder {
     playing: boolean;
     playIdx: number;
     loop: boolean;
+    play_speed_mode: PlaySpeedMode;
   } = {
     entries: [],
     recording: false,
     playing: false,
     playIdx: 0,
     loop: true,
+    play_speed_mode: 'recorded',
   };
 
   subscribe = (l: Listener): (() => void) => {
@@ -79,9 +91,14 @@ class Recorder {
     this.notify();
   }
 
-  push(status: any, formatted: string) {
+  push(status: any, formatted: string, physics_mode?: string, servo_speed?: number) {
     if (!this.recording) return;
-    this.entries.push({ status, formatted, timestamp: performance.now() });
+    // Recording is supported ONLY in `none` physics mode. servo_constraint
+    // capture + playback was removed: a recording samples only sparse gait
+    // endpoints, and there is no drift-free way to replay servo_constraint
+    // motion from them. Drop any frame captured outside `none`.
+    if (physics_mode && physics_mode !== 'none') return;
+    this.entries.push({ status, formatted, timestamp: performance.now(), physics_mode, servo_speed });
     this.notify();
   }
 
@@ -127,6 +144,10 @@ class Recorder {
   play(bot: any) {
     if (this.playing) return;
     if (this.entries.length === 0) return;
+    // Playback is supported ONLY in `none` physics mode (see push()). Refuse
+    // to play while the bot is in servo_constraint — the UI also disables the
+    // Play button there, this is the defensive backstop.
+    if (bot?.options?.physics_mode && bot.options.physics_mode !== 'none') return;
 
     // Quiesce all other motion sources before playback. Otherwise the rAF
     // loop's body_target chase, walking step scheduler, and in-flight
@@ -149,16 +170,34 @@ class Recorder {
     this.activeBot = bot;
     this.notify();
 
-    // Branch on physics_mode. In servo_constraint we drive each segment
-    // through the animator (Path A mesh + Path B body_mesh + per-leg
-    // AnimatedOutput keyframes) so the bot actually shows smooth motion
-    // limited by servo_speed. In `none` mode DirectOutput doesn't animate,
-    // so we fall back to snap-then-wait at recorded timestamp gaps.
-    if (bot.options?.physics_mode === 'servo_constraint') {
-      this.play_segment_animated(bot, this.playIdx);
-    } else {
-      this.schedule_next(bot);
-    }
+    // Snap-based playback. Each recorded frame is a valid IK solution (locked
+    // tips at exactly the right world positions), so applying it with
+    // apply_status() reproduces the pose with ZERO drift. We deliberately do
+    // NOT interpolate between frames: a recording samples only the endpoints
+    // of each gait sub-step / a ~11Hz body-tracking tick, and linearly
+    // blending mesh + body_mesh + servo values between two endpoints does not
+    // preserve tip lock (the FK map is non-linear), so the whole bot visibly
+    // slides. Snapping is mode-independent — apply_status works the same under
+    // `none` and `servo_constraint`. The only thing playback controls is the
+    // dwell time between snaps (see _segment_duration / play_speed_mode).
+    this.schedule_next(bot);
+  }
+
+  /** Recorded wall-clock gap for the forward segment fromIdx → toIdx, or null
+   *  if it can't be used (loop wrap, missing/absurd timestamps). The gap
+   *  between consecutive entries ≈ the original step's duration: entry N is
+   *  stamped when step N's keyframes are built (animation start) and entry
+   *  N+1 when the next step starts (≈ step N's end). */
+  private _recorded_gap(fromIdx: number, toIdx: number): number | null {
+    if (toIdx <= fromIdx) return null; // wrap-around seam — no meaningful gap
+    const a = this.entries[fromIdx];
+    const b = this.entries[toIdx];
+    if (!a || !b) return null;
+    if (typeof a.timestamp !== 'number' || typeof b.timestamp !== 'number') return null;
+    if (a.timestamp <= 0 || b.timestamp <= 0) return null;
+    const gap = b.timestamp - a.timestamp;
+    if (gap <= 0 || gap > MAX_PLAY_INTERVAL_MS) return null;
+    return gap;
   }
 
   pause() {
@@ -167,11 +206,6 @@ class Recorder {
     if (this.playTimer) {
       clearTimeout(this.playTimer);
       this.playTimer = null;
-    }
-    // Stop the animator if we were driving an animated segment.
-    if (this.activeBot && this.activeBot.animator) {
-      this.activeBot.animator.onBodyAnimComplete = null;
-      this.activeBot.animator.stop();
     }
     this.activeBot = null;
     this.notify();
@@ -188,6 +222,11 @@ class Recorder {
     this.notify();
   }
 
+  set_play_speed_mode(v: PlaySpeedMode) {
+    this.play_speed_mode = v;
+    this.notify();
+  }
+
   save_json(): string {
     // THREE.Euler stores its components as `_x` / `_y` / `_z` (the `.x` etc.
     // are getters). JSON.stringify on a raw Euler emits the underscored keys,
@@ -199,6 +238,8 @@ class Recorder {
         status: e.status,
         formatted: e.formatted,
         timestamp: e.timestamp,
+        physics_mode: e.physics_mode,
+        servo_speed: e.servo_speed,
       })),
       (_key, value) => {
         if (value && value._isEuler) {
@@ -221,6 +262,8 @@ class Recorder {
         status: p.status,
         formatted: typeof p.formatted === 'string' ? p.formatted : '',
         timestamp: typeof p.timestamp === 'number' ? p.timestamp : 0,
+        physics_mode: typeof p.physics_mode === 'string' ? p.physics_mode : undefined,
+        servo_speed: typeof p.servo_speed === 'number' ? p.servo_speed : undefined,
       });
     }
     if (this.playing) this.stop_play();
@@ -230,155 +273,60 @@ class Recorder {
     return true;
   }
 
-  /** servo_constraint playback: drive each transition through the animator
-   *  so the body actually slides and per-leg servos interpolate at
-   *  servo_speed — same visual model as walking gait. Apply_status is
-   *  called at segment end for exact restore (it correctly derives rotation
-   *  from servo_value as of the latest fix, so no pre-IK desync). */
-  private play_segment_animated(bot: any, fromIdx: number) {
-    if (!this.playing) return;
-    if (this.entries.length === 0) { this.stop_play(); return; }
-
+  /** Per-segment dwell time (ms) between two recorded frames:
+   *  - 'recorded': the original wall-clock gap (falls back to servo-speed
+   *    timing at the loop seam / when timestamps are unusable).
+   *  - 'current': recomputed from the bot's live servo_speed × max servo
+   *    delta, so scrubbing servo_speed rescales the whole playback. */
+  private _segment_duration(bot: any, fromIdx: number, toIdx: number): number {
     const a = this.entries[fromIdx];
-    if (!a) { this.stop_play(); return; }
-
-    let toIdx = fromIdx + 1;
-    if (toIdx >= this.entries.length) {
-      if (!this.loop) {
-        this.playIdx = this.entries.length - 1;
-        this.playing = false;
-        this.activeBot = null;
-        this.notify();
-        return;
-      }
-      toIdx = 0;
-    }
     const b = this.entries[toIdx];
-    if (!b) { this.stop_play(); return; }
-
-    // Segment duration: derive from current servo_speed × max servo delta.
-    // The recorded gap reflects the recording's servo_speed; using current
-    // values means "what would real servos take, NOW, to traverse this
-    // delta" — which is the literal definition of "follow servo
-    // constraint".
     const speed = Math.max(1, bot.servo_speed || 1);
-    const aServos = a.status?.servo_values || [];
-    const bServos = b.status?.servo_values || [];
-    const maxDelta = computeMaxDelta(aServos, bServos);
-    let duration = computeServoSpeedHoldTime(maxDelta, speed);
-    if (!isFinite(duration) || duration < MIN_PLAY_INTERVAL_MS) duration = MIN_PLAY_INTERVAL_MS;
+    const maxDelta = computeMaxDelta(a?.status?.servo_values || [], b?.status?.servo_values || []);
+    const servoSpeedDuration = computeServoSpeedHoldTime(maxDelta, speed);
 
-    // Fields the animator doesn't interpolate (mesh.y / rot.x,z /
-    // center_offset). Snap at segment start so the visual is consistent
-    // with the keyframes Path A is about to drive.
-    if (typeof a.status.mesh?.position?.y === 'number') bot.mesh.position.y = a.status.mesh.position.y;
-    if (typeof a.status.mesh?.rotation?.x === 'number') bot.mesh.rotation.x = a.status.mesh.rotation.x;
-    if (typeof a.status.mesh?.rotation?.z === 'number') bot.mesh.rotation.z = a.status.mesh.rotation.z;
-    if (typeof a.status.center_offset === 'number') bot.center_offset = a.status.center_offset;
-
-    const meshKfs = [
-      { pos: { x: a.status.mesh.position.x, z: a.status.mesh.position.z }, rotY: a.status.mesh.rotation.y },
-      { pos: { x: b.status.mesh.position.x, z: b.status.mesh.position.z }, rotY: b.status.mesh.rotation.y },
-    ];
-
-    const bodyKfs = [
-      {
-        pos: { x: a.status.body_mesh.position.x, y: a.status.body_mesh.position.y, z: a.status.body_mesh.position.z },
-        rot: { x: a.status.body_mesh.rotation.x, y: a.status.body_mesh.rotation.y, z: a.status.body_mesh.rotation.z },
-      },
-      {
-        pos: { x: b.status.body_mesh.position.x, y: b.status.body_mesh.position.y, z: b.status.body_mesh.position.z },
-        rot: { x: b.status.body_mesh.rotation.x, y: b.status.body_mesh.rotation.y, z: b.status.body_mesh.rotation.z },
-      },
-    ];
-
-    const LIMB_NAMES_FULL = ['coxa', 'femur', 'tibia', 'tarsus', 'segment5', 'segment6'];
-    const servoKfs: number[][][] = [];
-    for (let i = 0; i < bot.legs.length; i++) {
-      const leg = bot.legs[i];
-      const names: string[] = leg._limbNames || LIMB_NAMES_FULL.slice(0, leg.joint_count);
-      const legA = a.status.legs?.[i] || {};
-      const legB = b.status.legs?.[i] || {};
-      const from: number[] = [];
-      const to: number[] = [];
-      for (let j = 0; j < names.length; j++) {
-        from.push(legA[names[j]]?.servo_value ?? leg.limbs[j].servo_value);
-        to.push(legB[names[j]]?.servo_value ?? leg.limbs[j].servo_value);
-      }
-      servoKfs.push([from, to]);
+    let duration: number;
+    if (this.play_speed_mode === 'recorded') {
+      const gap = this._recorded_gap(fromIdx, toIdx);
+      duration = gap != null ? gap : servoSpeedDuration;
+    } else {
+      duration = servoSpeedDuration;
     }
-
-    bot._servo_anim_disabled = false;
-    const startTime = performance.now();
-    bot.animator.applyMeshKeyframes(bot, meshKfs, [duration], servoKfs);
-    bot.animator.applyBodyKeyframes(bodyKfs, [duration], startTime);
-
-    bot.animator.onBodyAnimComplete = () => {
-      // Exact restore. apply_status now derives rotation from servo_value
-      // (the fix that made playback correct in the first place), so this
-      // does NOT snap legs back to pre-IK pose — the visual stays put.
-      bot.apply_status(b.status);
-      this.playIdx = toIdx;
-      this.notify();
-      if (!this.playing) return;
-      this.play_segment_animated(bot, toIdx);
-    };
+    if (!isFinite(duration) || duration < MIN_PLAY_INTERVAL_MS) duration = MIN_PLAY_INTERVAL_MS;
+    return duration;
   }
 
+  /** Snap-based playback step: apply the current frame exactly, then schedule
+   *  the next after the segment dwell time. apply_status restores a recorded
+   *  (and therefore valid, drift-free) pose — no interpolation between frames,
+   *  so the bot never slides. Works identically under `none` and
+   *  `servo_constraint`. */
   private schedule_next(bot: any) {
     if (!this.playing) return;
     if (this.entries.length === 0) { this.stop_play(); return; }
 
     const idx = this.playIdx;
     const entry = this.entries[idx];
-    if (entry) bot.apply_status(entry.status);
+    if (entry) {
+      bot.apply_status(entry.status);
+      this.notify();
+    }
 
-    // Advance index; loop or stop at end
     let nextIdx = idx + 1;
     if (nextIdx >= this.entries.length) {
-      if (this.loop) {
-        nextIdx = 0;
-      } else {
-        this.playIdx = this.entries.length - 1;
+      if (!this.loop) {
         this.playing = false;
+        this.activeBot = null;
         this.notify();
         return;
       }
+      nextIdx = 0;
     }
-    this.playIdx = nextIdx;
-    this.notify();
 
-    // Inter-frame interval: use the actual wall-clock gap between the
-    // recorded entries — that's the real timing the user saw during
-    // capture, including servo_speed effects, mode-specific hold times,
-    // and natural pauses between actions. Fall back to servo-speed-derived
-    // timing only when timestamps are unavailable (loaded JSON without
-    // them) or when we're wrapping from the last entry back to the first.
-    const nextEntry = this.entries[nextIdx];
-    let interval = FALLBACK_PLAY_INTERVAL_MS;
-    const wrapping = nextIdx <= idx;
-    if (nextEntry && entry && !wrapping
-        && typeof entry.timestamp === 'number'
-        && typeof nextEntry.timestamp === 'number'
-        && nextEntry.timestamp > 0 && entry.timestamp > 0) {
-      const gap = nextEntry.timestamp - entry.timestamp;
-      if (gap > 0 && gap < MAX_PLAY_INTERVAL_MS) {
-        interval = gap;
-      }
-    }
-    // No recorded timing usable — derive from servo_speed and max delta.
-    if (interval === FALLBACK_PLAY_INTERVAL_MS) {
-      const a = entry?.status?.servo_values || [];
-      const b = nextEntry?.status?.servo_values || [];
-      if (a.length && b.length && bot.servo_speed) {
-        const delta = computeMaxDelta(a, b);
-        interval = computeServoSpeedHoldTime(delta, bot.servo_speed);
-      }
-    }
-    if (interval < MIN_PLAY_INTERVAL_MS) interval = MIN_PLAY_INTERVAL_MS;
-
+    const interval = this._segment_duration(bot, idx, nextIdx);
     this.playTimer = setTimeout(() => {
       this.playTimer = null;
+      this.playIdx = nextIdx;
       this.schedule_next(bot);
     }, interval);
   }
@@ -393,6 +341,7 @@ class Recorder {
       playing: this.playing,
       playIdx: this.playIdx,
       loop: this.loop,
+      play_speed_mode: this.play_speed_mode,
     };
     this.listeners.forEach(l => l());
   }

@@ -37,6 +37,9 @@ export function beginBodyTracking(bot: any) {
   bot.body_tracking_active = true;
   bot._body_tracking_release_pending = false;
   bot._body_tracking_last_time = performance.now();
+  // Start the capture throttle now so the first released entry is one
+  // interval into the motion (the pre-tracking pose was already captured).
+  bot._track_last_capture = performance.now();
   bot.mesh.updateMatrixWorld();
   bot._body_tracking_locked_world_tips = bot.get_tip_pos();
   bot._body_tracking_local_tips = bot._body_tracking_locked_world_tips.map(
@@ -184,14 +187,25 @@ export function stepBodyTracking(bot: any, now: number): boolean {
   bot._servo_anim_disabled = prevDisabled;
   bot.sync_guide_circles();
 
-  // after_status_change runs but the onStatusEntry callback is suppressed
-  // for the duration of the session — see Hexapod.after_status_change gating.
-  bot._suppress_status_entries = true;
+  // after_status_change runs every frame, but the onStatusEntry callback is
+  // mostly suppressed during a tracking session (it would flood the recorder
+  // + React at ~60Hz). To still capture the body's motion when a recording is
+  // active, release one entry at most every RECORD_TRACK_INTERVAL_MS. This is
+  // harmless when idle: recorder.push() is a no-op unless recording is on, so
+  // the only cost of a released frame is one get_status()/format call.
+  const capture = (now - (bot._track_last_capture || 0)) >= RECORD_TRACK_INTERVAL_MS;
+  if (capture) bot._track_last_capture = now;
+  bot._suppress_status_entries = !capture;
   bot.after_status_change();
   bot._suppress_status_entries = false;
 
   return true;
 }
+
+/** Min interval between status entries released during a body-tracking
+ *  session (~11Hz). Sparse enough not to flood, dense enough that recorded
+ *  body motion replays smoothly. */
+const RECORD_TRACK_INTERVAL_MS = 90;
 
 /** End a body-tracking session. Clears body_target + tracking state and emits one
  *  status entry capturing the final pose for undo/history. Also forces a final

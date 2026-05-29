@@ -83,6 +83,10 @@ export class Hexapod {
   // session end to guarantee leg shape returns to its pre-tracking state.
   _body_tracking_init_servos: number[][] | null = null;
   _suppress_status_entries: boolean = false;
+  // Throttle clock for releasing status entries during a body-tracking
+  // session so a recording captures the body's motion without flooding at
+  // ~60Hz. See stepBodyTracking in body_motions.ts.
+  _track_last_capture: number = 0;
 
   constructor(scene: any, options: HexapodOptions) {
     if (!scene) {
@@ -119,6 +123,11 @@ export class Hexapod {
     this.lr_step = this.options.lr_step;
     this.servo_speed = this.options.servo_speed ?? 2000;
     this._servo_anim_disabled = true; // no animation during full rebuild
+    // Suppress status entries for the whole rebuild: draw() / laydown() /
+    // putdown_tips() / body_home restoration each call after_status_change,
+    // and capturing those setup frames would pollute an active recording.
+    const _prevSuppress = this._suppress_status_entries;
+    this._suppress_status_entries = true;
 
     // Drop any in-flight live-input session — its arrays index into the OLD
     // legs[] / use OLD body_mesh, and surviving past the rebuild would
@@ -213,6 +222,8 @@ export class Hexapod {
     if (history.autoSave) {
       set_bot_options(this.options);
     }
+
+    this._suppress_status_entries = _prevSuppress;
   }
 
   draw() {
