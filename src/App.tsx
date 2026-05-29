@@ -75,6 +75,10 @@ function App() {
         </div>
 
         <div className="grid-controls">
+          {/* Joysticks + body-pose sliders are always visible — primary
+              control surface, usable across all tabs. */}
+          <SceneControls />
+
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
             <TabsList className="w-full">
               {TABS.map((tab) => (
@@ -84,8 +88,10 @@ function App() {
               ))}
             </TabsList>
 
-            <TabsContent value="move_control" className="mt-3">
-              <SceneControls />
+            {/* keepMounted: ControlPanel's WASD keyboard listeners stay alive
+                on every tab so the bot can be driven while inspecting Status,
+                Servos, etc. */}
+            <TabsContent value="move_control" keepMounted className="mt-3">
               <ControlPanel />
             </TabsContent>
             <TabsContent value="servo_control" className="mt-3">
