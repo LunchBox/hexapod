@@ -41,6 +41,9 @@ class Recorder {
 
   private listeners = new Set<Listener>();
   private playTimer: ReturnType<typeof setTimeout> | null = null;
+  // Bot reference held during playback so pause() / non-loop end can null
+  // the animator callback and stop in-flight interpolation.
+  private activeBot: any = null;
   // Cached snapshot reference for useSyncExternalStore. Updated on every
   // notify() so React sees a new array identity and re-renders.
   private snapshot: {
@@ -127,7 +130,7 @@ class Recorder {
 
     // Quiesce all other motion sources before playback. Otherwise the rAF
     // loop's body_target chase, walking step scheduler, and in-flight
-    // per-leg animations all keep running and fight the apply_status snaps.
+    // per-leg animations all keep running and fight the playback.
     bot.body_target = null;
     bot._body_tracking_release_pending = false;
     if (bot.gait_controller && typeof bot.gait_controller.stop === 'function') {
@@ -143,8 +146,19 @@ class Recorder {
     }
 
     this.playing = true;
+    this.activeBot = bot;
     this.notify();
-    this.schedule_next(bot);
+
+    // Branch on physics_mode. In servo_constraint we drive each segment
+    // through the animator (Path A mesh + Path B body_mesh + per-leg
+    // AnimatedOutput keyframes) so the bot actually shows smooth motion
+    // limited by servo_speed. In `none` mode DirectOutput doesn't animate,
+    // so we fall back to snap-then-wait at recorded timestamp gaps.
+    if (bot.options?.physics_mode === 'servo_constraint') {
+      this.play_segment_animated(bot, this.playIdx);
+    } else {
+      this.schedule_next(bot);
+    }
   }
 
   pause() {
@@ -154,6 +168,12 @@ class Recorder {
       clearTimeout(this.playTimer);
       this.playTimer = null;
     }
+    // Stop the animator if we were driving an animated segment.
+    if (this.activeBot && this.activeBot.animator) {
+      this.activeBot.animator.onBodyAnimComplete = null;
+      this.activeBot.animator.stop();
+    }
+    this.activeBot = null;
     this.notify();
   }
 
@@ -208,6 +228,101 @@ class Recorder {
     this.playIdx = 0;
     this.notify();
     return true;
+  }
+
+  /** servo_constraint playback: drive each transition through the animator
+   *  so the body actually slides and per-leg servos interpolate at
+   *  servo_speed — same visual model as walking gait. Apply_status is
+   *  called at segment end for exact restore (it correctly derives rotation
+   *  from servo_value as of the latest fix, so no pre-IK desync). */
+  private play_segment_animated(bot: any, fromIdx: number) {
+    if (!this.playing) return;
+    if (this.entries.length === 0) { this.stop_play(); return; }
+
+    const a = this.entries[fromIdx];
+    if (!a) { this.stop_play(); return; }
+
+    let toIdx = fromIdx + 1;
+    if (toIdx >= this.entries.length) {
+      if (!this.loop) {
+        this.playIdx = this.entries.length - 1;
+        this.playing = false;
+        this.activeBot = null;
+        this.notify();
+        return;
+      }
+      toIdx = 0;
+    }
+    const b = this.entries[toIdx];
+    if (!b) { this.stop_play(); return; }
+
+    // Segment duration: derive from current servo_speed × max servo delta.
+    // The recorded gap reflects the recording's servo_speed; using current
+    // values means "what would real servos take, NOW, to traverse this
+    // delta" — which is the literal definition of "follow servo
+    // constraint".
+    const speed = Math.max(1, bot.servo_speed || 1);
+    const aServos = a.status?.servo_values || [];
+    const bServos = b.status?.servo_values || [];
+    const maxDelta = computeMaxDelta(aServos, bServos);
+    let duration = computeServoSpeedHoldTime(maxDelta, speed);
+    if (!isFinite(duration) || duration < MIN_PLAY_INTERVAL_MS) duration = MIN_PLAY_INTERVAL_MS;
+
+    // Fields the animator doesn't interpolate (mesh.y / rot.x,z /
+    // center_offset). Snap at segment start so the visual is consistent
+    // with the keyframes Path A is about to drive.
+    if (typeof a.status.mesh?.position?.y === 'number') bot.mesh.position.y = a.status.mesh.position.y;
+    if (typeof a.status.mesh?.rotation?.x === 'number') bot.mesh.rotation.x = a.status.mesh.rotation.x;
+    if (typeof a.status.mesh?.rotation?.z === 'number') bot.mesh.rotation.z = a.status.mesh.rotation.z;
+    if (typeof a.status.center_offset === 'number') bot.center_offset = a.status.center_offset;
+
+    const meshKfs = [
+      { pos: { x: a.status.mesh.position.x, z: a.status.mesh.position.z }, rotY: a.status.mesh.rotation.y },
+      { pos: { x: b.status.mesh.position.x, z: b.status.mesh.position.z }, rotY: b.status.mesh.rotation.y },
+    ];
+
+    const bodyKfs = [
+      {
+        pos: { x: a.status.body_mesh.position.x, y: a.status.body_mesh.position.y, z: a.status.body_mesh.position.z },
+        rot: { x: a.status.body_mesh.rotation.x, y: a.status.body_mesh.rotation.y, z: a.status.body_mesh.rotation.z },
+      },
+      {
+        pos: { x: b.status.body_mesh.position.x, y: b.status.body_mesh.position.y, z: b.status.body_mesh.position.z },
+        rot: { x: b.status.body_mesh.rotation.x, y: b.status.body_mesh.rotation.y, z: b.status.body_mesh.rotation.z },
+      },
+    ];
+
+    const LIMB_NAMES_FULL = ['coxa', 'femur', 'tibia', 'tarsus', 'segment5', 'segment6'];
+    const servoKfs: number[][][] = [];
+    for (let i = 0; i < bot.legs.length; i++) {
+      const leg = bot.legs[i];
+      const names: string[] = leg._limbNames || LIMB_NAMES_FULL.slice(0, leg.joint_count);
+      const legA = a.status.legs?.[i] || {};
+      const legB = b.status.legs?.[i] || {};
+      const from: number[] = [];
+      const to: number[] = [];
+      for (let j = 0; j < names.length; j++) {
+        from.push(legA[names[j]]?.servo_value ?? leg.limbs[j].servo_value);
+        to.push(legB[names[j]]?.servo_value ?? leg.limbs[j].servo_value);
+      }
+      servoKfs.push([from, to]);
+    }
+
+    bot._servo_anim_disabled = false;
+    const startTime = performance.now();
+    bot.animator.applyMeshKeyframes(bot, meshKfs, [duration], servoKfs);
+    bot.animator.applyBodyKeyframes(bodyKfs, [duration], startTime);
+
+    bot.animator.onBodyAnimComplete = () => {
+      // Exact restore. apply_status now derives rotation from servo_value
+      // (the fix that made playback correct in the first place), so this
+      // does NOT snap legs back to pre-IK pose — the visual stays put.
+      bot.apply_status(b.status);
+      this.playIdx = toIdx;
+      this.notify();
+      if (!this.playing) return;
+      this.play_segment_animated(bot, toIdx);
+    };
   }
 
   private schedule_next(bot: any) {
