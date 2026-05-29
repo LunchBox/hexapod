@@ -5,7 +5,6 @@ const HexapodContext = createContext(null);
 export function HexapodProvider({ children }) {
   const [servoValues, setServoValues] = useState('');
   const [lastServoValues, setLastServoValues] = useState('');
-  const [statusEntries, setStatusEntries] = useState<Array<{ status: any; formatted: string }>>([]);
   const [timeIntervals, setTimeIntervals] = useState<number[]>([]);
   const [botVersion, setBotVersion] = useState(0);
   const botRef = useRef(null);
@@ -32,19 +31,19 @@ export function HexapodProvider({ children }) {
 
   // Memoize the context value so consumers don't re-render on every state
   // update when nothing they care about changed. botRef is mutable and
-  // doesn't need to be in deps.
+  // doesn't need to be in deps. Status recording lives in the external
+  // `recorder` store (src/hexapod/recorder.ts), NOT here — pushing to it
+  // doesn't churn this context.
   const value = useMemo(() => ({
     botRef,
     servoValues,
     lastServoValues,
-    statusEntries,
-    setStatusEntries,
     timeIntervals,
     updateServoDisplay,
     botVersion,
     bumpBotVersion,
     pushTimeInterval,
-  }), [servoValues, lastServoValues, statusEntries, timeIntervals,
+  }), [servoValues, lastServoValues, timeIntervals,
        updateServoDisplay, botVersion, bumpBotVersion, pushTimeInterval]);
 
   return (
