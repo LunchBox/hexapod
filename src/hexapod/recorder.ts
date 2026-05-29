@@ -17,6 +17,10 @@
 
 import { computeMaxDelta, computeServoSpeedHoldTime } from './servo_utils';
 
+// Max gap used when the recorded timestamp delta is missing or absurd
+// (loaded JSON without timestamps, or first entry of a new wrap-around).
+const MAX_PLAY_INTERVAL_MS = 5000;
+
 export type RecorderEntry = {
   status: any;
   formatted: string;
@@ -200,12 +204,28 @@ class Recorder {
     this.playIdx = nextIdx;
     this.notify();
 
-    // Inter-frame interval: model real servo travel time at servo_speed.
+    // Inter-frame interval: use the actual wall-clock gap between the
+    // recorded entries — that's the real timing the user saw during
+    // capture, including servo_speed effects, mode-specific hold times,
+    // and natural pauses between actions. Fall back to servo-speed-derived
+    // timing only when timestamps are unavailable (loaded JSON without
+    // them) or when we're wrapping from the last entry back to the first.
     const nextEntry = this.entries[nextIdx];
     let interval = FALLBACK_PLAY_INTERVAL_MS;
-    if (nextEntry && entry) {
-      const a = entry.status?.servo_values || [];
-      const b = nextEntry.status?.servo_values || [];
+    const wrapping = nextIdx <= idx;
+    if (nextEntry && entry && !wrapping
+        && typeof entry.timestamp === 'number'
+        && typeof nextEntry.timestamp === 'number'
+        && nextEntry.timestamp > 0 && entry.timestamp > 0) {
+      const gap = nextEntry.timestamp - entry.timestamp;
+      if (gap > 0 && gap < MAX_PLAY_INTERVAL_MS) {
+        interval = gap;
+      }
+    }
+    // No recorded timing usable — derive from servo_speed and max delta.
+    if (interval === FALLBACK_PLAY_INTERVAL_MS) {
+      const a = entry?.status?.servo_values || [];
+      const b = nextEntry?.status?.servo_values || [];
       if (a.length && b.length && bot.servo_speed) {
         const delta = computeMaxDelta(a, b);
         interval = computeServoSpeedHoldTime(delta, bot.servo_speed);
