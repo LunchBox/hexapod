@@ -124,6 +124,24 @@ class Recorder {
   play(bot: any) {
     if (this.playing) return;
     if (this.entries.length === 0) return;
+
+    // Quiesce all other motion sources before playback. Otherwise the rAF
+    // loop's body_target chase, walking step scheduler, and in-flight
+    // per-leg animations all keep running and fight the apply_status snaps.
+    bot.body_target = null;
+    bot._body_tracking_release_pending = false;
+    if (bot.gait_controller && typeof bot.gait_controller.stop === 'function') {
+      bot.gait_controller.stop();
+    }
+    if (bot.animator && typeof bot.animator.stop === 'function') {
+      bot.animator.stop();
+    }
+    for (const leg of bot.legs) {
+      if (leg._output && typeof leg._output.reset === 'function') {
+        leg._output.reset();
+      }
+    }
+
     this.playing = true;
     this.notify();
     this.schedule_next(bot);
@@ -240,8 +258,11 @@ class Recorder {
   }
 
   private notify() {
+    // Slice entries so the snapshot can't tear under React's concurrent
+    // rendering or strict-mode double-checks if another push/splice runs
+    // between getSnapshot() reads and listener firing.
     this.snapshot = {
-      entries: this.entries,
+      entries: this.entries.slice(),
       recording: this.recording,
       playing: this.playing,
       playIdx: this.playIdx,

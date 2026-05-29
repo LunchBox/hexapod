@@ -350,9 +350,17 @@ export class Hexapod {
         let limb_status = leg_status[limb_name];
         if (!limb || !limb_status) continue;
         apply_xyz(limb.position, limb_status.position);
-        apply_xyz(limb.rotation, limb_status.rotation);
         limb.servo_value = limb_status.servo_value;
         limb.servo_idx = limb_status.servo_idx;
+        // Derive rotation from servo_value rather than restoring the
+        // captured rotation. In servo_constraint mode, get_status() clones
+        // limb.rotation while it still holds the PRE-IK rendered value
+        // (the animator catches it up over time), so the captured rotation
+        // lags the captured servo_value by one step. Re-deriving via
+        // _set_joint_rotation makes the visual match the servo target.
+        leg._set_joint_rotation(j, limb_status.servo_value);
+        limb._rendered_servo_value = limb_status.servo_value;
+        leg._output.renderedValues[j] = limb_status.servo_value;
       }
     }
 
