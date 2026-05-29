@@ -4,8 +4,17 @@ import {
 import { get_obj_from_local_storage, set_obj_to_local_storage } from './utils.js';
 import { history } from './history.js';
 
-export function get_bot_options() {
-  let options = get_obj_from_local_storage(HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS);
+/** Normalize a bot-options object in place: pad leg_options up to leg_count,
+ *  ensure each leg has segment data for its DOF, and assign servo indices.
+ *
+ *  Servo-idx assignment is idempotent (only fills entries that are still
+ *  undefined), so it is safe to run on already-normalized options. This must
+ *  run on ANY options about to drive a rebuild — not just the localStorage
+ *  read in get_bot_options. Preset configs (presets.ts), loaded JSON, and
+ *  random options carry no servo_idx, so without this their command strings
+ *  render "#undefined". apply_attributes calls it as the single chokepoint. */
+export function normalize_bot_options(options: any) {
+  if (!options || !Array.isArray(options.leg_options)) return options;
 
   const legCount = options.leg_count || 6;
   const globalDof = options.dof || 3;
@@ -18,7 +27,7 @@ export function get_bot_options() {
 
   // Ensure each leg_option has all segment data for its own DOF
   const defaultLeg = DEFAULT_HEXAPOD_OPTIONS.leg_options[0];
-  let servoBase = options.first_servo_idx;
+  let servoBase = options.first_servo_idx ?? 0;
   for (let i = 0; i < legCount; i++) {
     let leg_option = options.leg_options[i];
     const legDof = leg_option.dof ?? globalDof;
@@ -48,6 +57,11 @@ export function get_bot_options() {
   }
 
   return options;
+}
+
+export function get_bot_options() {
+  let options = get_obj_from_local_storage(HEXAPOD_OPTIONS_KEY, DEFAULT_HEXAPOD_OPTIONS);
+  return normalize_bot_options(options);
 }
 
 export function set_bot_options(hexapod_options: any) {

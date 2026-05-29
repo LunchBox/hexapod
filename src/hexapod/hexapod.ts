@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import appState from './appState.js';
 import { LIMB_NAMES, LIMB_DEFAULTS } from './defaults.js';
 import { getWorldPosition, apply_xyz, disposeObject3D } from './utils.js';
-import { set_bot_options } from './bot_options.js';
+import { set_bot_options, normalize_bot_options } from './bot_options.js';
 import { CommandSocket, formatServoValues, buildCmd } from './bot_commands.js';
 import { drawBody, createHeadIndicator } from './bot_geometry.js';
 import { BotGuides } from './bot_guides.js';
@@ -108,6 +108,11 @@ export class Hexapod {
   }
 
   apply_attributes(options: any) {
+    // Single chokepoint for every rebuild path (presets, loaded JSON, random,
+    // leg-count changes). Presets etc. carry no servo_idx, so without this the
+    // command string renders "#undefined". Idempotent on already-normalized
+    // options (only fills missing servo_idx / segment data).
+    normalize_bot_options(options);
     this.options = options;
 
     // Invalidate saved body home if leg geometry changed
