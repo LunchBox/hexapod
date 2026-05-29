@@ -84,7 +84,18 @@ export default function ControlPanel() {
   const setPhysicsMode = useCallback((mode: 'none' | 'servo_constraint') => {
     setPhysicsModeState(mode);
     const b = botRef.current;
-    if (b) { b.options.physics_mode = mode; set_bot_options(b.options); }
+    if (b) {
+      b.options.physics_mode = mode;
+      set_bot_options(b.options);
+      // Apply the mode immediately: stop in-flight animator interpolation
+      // and swap each leg between DirectOutput / AnimatedOutput. Without
+      // this, the change only takes effect on the next gait act() call —
+      // any animation currently in flight keeps playing under the old mode.
+      if (typeof b._setLegOutputs === 'function') {
+        b._setLegOutputs(mode === 'servo_constraint' ? 'servo_constraint' : 'none');
+      }
+      b._servo_anim_disabled = mode !== 'servo_constraint';
+    }
   }, [botRef]);
 
   const gc = useCallback(() => botRef.current?.gait_controller, [botRef]);

@@ -120,6 +120,20 @@ export class Hexapod {
     this.servo_speed = this.options.servo_speed ?? 2000;
     this._servo_anim_disabled = true; // no animation during full rebuild
 
+    // Drop any in-flight live-input session — its arrays index into the OLD
+    // legs[] / use OLD body_mesh, and surviving past the rebuild would
+    // produce off-end reads (TypeError) or chase against deleted meshes.
+    this.body_target = null;
+    this.body_tracking_active = false;
+    this._body_tracking_release_pending = false;
+    this._body_tracking_locked_world_tips = null;
+    this._body_tracking_local_tips = null;
+    this._body_tracking_init_servos = null;
+    if (this.animator) this.animator.stop();
+    if (this.gait_controller && typeof this.gait_controller.stop === 'function') {
+      this.gait_controller.stop();
+    }
+
     const isInitialBuild = !this.mesh;
 
     if (this.mesh) {
@@ -330,6 +344,19 @@ export class Hexapod {
   }
 
   apply_status(status: any) {
+    // Defensive: refuse to apply a snapshot whose shape doesn't match the
+    // current bot. Loading a 6-leg recording onto a 4-leg bot used to throw
+    // on the first `leg_status.on_floor` read; mismatched joint_count used
+    // to leave hybrid poses. Bail with a warning and let the caller decide.
+    if (!status || !status.mesh || !status.body_mesh || !status.legs) {
+      console.warn('apply_status: malformed status object'); return null;
+    }
+    const recordedLegCount = Object.keys(status.legs).length;
+    if (recordedLegCount !== this.legs.length) {
+      console.warn(`apply_status: leg count mismatch (recording=${recordedLegCount}, bot=${this.legs.length}) — skipping`);
+      return null;
+    }
+
     apply_xyz(this.mesh.position, status.mesh.position);
     apply_xyz(this.mesh.rotation, status.mesh.rotation);
     apply_xyz(this.body_mesh.position, status.body_mesh.position);
@@ -341,6 +368,7 @@ export class Hexapod {
     for (let i = 0; i < total_legs; i++) {
       let leg = this.legs[i];
       let leg_status = status["legs"][i];
+      if (!leg_status) continue;
       leg.on_floor = leg_status.on_floor;
 
       const names = leg._limbNames || LIMB_NAMES.slice(0, leg.joint_count);
@@ -428,17 +456,19 @@ export class Hexapod {
 
   /** Switch all legs between DirectOutput and AnimatedOutput. */
   _setLegOutputs(mode: 'none' | 'servo_constraint') {
-    // Only switch when mode actually changes, to avoid destroying
-    // in-progress keyframe animations.
+    // Stop animator FIRST when target mode is 'none', regardless of cached
+    // _legOutputMode. The cache lags whenever a caller (gc.stop, physics
+    // toggle, recorder.play) changes options.physics_mode without going
+    // through here — if we short-circuited on cache match, animator could
+    // keep interpolating mesh / body_mesh after the user switched off
+    // servo_constraint.
+    if (mode === 'none') {
+      this.animator.stop();
+    }
     if (this._legOutputMode === mode) return;
     this._legOutputMode = mode;
     for (const leg of this.legs) {
       leg.switchOutput(mode);
-    }
-    // When switching away from servo_constraint, also stop mesh + body_mesh
-    // animations so the body doesn't keep drifting after the legs have stopped.
-    if (mode === 'none') {
-      this.animator.stop();
     }
   }
 

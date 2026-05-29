@@ -169,13 +169,24 @@ class Recorder {
   }
 
   save_json(): string {
+    // THREE.Euler stores its components as `_x` / `_y` / `_z` (the `.x` etc.
+    // are getters). JSON.stringify on a raw Euler emits the underscored keys,
+    // and after JSON.parse there are no getters — `apply_xyz` would read
+    // undefined and produce NaN rotations. Flatten Euler instances to plain
+    // {x, y, z} so loaded recordings restore correctly.
     return JSON.stringify(
       this.entries.map(e => ({
         status: e.status,
         formatted: e.formatted,
         timestamp: e.timestamp,
       })),
-      null, 2
+      (_key, value) => {
+        if (value && value._isEuler) {
+          return { x: value._x, y: value._y, z: value._z };
+        }
+        return value;
+      },
+      2
     );
   }
 

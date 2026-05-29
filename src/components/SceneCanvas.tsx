@@ -82,6 +82,11 @@ export default function SceneCanvas() {
       botRef.current = null;
       appState.current_bot = null;
       appState.onAnimate = null;
+      // Tear down the Three.js scene: cancels the rAF loop, disposes the
+      // renderer + WebGL context, removes window resize / keyboard
+      // listeners, and removes the canvas + stats DOM nodes. Without this,
+      // HMR / StrictMode remount stacks multiple renderers + listeners.
+      if (sceneObjs.dispose) sceneObjs.dispose();
     };
   }, [botRef, updateServoDisplay]);
 

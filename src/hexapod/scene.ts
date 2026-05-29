@@ -44,8 +44,6 @@ export function initScene(container: HTMLElement) {
   container.appendChild(appState.renderer!.domElement);
 
   // Window resize
-  window.addEventListener('resize', onWindowResize, false);
-
   function onWindowResize() {
     let w = container.offsetWidth;
     let h = container.offsetHeight;
@@ -53,6 +51,7 @@ export function initScene(container: HTMLElement) {
     appState.camera!.updateProjectionMatrix();
     appState.renderer!.setSize(w, h);
   }
+  window.addEventListener('resize', onWindowResize, false);
 
   // OrbitControls
   appState.controls = new OrbitControls(appState.camera!, container);
@@ -103,16 +102,57 @@ export function initScene(container: HTMLElement) {
     if (appState.stats) appState.stats!.update();
   }
 
+  // Track rAF id so we can cancel on dispose; otherwise HMR / React
+  // StrictMode remount stacks a fresh loop on top of the old one.
+  let rafId = 0;
+  let disposed = false;
   function animate() {
-    requestAnimationFrame(animate);
+    if (disposed) return;
+    rafId = requestAnimationFrame(animate);
     render();
     update();
   }
-
-  animate();
+  rafId = requestAnimationFrame(animate);
 
   // Expose for external use
   appState.render = render;
+
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    cancelAnimationFrame(rafId);
+    window.removeEventListener('resize', onWindowResize, false);
+    if (appState.controls) {
+      try { appState.controls.dispose(); } catch { /* OrbitControls dispose may throw on partial init */ }
+    }
+    if (appState.keyboard) appState.keyboard.destroy();
+    if (appState.renderer) {
+      try {
+        const dom = appState.renderer.domElement;
+        if (dom && dom.parentNode) dom.parentNode.removeChild(dom);
+        appState.renderer.dispose();
+        // Force WebGL context loss so the GPU resource pool is freed
+        // immediately rather than waiting for GC. Browsers cap WebGL
+        // contexts at ~16; without this HMR eventually goes black.
+        const gl = appState.renderer.getContext();
+        const lose = gl && (gl as any).getExtension && (gl as any).getExtension('WEBGL_lose_context');
+        if (lose) lose.loseContext();
+      } catch { /* renderer dispose can throw on context already lost */ }
+    }
+    if (appState.stats && appState.stats.domElement && appState.stats.domElement.parentNode) {
+      appState.stats.domElement.parentNode.removeChild(appState.stats.domElement);
+    }
+    appState.scene = null as any;
+    appState.camera = null as any;
+    appState.renderer = null as any;
+    appState.controls = null as any;
+    appState.stats = null as any;
+    appState.keyboard = null as any;
+    appState.clock = null as any;
+    appState.onAnimate = null;
+    appState.render = null as any;
+    appState.container = null as any;
+  };
 
   return {
     scene: appState.scene,
@@ -122,5 +162,6 @@ export function initScene(container: HTMLElement) {
     stats: appState.stats,
     keyboard: appState.keyboard,
     clock: appState.clock,
+    dispose,
   };
 }
