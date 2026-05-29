@@ -355,6 +355,15 @@ export class Hexapod {
         limb.servo_idx = limb_status.servo_idx;
       }
     }
+
+    // World-space guides (ground circles + numeric labels) are children of
+    // `scene`, not `mesh`, so they don't auto-follow the mesh transform.
+    // During gait/keyframe motion the rAF loop calls sync_guide_circles each
+    // frame via update_servo_animations; for a discrete snap like this one,
+    // we sync them here so the markers track the restored pose.
+    this.mesh.updateMatrixWorld();
+    this.guides.resetPos(this);
+    this.sync_guide_circles();
     return status;
   }
 
